@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panadería - Pastelería D'chelis</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    :root {
+      --brand-dark: #005c27;
+      --brand-main: #009640;
+      --brand-light: #22c55e;
+      --brand-soft: #eef7ee;
+      --yape-purple: #742284;
+      --yape-light: #fdf4ff;
+      --yape-border: #f0abfc;
+      --bg-main: #f8fafc;
+      --bg-card: #ffffff;
+      --text-dark: #0f172a;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+      --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
+      --shadow-md: 0 10px 25px rgba(0,0,0,0.1);
+      --shadow-lg: 0 20px 40px rgba(0,0,0,0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-dark);
+      padding-bottom: 120px;
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, var(--brand-dark), var(--brand-main));
+      color: #ffffff;
+      padding: 2.2rem 1rem 1.8rem 1rem;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    header h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 4px;
+    }
+
+    header p {
+      font-size: 0.95rem;
+      color: #dcfce7;
+      font-weight: 500;
+    }
+
+    .category-nav {
+      max-width: 980px;
+      margin: 20px auto 0 auto;
+      padding: 0 1rem;
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+    }
+
+    .cat-btn {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .cat-btn.active, .cat-btn:hover {
+      background: var(--brand-dark);
+      color: #ffffff;
+      border-color: var(--brand-dark);
+    }
+
+    .main-container {
+      max-width: 980px;
+      margin: 20px auto;
+      padding: 0 1rem;
+    }
+
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .product-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .product-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .card-category-badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--brand-main);
+      background: var(--brand-soft);
+      padding: 3px 8px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+
+    .product-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 4px;
+    }
+
+    .product-price-info {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .product-subtotal {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--brand-main);
+      margin-bottom: 12px;
+    }
+
+    .controls-wrapper {
+      background: #f1f5f9;
+      border-radius: var(--radius-sm);
+      padding: 10px;
+    }
+
+    .stepper-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .btn-step-main {
+      background: var(--brand-dark);
+      color: #ffffff;
+      border: none;
+      font-weight: 800;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s ease;
+    }
+
+    .btn-step-main:hover {
+      background: var(--brand-main);
+    }
+
+    .qty-display {
+      font-weight: 800;
+      font-size: 1.1rem;
+      min-width: 44px;
+      text-align: center;
+      color: var(--text-dark);
+    }
+
+    .preset-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-action {
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      font-weight: 700;
+      font-size: 0.75rem;
+      padding: 6px 0;
+      border-radius: 6px;
+      cursor: pointer;
+      flex: 1;
+      color: var(--text-dark);
+      transition: all 0.2s ease;
+    }
+
+    .btn-action:hover {
+      background: var(--brand-soft);
+      border-color: var(--brand-main);
+      color: var(--brand-dark);
+    }
+
+    .cart-bar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 32px);
+      max-width: 800px;
+      background: var(--brand-dark);
+      color: #ffffff;
+      border-radius: var(--radius-lg);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+      z-index: 200;
+    }
+
+    .cart-count {
+      font-size: 0.85rem;
+      color: #bbf7d0;
+      font-weight: 600;
+    }
+
+    .cart-total {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #fef08a;
+    }
+
+    .btn-checkout {
+      background: #ffffff;
+      color: var(--brand-dark);
+      border: none;
+      padding: 12px 22px;
+      border-radius: var(--radius-md);
+      font-weight: 800;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    .btn-checkout:hover {
+      background: #f8fafc;
+      transform: scale(1.02);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(5px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 300;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: #ffffff;
+      border-radius: var(--radius-lg);
+      width: 92%;
+      max-width: 480px;
+      padding: 24px;
+      max-height: 88vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(20px);
+      transition: transform 0.25s ease;
+    }
+
+    .modal-overlay.active .modal-card {
+      transform: translateY(0);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 10px;
+    }
+
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--brand-dark);
+    }
+
+    .btn-close {
+      background: none;
+      border: none;
+      font-size: 1.4rem;
+      font-weight: 800;
+      cursor: pointer;
+      color: var(--text-muted);
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 5px;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 0.92rem;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .form-control:focus {
+      border-color: var(--brand-main);
+    }
+
+    .error-msg {
+      color: #dc2626;
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-top: 5px;
+      display: none;
+    }
+
+    .btn-next {
+      width: 100%;
+      background: var(--brand-main);
+      color: #ffffff;
+      border: none;
+      padding: 13px;
+      border-radius: var(--radius-md);
+      font-weight: 800;
+      font-size: 0.95rem;
+      cursor: pointer;
+      margin-top: 12px;
+      transition: background 0.2s ease;
+    }
+
+    .btn-next:hover {
+      background: var(--brand-dark);
+    }
+
+    .btn-yape {
+      width: 100%;
+      background: var(--yape-purple);
+      color: #ffffff;
+      border: none;
+      padding: 13px;
+      border-radius: var(--radius-md);
+      font-weight: 800;
+      font-size: 0.95rem;
+      cursor: pointer;
+      margin-top: 12px;
+      transition: background 0.2s ease;
+    }
+
+    .yape-box {
+      background: var(--yape-light);
+      border: 1.5px solid var(--yape-border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .yape-qr-img {
+      width: 170px;
+      height: 170px;
+      border-radius: 10px;
+      margin: 12px 0;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      padding: 6px;
+    }
+
+    #boletaPDF {
+      position: absolute;
+      left: -9999px;
+      top: 0;
+      width: 794px;
+      background: #ffffff;
+      padding: 28px;
+      font-size: 13px;
+      color: #0f172a;
+      box-sizing: border-box;
+    }
+
+    @media print {
+      body * { visibility: hidden; }
+      #boletaPDF, #boletaPDF * { visibility: visible; }
+      #boletaPDF {
+        position: static !important;
+        left: auto !important;
+        top: auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        display: block !important;
+        margin: 0 auto;
+        padding: 0;
+      }
+      .modal-overlay,
+      .modal-card,
+      .cart-bar,
+      header,
+      .category-nav,
+      .main-container,
+      .btn-next,
+      .btn-action,
+      .btn-yape,
+      .btn-close {
+        display: none !important;
+      }
+    }
+
+    .boleta-header {
+      text-align: center;
+      border-bottom: 2px solid #005c27;
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+    }
+
+    .boleta-header h2 {
+      color: #005c27;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .boleta-info {
+      margin-bottom: 18px;
+      line-height: 1.6;
+    }
+
+    .boleta-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 18px;
+      table-layout: fixed;
+    }
+
+    .boleta-table th {
+      background: #eef7ee;
+      color: #005c27;
+      border: 1px solid #cbd5e1;
+      padding: 9px;
+      text-align: left;
+    }
+
+    .boleta-table th:first-child,
+    .boleta-table td:first-child {
+      width: 90px;
+      text-align: center;
+    }
+
+    .boleta-table th:last-child,
+    .boleta-table td:last-child {
+      width: 130px;
+      text-align: right;
+    }
+
+    .boleta-table td {
+      border: 1px solid #cbd5e1;
+      padding: 9px;
+    }
+
+    .boleta-total-row {
+      text-align: right;
+      font-size: 16px;
+      font-weight: 800;
+      color: #005c27;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Panadería - Pastelería D'chelis</h1>
+    <p>Pedido de Bocaditos Dulces, Salados y Más</p>
+  </header>
+
+  <div class="category-nav" id="categoryNav">
+    <button class="cat-btn active" onclick="filtrarCategoria('todos', this)">Todos</button>
+  </div>
+
+  <main class="main-container">
+    <div class="product-grid" id="catalogGrid"></div>
+  </main>
+
+  <div class="cart-bar">
+    <div>
+      <div class="cart-count" id="cartCount">0 ítems seleccionados</div>
+      <div class="cart-total" id="cartTotal">S/. 0.00</div>
+    </div>
+    <button class="btn-checkout" onclick="iniciarCheckout()">Continuar Pedido</button>
+  </div>
+
+  <div class="modal-overlay" id="modalDatos">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Datos de Recojo</h3>
+        <button class="btn-close" onclick="cerrarModal('modalDatos')">&times;</button>
+      </div>
+
+      <form id="formCliente" onsubmit="procesarDatosCliente(event)">
+        <div class="form-group">
+          <label for="cliNombre">Nombre *</label>
+          <input type="text" id="cliNombre" class="form-control" required placeholder="Ej. Gael">
+        </div>
+
+        <div class="form-group">
+          <label for="cliApellido">Apellido *</label>
+          <input type="text" id="cliApellido" class="form-control" required placeholder="Ej. Calderón">
+        </div>
+
+        <div class="form-group">
+          <label for="cliTelefono">Teléfono celular *</label>
+          <input type="tel" id="cliTelefono" class="form-control" pattern="[0-9]{9}" required placeholder="987654321" maxlength="9">
+        </div>
+
+        <div class="form-group">
+          <label for="cliFecha">Fecha de Recojo *</label>
+          <input type="date" id="cliFecha" class="form-control" required onchange="validarHorarioAtencion()">
+        </div>
+
+        <div class="form-group">
+          <label for="cliHora">Hora de Recojo *</label>
+          <select id="cliHora" class="form-control" required onchange="validarHorarioAtencion()">
+            <option value="">Selecciona una hora</option>
+          </select>
+          <div class="error-msg" id="errHorario">
+             Horario fuera de atención. Lun-Sáb (8:00 AM - 7:59 PM) | Dom (8:00 AM - 10:59 AM)
+          </div>
+        </div>
+
+        <div class="form-group" style="display:flex; gap:10px; align-items:center; margin-top:14px;">
+          <input type="checkbox" id="cliTerminos" style="width:16px; height:16px; cursor:pointer;" required>
+          <label for="cliTerminos" style="margin:0; font-weight:600; font-size:0.85rem; cursor:pointer;">
+            Acepto los términos y condiciones del pedido
+          </label>
+        </div>
+
+        <button type="submit" class="btn-next">Ir a Pagar con Yape</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalYape">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color:var(--yape-purple);">Pago con Yape</h3>
+        <button class="btn-close" onclick="cerrarModal('modalYape')">&times;</button>
+      </div>
+
+      <div class="yape-box">
+        <div style="font-weight:800; color:var(--yape-purple); font-size:1.1rem;">Escanea el código QR</div>
+        <img id="yapeQR" class="yape-qr-img" src="" alt="QR Yape">
+        <div style="font-weight:800; font-size:1rem; color:#1e293b;">Número Yape: <span style="color:var(--yape-purple);">946 227 035</span></div>
+        <div style="font-size:0.85rem; color:var(--text-muted);">Titular: Pastelería D'chelis</div>
+        <div style="font-size:1.3rem; font-weight:800; color:var(--yape-purple); margin-top:8px;" id="yapeMonto">S/. 0.00</div>
+      </div>
+
+      <form onsubmit="confirmarPagoYape(event)">
+        <div class="form-group">
+          <label for="yapeCodigoOp">Número de Operación Yape (6 dígitos) *</label>
+          <input type="text" id="yapeCodigoOp" class="form-control" pattern="[0-9]{6}" required placeholder="Ej. 946227" maxlength="6">
+        </div>
+        <button type="submit" class="btn-yape">Confirmar Pago y Emitir Boleta</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalFinal">
+    <div class="modal-card" style="text-align:center;">
+      <h3 class="modal-title" style="color:var(--brand-main); margin-bottom:10px;">¡Pedido Registrado con Éxito!</h3>
+      <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:18px;">
+        Su pago fue registrado y el pedido se envió al área de producción.
+      </p>
+      <button class="btn-next" onclick="descargarBoletaPDF()">📄 Descargar Boleta PDF</button>
+      <button class="btn-action" style="width:100%; margin-top:10px; padding:12px; font-weight:700;" onclick="cerrarTodoYReiniciar()">Realizar Nuevo Pedido</button>
+    </div>
+  </div>
+
+  <div id="boletaPDF">
+    <div class="boleta-header">
+      <h2>PASTELERÍA D'CHELIS</h2>
+      <p style="font-size:11px; color:#64748b;">Comprobante de Pedido y Confirmación de Pago</p>
+    </div>
+    <div class="boleta-info" id="boletaClienteInfo"></div>
+    <div class="boleta-info" id="boletaResumenVenta" style="font-weight:700; color:#005c27; border-top:1px dashed #cbd5e1; border-bottom:1px dashed #cbd5e1; padding:10px 0; margin:10px 0;"></div>
+    <table class="boleta-table">
+      <thead>
+        <tr>
+          <th>Cant.</th>
+          <th>Descripción</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody id="boletaItems"></tbody>
+    </table>
+    <div class="boleta-total-row" id="boletaMontoTotal"></div>
+    <div style="margin-top:24px; font-size:10px; color:#64748b; text-align:center; border-top:1px dashed #cbd5e1; padding-top:10px;">
+      Presente esta boleta digital o impresa en caja al momento de retirar su pedido. ¡Muchas gracias por su preferencia!
+    </div>
+  </div>
+
+<script>
+const productosIniciales = [
+    // --- BOCADITOS DULCES ---
+    ['dulce_alfajorcito_choco', 'Alfajorcito de Chocolate', 'Bocaditos Dulces', 70.0, 20.0, 35.0, 70.0, null],
+    ['dulce_alfajorcito_manjar', 'Alfajorcito de Manjar', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_biscotelas', 'Biscotelas', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_brownies', 'Brownies', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_budin', 'Budin', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_cisne', 'Cisne', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_cocaditas', 'Cocaditas', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_conitos_manjar', 'Conitos de Manjar', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_donitas', 'Donitas', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_kekito_zanahoria', 'Kekito de Zanahoria', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_merenguitos', 'Merenguitos', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_mil_hojas', 'Mil Hojas', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_mini_muffin', 'Mini Muffin', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_mousse_fresa_maracuya_lucuma', 'Mousse de Fresa, Maracuya o Lucuma', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_niditos_amor', 'Niditos de Amor', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_orejitas', 'Orejitas', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_panuelitos_manjar', 'Pañuelitos de Manjar', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_pastelito_choclo', 'Pastelito de Choclo', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_piononitos', 'Piononitos', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_piononitos_chantilly', 'Piononitos de Chantilly', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_pye_limon', 'Pye de Limón', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_pye_manzana', 'Pye de Manzana', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_pye_pina', 'Pye de Piña', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_relampago_choco', 'Relámpago de Chocolate', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_tartaleta_coco', 'Tartaleta de Coco', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_tartaleta_durazno_fresa', 'Tartaleta de Durazno o fresa', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_tartaleta_sauco_lucuma', 'Tartaleta de Sauco o Lúcuma', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_tartaleta_guanabana', 'Tartaleta de Guanabana', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_tortita_choco', 'Tortita de Chocolate', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_tortita_helada_selva', 'Tortita Helada o Selva Negra', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_tortita_tres_leches', 'Tortita Tres Leches', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_trufas', 'Trufas', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
+    ['dulce_trufa_blanca', 'Trufa blanca', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+
+    // --- BOCADITOS SALADOS ---
+    ['salado_pizzitas', 'Pizzitas', 'Bocaditos Salados', 80.0, 22.0, 42.0, 80.0, null],
+    ['salado_empanaditas_aji_gallina', 'Empanaditas de Aji de Gallina', 'Bocaditos Salados', 80.0, 22.0, 42.0, 80.0, null],
+    ['salado_empanaditas_aceituna', 'Empanaditas de Aceituna', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
+    ['salado_empanaditas_carne', 'Empanaditas de Carne', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
+    ['salado_empanaditas_jamon', 'Empanaditas de Jamón', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
+    ['salado_empanaditas_pollo', 'Empanaditas de Pollo', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
+    ['salado_empanaditas_queso', 'Empanaditas de Queso', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
+    ['salado_empanaditas_mixtas', 'Empanaditas Mixtas', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
+    ['salado_enrollado_acelga', 'Enrollado de Acelga', 'Bocaditos Salados', 80.0, 22.0, 42.0, 80.0, null],
+    ['salado_enrollado_hotdog', 'Enrollado de Hot Dog', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
+    ['salado_soufle_alcachofa', 'Soufle de Alcachofa', 'Bocaditos Salados', 80.0, 22.0, 42.0, 80.0, null],
+
+    // --- SANDWICHITOS ---
+    ['sw_asado', 'Sandwich de Asado', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
+    ['sw_croissant_pollo', 'Croissant con Pollo', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
+    ['sw_lomito', 'Sandwich de Lomito', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
+    ['sw_petipan_pollo_durazno', 'Petipan de pollo c/durazno', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
+    ['sw_petipan_pollo_pina', 'Petipan de pollo c/piña', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
+    ['sw_salchicha_nortena', 'Sandwich de Salchicha norteña', 'Sandwichitos', 120.0, 38.0, 60.0, 120.0, null],
+    ['sw_petipan_pollo', 'Petipan de Pollo', 'Sandwichitos', 120.0, 38.0, 60.0, 120.0, null],
+    ['sw_caprece', 'Caprece Mozz/Alb/Tomate', 'Sandwichitos', 110.0, 35.0, 58.0, 110.0, null],
+    ['sw_hamburguesita', 'Sandwich Hamburguesita', 'Sandwichitos', 110.0, 35.0, 58.0, 110.0, null],
+    ['sw_croissant_mixto', 'Croissant Mixto', 'Sandwichitos', 100.0, 28.0, 50.0, 100.0, null],
+    ['sw_butifarras', 'Butifarras', 'Sandwichitos', 100.0, 28.0, 50.0, 100.0, null],
+
+    // --- TORTA CHANTILLY ---
+    ['torta_chantilly_foto', 'Torta Chantilly - Foto', 'Torta Chantilly', 15.0, null, null, null, 15.0],
+    ['torta_chantilly_30_35', 'Torta Chantilly (30-35 Porciones aprox)', 'Torta Chantilly', 70.0, null, null, null, 70.0],
+    ['torta_chantilly_60', 'Torta Chantilly (60 Porciones aprox)', 'Torta Chantilly', 90.0, null, null, null, 90.0],
+    ['torta_chantilly_80', 'Torta Chantilly (80 Porciones aprox)', 'Torta Chantilly', 130.0, null, null, null, 130.0],
+    ['torta_chantilly_tres_leches', 'Torta Chantilly Tres Leches (35 Porciones aprox)', 'Torta Chantilly', 120.0, null, null, null, 120.0],
+    ['torta_chantilly_adicional', 'Torta Chantilly Chocolate o Selva Negra (adicional)', 'Torta Chantilly', 10.0, null, null, null, 10.0],
+
+    // --- MINI TRIPLES ---
+    ['triple_jamon_queso', 'Triple de Jamón y queso', 'Mini Triples', 100.0, 28.0, 50.0, 100.0, null],
+    ['triple_palta_tomate_huevo', 'Triple palta, tomate, huevo', 'Mini Triples', 130.0, 45.0, 65.0, 130.0, null],
+    ['triple_pollo_jamon_queso', 'Triple pollo, jamón, queso', 'Mini Triples', 118.0, 35.0, 59.0, 118.0, null],
+    ['triple_pollo_durazno', 'Triple pollo con durazno', 'Mini Triples', 130.0, 45.0, 65.0, 130.0, null],
+    ['triple_espinaca_queso_crema', 'Triple espinaca y queso crema', 'Mini Triples', 118.0, 35.0, 59.0, 118.0, null],
+    ['triple_mermelada_queso_crema', 'Triple mermelada y queso crema', 'Mini Triples', 110.0, 35.0, 59.0, 110.0, null],
+    ['triple_pollo_lomo_ahumado', 'Triple pollo y lomo ahumado', 'Mini Triples', 118.0, 35.0, 59.0, 118.0, null],
+    ['triple_pollo_tocino', 'Triple pollo y tocino', 'Mini Triples', 118.0, 35.0, 59.0, 118.0, null],
+    ['triple_pollo_aceituna', 'Triple pollo con aceituna', 'Mini Triples', 118.0, 35.0, 59.0, 118.0, null],
+    ['triple_pollo_pina', 'Triple pollo con piña', 'Mini Triples', 130.0, 45.0, 65.0, 130.0, null],
+    ['triple_pollo_pecanas_jamon', 'Triple pollo, pecanas y jamón', 'Mini Triples', 120.0, 40.0, 60.0, 120.0, null],
+
+    // --- PIQUEOS ---
+    ['piqueo_brochetas_pollo', 'Brochetas de pollo', 'Piqueos', 240.0, 70.0, 120.0, 240.0, null],
+    ['piqueo_alitas_bouchet', 'Alitas bouchet', 'Piqueos', 240.0, 70.0, 120.0, 240.0, null],
+    ['piqueo_guindones_tocino', 'Guindones c/tocino', 'Piqueos', 100.0, 30.0, 50.0, 100.0, null],
+    ['piqueo_enrollado_jamon_esparragos', 'Enrollado de jamón c/espárragos', 'Piqueos', 65.0, 25.0, 35.0, 65.0, null],
+    ['piqueo_hojarascas_aji_gallina', 'Hojarascas de ají de gallina', 'Piqueos', 65.0, 25.0, 35.0, 65.0, null],
+    ['piqueo_piononitos_espinaca', 'Piononitos de espinaca', 'Piqueos', 60.0, 20.0, 30.0, 60.0, null],
+    ['piqueo_tequenos_guacamole', 'Tequeños con guacamole', 'Piqueos', 80.0, 28.0, 42.0, 80.0, null],
+    ['piqueo_voulevans_jamon', 'Voulevans de jamón', 'Piqueos', 65.0, 25.0, 35.0, 65.0, null],
+    ['piqueo_voulevans_tocino', 'Voulevans de tocino', 'Piqueos', 65.0, 25.0, 35.0, 65.0, null],
+    ['piqueo_canapes_jamon_pina_durazno', 'Canapés jamón, piña, durazno', 'Piqueos', 65.0, 25.0, 35.0, 65.0, null],
+
+    // --- PASTELES FAMILIARES ---
+    ['fam_crema_volteada', 'Crema Volteada', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
+    ['fam_mousse_fresa_maracuya', 'Mousse de Fresa, Maracuya', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
+    ['fam_pastel_acelga', 'Pastel de Acelga', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
+    ['fam_torta_tres_leches', 'Torta Tres Leches', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
+    ['fam_pye_manzana_limon', 'Pye de Manzana - Limón', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
+    ['fam_torta_choco', 'Torta de Chocolate', 'Pasteles Familiares', 45.0, null, null, null, 45.0],
+    ['fam_torta_helada', 'Torta Helada', 'Pasteles Familiares', 45.0, null, null, null, 45.0],
+    ['fam_torta_selva_negra', 'Torta Selva Negra', 'Pasteles Familiares', 45.0, null, null, null, 45.0],
+    ['fam_torta_chantilly', 'Torta de Chantilly', 'Pasteles Familiares', 40.0, null, null, null, 40.0],
+    ['fam_keke_variado', 'Keke de pasas-Vainilla-Marmol-Castaña', 'Pasteles Familiares', 16.0, null, null, null, 16.0],
+
+    // --- PAN GOURMET ---
+    ['gourmet_mini_aceituna', 'Mini Aceituna', 'Pan Gourmet', 35.0, 12.0, 24.0, 35.0, null],
+    ['gourmet_mini_arabe', 'Mini Arabe', 'Pan Gourmet', 32.0, 11.0, 22.0, 32.0, null],
+    ['gourmet_mini_ciabatta', 'Mini Ciabatta', 'Pan Gourmet', 32.0, 11.0, 22.0, 32.0, null],
+    ['gourmet_mini_croissant', 'Mini Croissant', 'Pan Gourmet', 50.0, 15.0, 30.0, 50.0, null],
+    ['gourmet_mini_frances', 'Mini Francés', 'Pan Gourmet', 30.0, 9.0, 18.0, 30.0, null],
+    ['gourmet_mini_hamburguesa', 'Mini Hamburguesa', 'Pan Gourmet', 32.0, 11.0, 22.0, 32.0, null],
+    ['gourmet_mini_hotdog', 'Mini Hot Dog', 'Pan Gourmet', 30.0, 9.0, 18.0, 30.0, null],
+    ['gourmet_mini_integral', 'Mini Integral', 'Pan Gourmet', 32.0, 11.0, 22.0, 32.0, null],
+    ['gourmet_mini_jamon', 'Mini Jamón', 'Pan Gourmet', 40.0, 12.0, 24.0, 40.0, null],
+    ['gourmet_petipan', 'Petipan', 'Pan Gourmet', 30.0, 9.0, 18.0, 30.0, null],
+    ['gourmet_hamburguesa_grande', 'Hamburguesa grande', 'Pan Gourmet', 0.80, null, null, null, 0.80],
+    ['gourmet_croissant_grande', 'Croissant grande', 'Pan Gourmet', 1.50, null, null, null, 1.50],
+
+    // --- PAN ESPECIAL ---
+    ['esp_pan_molde_pullman', 'Pan de Molde (Pullman)', 'Pan Especial', 18.0, null, null, null, 18.0],
+    ['esp_pan_molde_integral', 'Pan de Molde Integral', 'Pan Especial', 19.0, null, null, null, 19.0],
+    ['esp_pan_molde_marmoleado', 'Pan de Molde Marmoleado', 'Pan Especial', 20.0, null, null, null, 20.0],
+    ['esp_pan_molde_color', 'Pan de Molde de Color', 'Pan Especial', 21.0, null, null, null, 21.0],
+    ['esp_pan_molde_blanco_chico', 'Pan de Molde Blanco chico', 'Pan Especial', 10.0, null, null, null, 10.0],
+    ['esp_pan_molde_integral_chico', 'Pan de Molde Integral chico', 'Pan Especial', 11.0, null, null, null, 11.0]
+];
+
+// Mapeo automático de la estructura de matriz a objetos internos legibles
+const productos = productosIniciales.map((p, index) => {
+  const [id, nombre, categoria, p100, p25, p50, ref100, precioFijo] = p;
+  let obj = { id: index + 1, codigo: id, nombre, categoria };
+  if (precioFijo !== null) {
+    obj.precio = precioFijo;
+  } else {
+    obj.precios = {
+      x100: ref100 !== null ? ref100 : p100,
+      x50: p50,
+      x25: p25
+    };
+  }
+  return obj;
+});
+
+let cantidades = {};
+let paquetesPorProducto = {};
+let datosPedidoActual = {};
+let categoriaFiltroActual = "todos";
+
+function obtenerPaquetesProducto(id) {
+  if (!paquetesPorProducto[id]) paquetesPorProducto[id] = {};
+  return paquetesPorProducto[id];
+}
+
+function reconstruirCantidadDesdePaquetes(id) {
+  const paquetes = obtenerPaquetesProducto(id);
+  cantidades[id] = Object.entries(paquetes).reduce((total, [tamano, cantidad]) => {
+    const valor = Number(tamano) || 0;
+    const cant = Number(cantidad) || 0;
+    return total + (valor * cant);
+  }, 0);
+  return cantidades[id];
+}
+
+function actualizarPaquete(id, tamano, delta) {
+  const paquetes = obtenerPaquetesProducto(id);
+  const nuevoValor = (Number(paquetes[tamano]) || 0) + delta;
+
+  if (nuevoValor <= 0) {
+    delete paquetes[tamano];
+  } else {
+    paquetes[tamano] = nuevoValor;
+  }
+
+  reconstruirCantidadDesdePaquetes(id);
+  return cantidades[id];
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  generarBotonesCategorias();
+  renderizarCatalogo();
+  generarOpcionesHora();
+  const hoy = new Date().toISOString().split('T')[0];
+  const inputFecha = document.getElementById('cliFecha');
+  if (inputFecha) inputFecha.setAttribute('min', hoy);
+});
+
+function generarOpcionesHora() {
+  const selector = document.getElementById('cliHora');
+  if (!selector) return;
+
+  for (let minutos = 8 * 60; minutos <= 19 * 60 + 30; minutos += 30) {
+    const horas = Math.floor(minutos / 60);
+    const minutosTexto = String(minutos % 60).padStart(2, '0');
+    const periodo = horas < 12 ? 'a. m.' : 'p. m.';
+    const hora12 = horas % 12 || 12;
+    const opcion = document.createElement('option');
+    opcion.value = `${String(horas).padStart(2, '0')}:${minutosTexto}`;
+    opcion.textContent = `${hora12}:${minutosTexto} ${periodo}`;
+    selector.appendChild(opcion);
+  }
+}
+
+function generarBotonesCategorias() {
+  const nav = document.getElementById('categoryNav');
+  const categoriasUnicas = [...new Set(productos.map(p => p.categoria))];
+  
+  categoriasUnicas.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'cat-btn';
+    btn.innerText = cat;
+    btn.onclick = (e) => filtrarCategoria(cat, btn);
+    nav.appendChild(btn);
+  });
+}
+
+function filtrarCategoria(cat, btn) {
+  categoriaFiltroActual = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderizarCatalogo();
+}
+
+function obtenerTextoPrecio(prod) {
+  if (prod.precio !== undefined) {
+    return `Precio unitario: <strong>S/. ${prod.precio.toFixed(2)}</strong>`;
+  }
+  if (prod.precios && prod.precios.x100 !== undefined) {
+    return `Ciento (100u): <strong>S/. ${prod.precios.x100.toFixed(2)}</strong>`;
+  }
+  return `Precio no disponible`;
+}
+
+function renderizarCatalogo() {
+  const container = document.getElementById('catalogGrid');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const filtrados = productos.filter(p => {
+    if (categoriaFiltroActual === 'todos') return true;
+    return p.categoria === categoriaFiltroActual;
+  });
+
+  filtrados.forEach(prod => {
+    cantidades[prod.id] = cantidades[prod.id] || 0;
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    card.innerHTML = `
+      <div>
+        <span class="card-category-badge">${prod.categoria}</span>
+        <h3 class="product-title">${prod.nombre}</h3>
+        <div class="product-price-info">${obtenerTextoPrecio(prod)}</div>
+        <div class="product-subtotal" id="subtotal-${prod.id}">S/. ${calcularSubtotal(prod, cantidades[prod.id]).toFixed(2)}</div>
+      </div>
+      <div class="controls-wrapper">
+        <div class="stepper-row">
+          <button class="btn-step-main" type="button" onclick="modificarCantidad(${prod.id}, -5)">-5</button>
+          <span class="qty-display" id="qty-${prod.id}">${cantidades[prod.id]}</span>
+          <button class="btn-step-main" type="button" onclick="modificarCantidad(${prod.id}, 5)">+5</button>
+        </div>
+        <div class="preset-row">
+          <button class="btn-action" type="button" onclick="establecerPaquete(${prod.id}, 25)">25</button>
+          <button class="btn-action" type="button" onclick="establecerPaquete(${prod.id}, 50)">50</button>
+          <button class="btn-action" type="button" onclick="establecerPaquete(${prod.id}, 100)">100</button>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function calcularSubtotal(prod, cant) {
+  if (cant <= 0) return 0;
+  if (prod.precio !== undefined) return cant * prod.precio;
+  if (prod.precios) {
+    if (cant >= 100 && prod.precios.x100) return cant * (prod.precios.x100 / 100.0);
+    if (cant >= 50 && prod.precios.x50) return cant * (prod.precios.x50 / 50.0);
+    if (cant >= 25 && prod.precios.x25) return cant * (prod.precios.x25 / 25.0);
+    if (prod.precios.x100) return cant * (prod.precios.x100 / 100.0);
+  }
+  return 0;
+}
+
+function modificarCantidad(id, delta) {
+  const prod = productos.find(p => p.id === id);
+  if (!prod) return;
+
+  if ([25, 50, 100].includes(Math.abs(delta))) {
+    const tamano = Math.abs(delta);
+    actualizarPaquete(id, tamano, delta > 0 ? 1 : -1);
+  } else {
+    const nueva = (Number(cantidades[id]) || 0) + delta;
+    cantidades[id] = nueva < 0 ? 0 : nueva;
+    paquetesPorProducto[id] = {};
+  }
+
+  const subtotal = calcularSubtotal(prod, cantidades[id]);
+  const elemQty = document.getElementById(`qty-${id}`);
+  const elemSub = document.getElementById(`subtotal-${id}`);
+  if (elemQty) elemQty.innerText = cantidades[id];
+  if (elemSub) elemSub.innerText = `S/. ${subtotal.toFixed(2)}`;
+  actualizarBarraCarrito();
+}
+
+function establecerPaquete(id, tamano) {
+  const prod = productos.find(p => p.id === id);
+  if (!prod) return;
+
+  paquetesPorProducto[id] = { [tamano]: 1 };
+  reconstruirCantidadDesdePaquetes(id);
+
+  const subtotal = calcularSubtotal(prod, cantidades[id]);
+  const elemQty = document.getElementById(`qty-${id}`);
+  const elemSub = document.getElementById(`subtotal-${id}`);
+  if (elemQty) elemQty.innerText = cantidades[id];
+  if (elemSub) elemSub.innerText = `S/. ${subtotal.toFixed(2)}`;
+  actualizarBarraCarrito();
+}
+
+function calcularTotalGlobal() {
+  let total = 0;
+  let bocaditos = 0;
+  productos.forEach(p => {
+    const cant = cantidades[p.id] || 0;
+    bocaditos += cant;
+    total += calcularSubtotal(p, cant);
+  });
+  return { total, bocaditos };
+}
+
+function actualizarBarraCarrito() {
+  const { total, bocaditos } = calcularTotalGlobal();
+  document.getElementById('cartCount').innerText = `${bocaditos} ítems seleccionados`;
+  document.getElementById('cartTotal').innerText = `S/. ${total.toFixed(2)}`;
+}
+
+function abrirModal(id) {
+  const m = document.getElementById(id);
+  if (m) m.classList.add('active');
+}
+
+function cerrarModal(id) {
+  const m = document.getElementById(id);
+  if (m) m.classList.remove('active');
+}
+
+function iniciarCheckout() {
+  const { bocaditos } = calcularTotalGlobal();
+  if (bocaditos === 0) {
+    alert('Por favor selecciona al menos una cantidad de productos.');
+    return;
+  }
+  abrirModal('modalDatos');
+}
+
+function validarHorarioAtencion() {
+  const fechaVal = document.getElementById('cliFecha').value;
+  const horaVal = document.getElementById('cliHora').value;
+  const errElem = document.getElementById('errHorario');
+
+  if (!fechaVal || !horaVal) return false;
+
+  const [year, month, day] = fechaVal.split('-').map(Number);
+  const [hours, minutes] = horaVal.split(':').map(Number);
+  const fechaObj = new Date(year, month - 1, day, hours, minutes);
+  const diaSemana = fechaObj.getDay(); 
+  const minutosTotales = hours * 60 + minutes;
+
+  let esValido = false;
+  if (diaSemana >= 1 && diaSemana <= 6) {
+    esValido = minutosTotales >= 480 && minutosTotales <= 1199;
+  } else if (diaSemana === 0) {
+    esValido = minutosTotales >= 480 && minutosTotales <= 659;
+  }
+
+  if (errElem) {
+    errElem.style.display = esValido ? 'none' : 'block';
+  }
+  return esValido;
+}
+
+function procesarDatosCliente(e) {
+  e.preventDefault();
+  if (!validarHorarioAtencion()) {
+    alert('Por favor elige una hora dentro del rango de atención especificado.');
+    return;
+  }
+
+  const { total } = calcularTotalGlobal();
+  datosPedidoActual.cliente = {
+    nombre: document.getElementById('cliNombre').value,
+    apellido: document.getElementById('cliApellido').value,
+    telefono: document.getElementById('cliTelefono').value,
+    fecha: document.getElementById('cliFecha').value,
+    hora: document.getElementById('cliHora').value
+  };
+  datosPedidoActual.monto = total;
+
+  document.getElementById('yapeMonto').innerText = `S/. ${total.toFixed(2)}`;
+  const qrData = encodeURIComponent(`YAPE|PASTELERIA_DCHELIS|946227035|S/.${total.toFixed(2)}`);
+  document.getElementById('yapeQR').src = `https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${qrData}`;
+
+  cerrarModal('modalDatos');
+  abrirModal('modalYape');
+}
+
+async function confirmarPagoYape(e) {
+  e.preventDefault();
+  const codOp = document.getElementById('yapeCodigoOp').value;
+  datosPedidoActual.codigoOperacion = codOp;
+  const fechaCodigo = datosPedidoActual.cliente.fecha.replace(/-/g, '');
+  const sufijoTemporal = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  datosPedidoActual.idPedido = `PED-${fechaCodigo}-${sufijoTemporal}`;
+  datosPedidoActual.items = productos
+    .filter(p => (cantidades[p.id] || 0) > 0)
+    .map(p => ({
+      nombre: p.nombre,
+      cantidad: cantidades[p.id],
+      subtotal: calcularSubtotal(p, cantidades[p.id]),
+      paquetes: obtenerPaquetesProducto(p.id)
+    }));
+
+  const payload = {
+    codigo: datosPedidoActual.idPedido,
+    tipo_cliente: 'Particular',
+    cliente_nombre: `${datosPedidoActual.cliente.nombre} ${datosPedidoActual.cliente.apellido}`.trim(),
+    celular: datosPedidoActual.cliente.telefono,
+    monto_total: datosPedidoActual.monto,
+    adelanto: datosPedidoActual.monto,
+    metodo_pago: 'Yape',
+    fecha_recoge: datosPedidoActual.cliente.fecha,
+    hora_recoge: datosPedidoActual.cliente.hora,
+    detalles: datosPedidoActual.items.map(item => ({
+      producto_nombre: item.nombre,
+      cantidad: item.cantidad,
+      subtotal: item.subtotal,
+      paquetes: item.paquetes || {}
+    }))
+  };
+
+  try {
+    const response = await fetch('/api/pedidos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'No se pudo guardar el pedido.');
+    }
+
+    if (data.codigo) datosPedidoActual.idPedido = data.codigo;
+    guardarEnControlProduccion(datosPedidoActual);
+    cerrarModal('modalYape');
+    prepararBoletaHTML();
+    abrirModal('modalFinal');
+  } catch (error) {
+    alert(error.message || 'Ocurrió un error al registrar el pedido.');
+  }
+}
+
+function guardarEnControlProduccion(pedido) {
+  const historial = JSON.parse(localStorage.getItem('pedidos_produccion') || '[]');
+  historial.push({
+    ...pedido,
+    estado: 'Pendiente',
+    fechaRegistro: new Date().toLocaleString('es-PE')
+  });
+  localStorage.setItem('pedidos_produccion', JSON.stringify(historial));
+}
+
+function prepararBoletaHTML() {
+  const clienteInfo = document.getElementById('boletaClienteInfo');
+  const resumenVenta = document.getElementById('boletaResumenVenta');
+  const itemsContainer = document.getElementById('boletaItems');
+  const totalContainer = document.getElementById('boletaMontoTotal');
+
+  if (clienteInfo) {
+    clienteInfo.innerHTML = `
+      <p><strong>Código:</strong> ${datosPedidoActual.idPedido}</p>
+      <p><strong>Cliente:</strong> ${datosPedidoActual.cliente.nombre} ${datosPedidoActual.cliente.apellido}</p>
+      <p><strong>Teléfono:</strong> ${datosPedidoActual.cliente.telefono}</p>
+      <p><strong>Fecha/Hora Recojo:</strong> ${datosPedidoActual.cliente.fecha} ${datosPedidoActual.cliente.hora}</p>
+      <p><strong>N° Operación Yape:</strong> ${datosPedidoActual.codigoOperacion}</p>
+    `;
+  }
+
+  if (resumenVenta) {
+    const totalBocaditos = (datosPedidoActual.items || []).reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
+    resumenVenta.innerHTML = `
+      <strong>Reporte de venta:</strong> ${totalBocaditos} bocaditos • ${datosPedidoActual.items.length} líneas registradas
+    `;
+  }
+
+  if (itemsContainer) {
+    itemsContainer.innerHTML = datosPedidoActual.items.map(it => `
+      <tr>
+        <td>${it.cantidad}</td>
+        <td>${it.nombre}${Object.keys(it.paquetes || {}).length ? `<br><small>${Object.entries(it.paquetes).map(([tamano, cantidad]) => `${cantidad} paquete(s) de ${tamano}`).join(' + ')}</small>` : ''}</td>
+        <td>S/. ${Number(it.subtotal || 0).toFixed(2)}</td>
+      </tr>
+    `).join('');
+  }
+
+  if (totalContainer) {
+    totalContainer.innerHTML = `Total Pagado: S/. ${datosPedidoActual.monto.toFixed(2)}`;
+  }
+}
+
+async function descargarBoletaPDF() {
+  if (!datosPedidoActual.items || datosPedidoActual.items.length === 0) {
+    alert('No hay información del pedido para generar la boleta.');
+    return;
+  }
+
+  if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
+    alert('No se pudo cargar el generador de PDF. Revisa la conexión a internet y recarga la página.');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const margen = 14;
+  const ancho = pdf.internal.pageSize.getWidth();
+  const cliente = datosPedidoActual.cliente || {};
+  const nombreCliente = `${cliente.nombre || ''} ${cliente.apellido || ''}`.trim();
+  const totalBocaditos = datosPedidoActual.items.reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
+
+  pdf.setTextColor(0, 92, 39);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(18);
+  pdf.text("PASTELERIA D'CHELIS", ancho / 2, 18, { align: 'center' });
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  pdf.setTextColor(100, 116, 139);
+  pdf.text('Comprobante de pedido y confirmacion de pago', ancho / 2, 24, { align: 'center' });
+  pdf.setDrawColor(0, 92, 39);
+  pdf.line(margen, 28, ancho - margen, 28);
+
+  pdf.setTextColor(15, 23, 42);
+  pdf.setFontSize(10);
+  const datos = [
+    ['Codigo:', datosPedidoActual.idPedido],
+    ['Cliente:', nombreCliente],
+    ['Telefono:', cliente.telefono],
+    ['Fecha/Hora de recojo:', `${cliente.fecha || '-'} ${cliente.hora || ''}`],
+    ['Operacion Yape:', datosPedidoActual.codigoOperacion]
+  ];
+  let y = 37;
+  datos.forEach(([etiqueta, valor]) => {
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(etiqueta, margen, y);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(String(valor || '-'), margen + 39, y);
+    y += 6;
+  });
+
+  pdf.setFillColor(238, 247, 238);
+  pdf.roundedRect(margen, y + 1, ancho - margen * 2, 10, 2, 2, 'F');
+  pdf.setTextColor(0, 92, 39);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text(`Reporte de venta: ${totalBocaditos} bocaditos`, margen + 4, y + 7.5);
+  y += 18;
+
+  const filas = datosPedidoActual.items.map((item) => {
+    const paquetes = Object.entries(item.paquetes || {})
+      .map(([tamano, cantidad]) => `${cantidad} paquete(s) de ${tamano}`)
+      .join(' + ');
+    return [
+      String(item.cantidad || 0),
+      paquetes ? `${item.nombre}\n${paquetes}` : item.nombre,
+      `S/. ${Number(item.subtotal || 0).toFixed(2)}`
+    ];
+  });
+
+  pdf.autoTable({
+    startY: y,
+    margin: { left: margen, right: margen },
+    head: [['Cant.', 'Descripcion', 'Subtotal']],
+    body: filas,
+    theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 9, cellPadding: 3, textColor: [15, 23, 42] },
+    headStyles: { fillColor: [238, 247, 238], textColor: [0, 92, 39], fontStyle: 'bold' },
+    columnStyles: { 0: { cellWidth: 20, halign: 'center' }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 30, halign: 'right' } }
+  });
+
+  const finalY = pdf.lastAutoTable.finalY + 10;
+  pdf.setTextColor(0, 92, 39);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(13);
+  pdf.text(`Total pagado: S/. ${Number(datosPedidoActual.monto || 0).toFixed(2)}`, ancho - margen, finalY, { align: 'right' });
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(100, 116, 139);
+  pdf.text('Presente esta boleta al retirar su pedido. Muchas gracias por su preferencia.', ancho / 2, 286, { align: 'center' });
+  pdf.save(`Boleta_${datosPedidoActual.idPedido}.pdf`);
+}
+
+function cerrarTodoYReiniciar() {
+  cantidades = {};
+  paquetesPorProducto = {};
+  datosPedidoActual = {};
+  document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+  renderizarCatalogo();
+  actualizarBarraCarrito();
+}
+</script>
+</body>
+</html>
