@@ -1,0 +1,13 @@
+{
+  "name": "dchelis-sistema",
+  "version": "2.0.0",
+  "main": "server.js",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.6",
+    "exceljs": "^4.4.0",
+    "express": "^4.22.2",
+    "node-cron": "^4.6.0",
+    "sqlite3": "^5.1.7"
+  }
+}
