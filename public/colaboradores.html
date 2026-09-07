@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>D'chelis | Salidas del día</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="config.js"></script>
+  <style>
+    :root { --ink:#173c2b; --accent:#b75e36; --paper:#fffaf5; --line:#eadfd6; --muted:#766b64; }
+    * { box-sizing:border-box; } body { margin:0; background:radial-gradient(circle at right top,#ffe5d1,transparent 28rem),var(--paper); color:#29221e; font-family:'Plus Jakarta Sans',sans-serif; }
+    header { padding:28px max(20px,calc((100% - 1040px)/2)); color:#fff; background:linear-gradient(110deg,#173c2b,#28533c); } h1 { margin:0; font-size:clamp(1.7rem,4vw,2.5rem); } header p { margin:7px 0 0; color:#f7d7bf; }
+    main { max-width:1040px; margin:25px auto; padding:0 20px 50px; } .toolbar { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; align-items:center; margin-bottom:18px; } input,button { font:inherit; border-radius:10px; padding:10px 12px; } input { border:1px solid var(--line); background:#fff; } button { cursor:pointer; color:#fff; background:var(--accent); border:0; font-weight:800; }
+    .notice { color:var(--muted); } .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(245px,1fr)); gap:15px; } article { background:#fff; border:1px solid var(--line); border-top:4px solid var(--accent); border-radius:15px; padding:17px; box-shadow:0 7px 18px rgba(74,48,31,.06); } .top { display:flex; justify-content:space-between; gap:10px; align-items:center; } .code { color:var(--accent); font-weight:800; } .time { font-weight:800; font-size:1.25rem; color:var(--ink); margin:15px 0 4px; } .name { font-weight:700; } .status { display:inline-block; padding:4px 8px; border-radius:999px; background:#fff0e5; color:#984728; font-size:.72rem; font-weight:800; } ul { margin:14px 0 0; padding:12px 0 0; list-style:none; border-top:1px solid var(--line); } li { display:flex; justify-content:space-between; gap:10px; padding:4px 0; font-size:.9rem; } footer { text-align:center; padding:20px; color:var(--muted); font-size:.8rem; }
+  </style>
+</head>
+<body>
+  <header><h1>Salidas del día</h1><p>D'chelis · Vista de producción y despacho</p></header>
+  <main>
+    <div class="toolbar"><div><label for="fecha"><strong>Fecha:</strong></label> <input id="fecha" type="date"></div><button id="actualizar">Actualizar</button></div>
+    <p class="notice" id="resumen">Cargando pedidos…</p><section class="grid" id="pedidos"></section>
+  </main><footer>Esta vista es solo de consulta. Los pedidos se administran desde el panel administrativo.</footer>
+  <script>
+    const base = String(window.DCHELIS_API_URL || localStorage.getItem('dchelis_api_url') || '').replace(/\/$/, '');
+    const api = (path) => base ? `${base}${path}` : path;
+    const fecha = document.getElementById('fecha'); fecha.value = new Date().toISOString().slice(0,10);
+    const safe = (text) => String(text || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    async function cargar() { const out=document.getElementById('pedidos'), resumen=document.getElementById('resumen'); resumen.textContent='Cargando pedidos…'; out.innerHTML=''; try { const r=await fetch(api(`/api/colaboradores/salidas?fecha=${encodeURIComponent(fecha.value)}`)); const data=await r.json(); if(!r.ok) throw new Error(data.error || 'No se pudieron cargar los pedidos.'); const pedidos=data.pedidos || []; resumen.textContent=pedidos.length ? `${pedidos.length} pedido(s) programado(s) para hoy.` : 'No hay pedidos programados para esta fecha.'; out.innerHTML=pedidos.map(p=>`<article><div class="top"><span class="code">${safe(p.codigo)}</span><span class="status">${safe(p.estado)}</span></div><div class="time">${safe(p.hora_recoge || '--:--')}</div><div class="name">${safe(p.cliente_nombre)}</div><ul>${p.detalles.map(d=>`<li><span>${safe(d.producto_nombre)}</span><strong>${Number(d.cantidad)||0}</strong></li>`).join('')}</ul></article>`).join(''); } catch(e) { resumen.textContent=`${e.message}${!base && location.hostname.endsWith('github.io') ? ' Configura la URL del servidor en config.js.' : ''}`; } }
+    document.getElementById('actualizar').addEventListener('click', cargar); fecha.addEventListener('change',cargar); cargar(); setInterval(cargar,30000);
+  </script>
+</body>
+</html>

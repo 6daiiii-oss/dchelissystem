@@ -7,20 +7,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="config.js"></script>
   <style>
     :root {
-      --brand-dark: #005c27;
-      --brand-main: #009640;
-      --brand-light: #22c55e;
-      --brand-soft: #eef7ee;
+      --brand-dark: #173c2b;
+      --brand-main: #b75e36;
+      --brand-light: #e79a68;
+      --brand-soft: #fff1e8;
       --yape-purple: #742284;
       --yape-light: #fdf4ff;
       --yape-border: #f0abfc;
-      --bg-main: #f8fafc;
+      --bg-main: #fffaf5;
       --bg-card: #ffffff;
-      --text-dark: #0f172a;
-      --text-muted: #64748b;
-      --border-color: #e2e8f0;
+      --text-dark: #29221e;
+      --text-muted: #766b64;
+      --border-color: #eadfd6;
       --radius-sm: 8px;
       --radius-md: 12px;
       --radius-lg: 18px;
@@ -588,6 +589,71 @@
       color: #005c27;
       margin-top: 12px;
     }
+
+    /* Experiencia de compra: una identidad cálida, clara y fácil de recorrer. */
+    body {
+      background: radial-gradient(circle at 8% 0%, #ffe9d8 0, transparent 27rem), var(--bg-main);
+      letter-spacing: -0.01em;
+    }
+
+    header {
+      position: relative;
+      overflow: hidden;
+      min-height: 176px;
+      display: grid;
+      place-content: center;
+      background: linear-gradient(118deg, #173c2b 0%, #28533c 56%, #a54f30 160%);
+      box-shadow: 0 12px 32px rgba(23, 60, 43, 0.18);
+    }
+
+    header::before, header::after {
+      content: '';
+      position: absolute;
+      width: 230px;
+      height: 230px;
+      border: 1px solid rgba(255, 233, 216, 0.18);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    header::before { top: -150px; left: -48px; box-shadow: 0 0 0 28px rgba(255,255,255,.035), 0 0 0 58px rgba(255,255,255,.025); }
+    header::after { right: -112px; bottom: -168px; }
+    header h1 { position: relative; font-size: clamp(2rem, 5vw, 3.15rem); letter-spacing: -0.06em; }
+    header h1::before { content: "D'"; display: inline-grid; place-items: center; width: 34px; height: 34px; margin-right: 10px; border-radius: 50%; color: #173c2b; background: #f5b58a; font-size: .75rem; letter-spacing: 0; vertical-align: 7px; }
+    header p { position: relative; color: #f9d7c0; letter-spacing: .06em; text-transform: uppercase; font-size: .72rem; }
+
+    .category-nav { margin-top: -22px; position: relative; z-index: 1; padding-bottom: 4px; }
+    .cat-btn { border-radius: 999px; padding: 10px 17px; box-shadow: 0 5px 14px rgba(54, 36, 25, .08); }
+    .cat-btn.active, .cat-btn:hover { background: var(--brand-main); border-color: var(--brand-main); }
+    .main-container { max-width: 1120px; margin-top: 28px; }
+    .catalog-toolbar { padding: 8px; border: 1px solid rgba(234,223,214,.9); background: rgba(255,255,255,.7); border-radius: 16px; box-shadow: 0 8px 25px rgba(91, 62, 43, .06); }
+    .search-box { background: transparent; border: 0; box-shadow: none; min-height: 42px; }
+    .catalog-help { padding-right: 10px; }
+    .product-grid { grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)); gap: 18px; }
+    .product-card { position: relative; overflow: hidden; border-radius: 18px; padding: 19px; box-shadow: 0 7px 20px rgba(74, 48, 31, .06); }
+    .product-card::after { content: ''; position: absolute; height: 4px; width: 48px; left: 19px; bottom: 0; background: var(--brand-light); border-radius: 8px 8px 0 0; }
+    .product-card:hover { transform: translateY(-5px); box-shadow: 0 18px 34px rgba(74, 48, 31, .13); border-color: #e8c4ab; }
+    .product-card.is-extra { background: linear-gradient(145deg, #fff 20%, #fff7f0); border-color: #efd4c3; }
+    .card-category-badge { color: #a54f30; background: #fff0e5; border-radius: 999px; padding: 4px 9px; }
+    .product-subtotal { color: #a54f30; }
+    .controls-wrapper { background: #fcf7f2; }
+    .btn-step-main { background: var(--brand-dark); border-radius: 10px; }
+    .btn-action:hover { background: #fff0e5; border-color: var(--brand-light); color: #8e4227; }
+    .cart-bar { max-width: 880px; background: linear-gradient(105deg, #173c2b, #28533c); border: 1px solid rgba(255,255,255,.16); border-radius: 20px; padding: 13px 15px 13px 24px; }
+    .cart-total { color: #f7c48f; }
+    .btn-checkout { color: #fff; background: var(--brand-main); border-radius: 12px; }
+    .btn-checkout:hover { background: #cb7047; }
+    .modal-card { border-radius: 22px; border: 1px solid #f0dfd3; }
+    .modal-title { color: var(--brand-dark); }
+    .btn-next { background: var(--brand-main); }
+    .btn-next:hover { background: #9d482b; }
+    @media (max-width: 640px) {
+      header { min-height: 155px; padding-inline: 22px; }
+      header h1 { font-size: 2rem; }
+      .catalog-toolbar { padding: 6px; }
+      .cart-bar { bottom: 12px; width: calc(100% - 20px); gap: 10px; padding: 12px; }
+      .cart-count { display: none; }
+      .btn-checkout { padding: 11px 14px; }
+    }
   </style>
 </head>
 <body>
@@ -681,6 +747,12 @@
           </label>
         </div>
 
+        <div class="form-group">
+          <label for="cliAdelanto">Adelanto a pagar ahora (S/.)</label>
+          <input type="number" id="cliAdelanto" class="form-control" min="0" step="0.01" value="0" inputmode="decimal">
+          <small style="color:var(--text-muted);">Puedes pagar un adelanto. El saldo se cancela al recoger el pedido.</small>
+        </div>
+
         <button type="submit" class="btn-next">Ir a Pagar con Yape</button>
       </form>
     </div>
@@ -699,6 +771,7 @@
         <div style="font-weight:800; font-size:1rem; color:#1e293b;">Número Yape: <span style="color:var(--yape-purple);">946 227 035</span></div>
         <div style="font-size:0.85rem; color:var(--text-muted);">Titular: Pastelería D'chelis</div>
         <div style="font-size:1.3rem; font-weight:800; color:var(--yape-purple); margin-top:8px;" id="yapeMonto">S/. 0.00</div>
+        <div id="yapeSaldo" style="font-size:.85rem; color:var(--text-muted); margin-top:4px;"></div>
       </div>
 
       <form onsubmit="confirmarPagoYape(event)">
@@ -706,7 +779,8 @@
           <label for="yapeCodigoOp">Número de Operación Yape (6 dígitos) *</label>
           <input type="text" id="yapeCodigoOp" class="form-control" pattern="[0-9]{6}" required placeholder="Ej. 946227" maxlength="6">
         </div>
-        <button type="submit" class="btn-yape">Confirmar Pago y Emitir Boleta</button>
+        <small style="display:block; margin-top:10px; color:var(--text-muted); line-height:1.45;">El número de operación será revisado por D'chelis antes de confirmar el pago.</small>
+        <button type="submit" class="btn-yape">Registrar solicitud de pago</button>
       </form>
     </div>
   </div>
@@ -746,6 +820,11 @@
   </div>
 
 <script>
+// En GitHub Pages define window.DCHELIS_API_URL en config.js con la URL pública
+// del servidor Node instalado en la PC o en un hosting. Sin servidor no existe
+// una base de datos donde registrar pedidos.
+const API_BASE = String(window.DCHELIS_API_URL || localStorage.getItem('dchelis_api_url') || '').replace(/\/$/, '');
+const apiUrl = (path) => API_BASE ? `${API_BASE}${path}` : path;
 const productosIniciales = [
     // --- BOCADITOS DULCES ---
     ['dulce_alfajorcito_choco', 'Alfajorcito de Chocolate', 'Bocaditos Dulces', 70.0, 20.0, 35.0, 70.0, null],
@@ -1433,6 +1512,11 @@ function procesarDatosCliente(e) {
   }
 
   const { total } = calcularTotalGlobal();
+  const adelanto = Number(document.getElementById('cliAdelanto').value || 0);
+  if (!Number.isFinite(adelanto) || adelanto < 0 || adelanto > total) {
+    alert('El adelanto debe ser un monto entre S/. 0.00 y el total del pedido.');
+    return;
+  }
   datosPedidoActual.cliente = {
     nombre: document.getElementById('cliNombre').value,
     apellido: document.getElementById('cliApellido').value,
@@ -1443,9 +1527,11 @@ function procesarDatosCliente(e) {
     foto_torta: fotoTortaData
   };
   datosPedidoActual.monto = total;
+  datosPedidoActual.adelanto = adelanto;
 
-  document.getElementById('yapeMonto').innerText = `S/. ${total.toFixed(2)}`;
-  const qrData = encodeURIComponent(`YAPE|PASTELERIA_DCHELIS|946227035|S/.${total.toFixed(2)}`);
+  document.getElementById('yapeMonto').innerText = `Pagar ahora: S/. ${adelanto.toFixed(2)}`;
+  document.getElementById('yapeSaldo').innerText = adelanto < total ? `Saldo al recoger: S/. ${(total - adelanto).toFixed(2)}` : 'Pedido pagado en su totalidad.';
+  const qrData = encodeURIComponent(`YAPE|PASTELERIA_DCHELIS|946227035|S/.${adelanto.toFixed(2)}`);
   document.getElementById('yapeQR').src = `https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${qrData}`;
 
   cerrarModal('modalDatos');
@@ -1473,8 +1559,8 @@ async function confirmarPagoYape(e) {
     cliente_nombre: `${datosPedidoActual.cliente.nombre} ${datosPedidoActual.cliente.apellido}`.trim(),
     celular: datosPedidoActual.cliente.telefono,
     monto_total: datosPedidoActual.monto,
-    adelanto: datosPedidoActual.monto,
-    metodo_pago: 'Yape',
+    adelanto: datosPedidoActual.adelanto,
+    metodo_pago: `Yape - operación ${codOp} (verificación pendiente)`,
     fecha_recoge: datosPedidoActual.cliente.fecha,
     hora_recoge: datosPedidoActual.cliente.hora,
     dedicatoria: datosPedidoActual.cliente.dedicatoria,
@@ -1488,7 +1574,7 @@ async function confirmarPagoYape(e) {
   };
 
   try {
-    const response = await fetch('/api/pedidos', {
+    const response = await fetch(apiUrl('/api/pedidos'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -1506,7 +1592,10 @@ async function confirmarPagoYape(e) {
     prepararBoletaHTML();
     abrirModal('modalFinal');
   } catch (error) {
-    alert(error.message || 'Ocurrió un error al registrar el pedido.');
+    const ayudaApi = !API_BASE && location.hostname.endsWith('github.io')
+      ? ' Esta página está en GitHub Pages y necesita configurar la URL del servidor de pedidos en config.js.'
+      : '';
+    alert((error.message || 'Ocurrió un error al registrar el pedido.') + ayudaApi);
   }
 }
 
