@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -8,16 +8,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f3f5f8;
+      --bg: #fffaf5;
       --panel: #ffffff;
       --panel-alt: #f8fafc;
-      --brand: #0d3b1e;
-      --brand-soft: #eaf5ee;
+      --brand: #173c2b;
+      --brand-soft: #fff0e5;
       --accent: #b42318;
       --text: #101828;
       --muted: #667085;
-      --line: #e4e7ec;
-      --shadow: 0 10px 25px rgba(16, 24, 40, 0.08);
+      --line: #eadfd6;
+      --shadow: 0 12px 30px rgba(74, 48, 31, 0.08);
     }
 
     * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; padding: 0; }
@@ -761,6 +761,43 @@
       .pack-total { display: none; }
       .qty-cell { font-size: 7.2px; }
     }
+
+
+    /* Interfaz administrativa: jerarquía visual, superficie cálida y controles consistentes. */
+    body { background: radial-gradient(circle at 100% -10%, #ffe8d6 0, transparent 28rem), var(--bg); }
+    .auth-shell { background: linear-gradient(135deg, #fff3e8, #edf4ef); }
+    .auth-card { position: relative; overflow: hidden; border: 1px solid #eadfd6; box-shadow: 0 20px 45px rgba(71, 48, 33, .12); }
+    .auth-card::before { content: "D'"; display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 17px; border-radius: 50%; background: #f3b383; color: var(--brand); font-weight: 800; }
+    .auth-card h2 { font-size: 2rem; letter-spacing: -.06em; }
+    .field input, input[type="date"], .form-control { border-color: #e6d8ce; border-radius: 11px; }
+    .field input:focus, input[type="date"]:focus, .form-control:focus { border-color: #b75e36; box-shadow: 0 0 0 3px rgba(183,94,54,.12); }
+    .btn { border-radius: 11px; box-shadow: 0 2px 4px rgba(23,60,43,.08); }
+    .btn-primary { background: var(--brand); }
+    .btn-success { background: #b75e36; }
+    .btn-success:hover { background: #9f4c2d; }
+    .btn-warning { background: #6b625d; }
+    .btn-ghost { background: #fff5ee; color: #6d3724; }
+    .admin-shell { max-width: 1500px; margin: auto; padding: 28px clamp(16px, 4vw, 52px) 48px; }
+    .topbar { position: relative; overflow: hidden; min-height: 112px; padding: 24px 27px; color: #fff; border: 0; background: linear-gradient(110deg, #173c2b 0%, #28533c 70%, #9d482b 150%); box-shadow: 0 16px 32px rgba(23,60,43,.16); }
+    .topbar::after { content: ''; position: absolute; width: 210px; height: 210px; right: 10%; top: -150px; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; box-shadow: 0 0 0 32px rgba(255,255,255,.035); }
+    .topbar h1 { position: relative; color: #fff; letter-spacing: -.055em; }
+    .topbar .meta { position: relative; color: #f7d7bf; }
+    .topbar .btn-ghost { position: relative; color: #fff; background: rgba(255,255,255,.13); border: 1px solid rgba(255,255,255,.25); }
+    .tab-nav { gap: 8px; padding: 7px; width: max-content; max-width: 100%; overflow-x: auto; border: 1px solid #eadfd6; border-radius: 14px; background: rgba(255,255,255,.72); box-shadow: 0 6px 18px rgba(74,48,31,.04); }
+    .tab-btn { border: 0; border-radius: 9px; color: var(--muted); padding: 10px 15px; white-space: nowrap; }
+    .tab-btn:hover, .tab-btn.active { background: #fff0e5; color: #984728; }
+    .panel { border-radius: 20px; border-color: #eadfd6; padding: clamp(18px, 3vw, 28px); }
+    .header-row { border-bottom: 1px solid #f0e5dd; padding-bottom: 16px; }
+    .header-row h3 { letter-spacing: -.04em; }
+    .order-card { border-radius: 15px; border-color: #eee1d7; border-top: 4px solid #b75e36; box-shadow: 0 6px 16px rgba(74,48,31,.06); }
+    .order-card:hover { box-shadow: 0 15px 28px rgba(74,48,31,.12); }
+    .order-code { color: #984728; }
+    .badge { border-radius: 999px; }
+    .pedido-modal-card { border-radius: 20px; border: 1px solid #eadfd6; box-shadow: 0 22px 50px rgba(41,34,30,.2); }
+    .notice { border-radius: 12px; background: #fff4ea; border-color: #f0c9ad; }
+    .table-container { border: 1px solid #eadfd6; border-radius: 14px; overflow: hidden; }
+    @media (max-width: 640px) { .admin-shell { padding: 14px 12px 32px; } .topbar { border-radius: 15px; min-height: 100px; padding: 20px; } .tab-nav { width: 100%; } .panel { border-radius: 15px; } }
+
   </style>
 </head>
 <body>
