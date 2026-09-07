@@ -18,6 +18,17 @@ const PRODUCTOS_COCINA = [
   'TORTITA CHOCOLATE', 'TORTITA CHANTILLY', 'TORTITA SELVA NEGRA', 'TRUFAS BLANCAS', 'TRUFAS', 'RELAMPAGOS'
 ];
 
+const PRODUCTOS_COCINA_EXTRA = [
+  'Sandwich de Asado', 'Croissant con Pollo', 'Sandwich de Lomito', 'Petipan', 'Petipan de pollo c/durazno',
+  'Petipan de pollo c/piña', 'Petipan de Pollo', 'Sandwich de Salchicha norteña', 'Caprece Mozzarella con Tomate y Albaca',
+  'Sandwich Hamburguesita', 'Croissant Mixto', 'Butifarras', 'Triple de Jamón y queso',
+  'Triple palta, tomate, huevo', 'Triple pollo, jamón y queso', 'Triple pollo con durazno',
+  'Triple espinaca y queso crema', 'Triple mermelada y queso crema', 'Triple pollo y lomo ahumado',
+  'Triple pollo y tocino', 'Triple pollo con aceituna', 'Triple pollo con piña', 'Triple pollo, pecanas y jamón',
+  'Pan de Molde (Pullman)', 'Pan de Molde Integral', 'Pan de Molde Marmoleado', 'Pan de Molde de Color',
+  'Pan de Molde Blanco chico', 'Pan de Molde Integral chico', 'Baguetina', 'Mini Francés', 'Mini Croissant', 'Pan de Hamburguesa'
+];
+
 const PRODUCTOS_COCINA_MAPA_TIENDA = Object.fromEntries(Object.entries({
   'ALFAJORCITO DE CHOCOLATE': 'ALFAJOR CHOCOLATE',
   'ALFAJORCITO CHOCOLATE': 'ALFAJOR CHOCOLATE',
@@ -132,6 +143,42 @@ const PRODUCTOS_COCINA_ALIASES = {
   'TRUFAS': ['TRUFAS', 'TRUFA'],
   'RELAMPAGOS': ['RELAMPAGOS', 'RELAMPAGO', 'RELAMPAGOS DE CHOCOLATE'],
   'PIZZAS': ['PIZZAS', 'PIZZITA', 'PIZZITAS'],
+  'SANDWICH DE ASADO': ['SANDWICH DE ASADO', 'SANDWICH ASADO', 'ASADO'],
+  'CROISSANT CON POLLO': ['CROISSANT CON POLLO', 'CROISSANT POLLO', 'CROISSANT DE POLLO'],
+  'SANDWICH DE LOMITO': ['SANDWICH DE LOMITO', 'SANDWICH LOMITO', 'LOMITO'],
+  'PETIPAN': ['PETIPAN', 'PETIPAN DE POLLO', 'PETIPAN POLLO', 'PETIPAN DE POLLO C DURAZNO', 'PETIPAN DE POLLO C PIÑA', 'PETIPAN DE POLL'],
+  'PETIPAN DE POLLO C DURAZNO': ['PETIPAN DURAZNO', 'PETIPAN POLLO DURAZNO', 'PETIPAN DE POLLO C DURAZNO', 'PETIPAN POLLO C DURAZNO', 'PETIPAN C DURAZNO'],
+  'PETIPAN DE POLLO C PIÑA': ['PETIPAN PIÑA', 'PETIPAN POLLO PIÑA', 'PETIPAN DE POLLO C PIÑA', 'PETIPAN POLLO C PIÑA', 'PETIPAN C PIÑA'],
+  'SANDWICH DE SALCHICHA NORTEÑA': ['SANDWICH DE SALCHICHA NORTEÑA', 'SANDWICH SALCHICHA', 'SALCHICHA NORTEÑA', 'SALCHICHA', 'SW SALCHICHA'],
+  'CAPRECCE MOZZARELLA CON TOMATE Y ALBACA': ['CAPRECCE', 'CAPRECCE MOZZARELLA', 'CAPRECCE MOZZ', 'CAPRECCE MOZZARELLA TOMATE ALBACA', 'CAPRECCE MOZZ ALBACA TOMATE'],
+  'SANDWICH HAMBURGUESITA': ['SANDWICH HAMBURGUESITA', 'SANDWICH DE HAMBURGUESA', 'HAMBURGUESITA'],
+  'CROISSANT MIXTO': ['CROISSANT MIXTO', 'CROISSANT MIJTO', 'CROISSANT MIXTO JAMON Y QUESO'],
+  'BUTIFARRAS': ['BUTIFARRA', 'BUTIFARRAS'],
+  'TRIPLE DE JAMON Y QUESO': ['TRIPLE JAMON Y QUESO', 'TRIPLE JAMÓN Y QUESO', 'TRIPLE PJQ', 'PJQ', 'TRIPLE JAMON QUESO'],
+  'TRIPLE PALTA TOMATE HUEVO': ['TRIPLE PALTA TOMATE HUEVO', 'TRIPLE PTH', 'PTH', 'TRIPLE PALTA TOMATE'],
+  'TRIPLE POLLO JAMON Y QUESO': ['TRIPLE POLLO JAMON Y QUESO', 'TRIPLE POLLO JAMÓN Y QUESO', 'TRIPLE POLLO JQ', 'TRIPLE POLLO JAMON QUESO'],
+  'TRIPLE POLLO CON DURAZNO': ['TRIPLE POLLO DURAZNO', 'TRIPLES DURAZNO', 'TRIPLE DURAZNO', 'TRIPLE POLLO CON DURAZNO'],
+  'TRIPLE POLLO CON PIÑA': ['TRIPLE POLLO PIÑA', 'TRIPLES PIÑA', 'TRIPLE PIÑA', 'TRIPLE POLLO CON PIÑA'],
+  'TRIPLE POLLO PECANAS Y JAMON': ['TRIPLE PECANA JAMON', 'TRIPLE POLLO PECANAS Y JAMON', 'TRIPLE POLLO PECANA Y JAMON'],
+  'TRIPLE POLLO Y LOMO AHUMADO': ['TRIPLE CON LOMO AHUMADO', 'TRIPLE POLLO LOMO AHUMADO', 'TRIPLE POLLO CON LOMO AHUMADO', 'TRIPLE POLLO Y LOMO AHUMADO'],
+  'TRIPLE POLLO Y TOCINO': ['TRIPLE POLLO TOCINO', 'TRIPLE POLLO CON TOCINO', 'TRIPLE TOCINO', 'TRIPLE POLLO Y TOCINO'],
+  'TRIPLE POLLO CON ACEITUNA': ['TRIPLE POLLO ACEITUNA', 'TRIPLE ACEITUNA', 'TRIPLE POLLO CON ACEITUNA'],
+  'TRIPLE ESPINACA Y QUESO CREMA': ['TRIPLE ESPINACA QUESO CREMA', 'TRIPLE ESPINACA', 'TRIPLE ESPINACA Y QUESO CREMA'],
+  'TRIPLE MERMELADA Y QUESO CREMA': ['TRIPLE MERMELADA', 'TRIPLE MERMELADA QUESO CREMA', 'TRIPLE MERMELADA Y QUESO CREMA'],
+  'PAN DE MOLDE PULLMAN': ['PAN PULLMAN', 'PAN DE MOLDE', 'PULLMAN', 'PAN DE MOLDE PULLMAN'],
+  'PAN DE MOLDE INTEGRAL': ['PAN INTEGRAL', 'PAN DE MOLDE INTEGRAL'],
+  'PAN DE MOLDE MARMOLEADO': ['PAN MARMOLEADO', 'PAN DE MOLDE MARMOLEADO'],
+  'PAN DE MOLDE DE COLOR': ['PAN DE COLOR', 'PAN DE MOLDE DE COLOR'],
+  'MINI FRANCES': ['PAN FRANCÉS', 'PAN FRANCES', 'FRANCES', 'MINI FRANCES', 'MINI FRANCÉS', 'MINI FRENCH', 'FRANCÉS'],
+  'MINI CROISSANT': ['MINI CROISSANT', 'CROISSANT MINI', 'CROISSANT PEQUEÑO'],
+  'PAN DE HAMBURGUESA': ['PAN HAMBURGUESA', 'PAN DE HAMBURGUESA'],
+  'PAN DE MOLDE (PULLMAN)': ['PAN DE MOLDE', 'PAN MOLDE PULLMAN', 'PULLMAN'],
+  'PETIPAN DE POLLO': ['PETIPAN DE POLLO', 'PETIPAN POLLO', 'PETIPAN DE POLL'],
+  'TRIPLE POLLO JAMON Y QUESO': ['TRIPLE POLLO JAMON Y QUESO', 'TRIPLE POLLO JAMÓN Y QUESO', 'TRIPLE POLLO JQ', 'TRIPLE POLLO JAMON QUESO'],
+  'SANDWICH HAMBURGUESITA': ['SANDWICH HAMBURGUESITA', 'SANDWICH DE HAMBURGUESA', 'HAMBURGUESITA'],
+  'TRIPLE DE JAMON Y QUESO': ['TRIPLE JAMON Y QUESO', 'TRIPLE JAMÓN Y QUESO', 'TRIPLE PJQ', 'PJQ', 'TRIPLE JAMON QUESO'],
+  'TRIPLE POLLO JAMON Y QUESO': ['TRIPLE POLLO JAMON Y QUESO', 'TRIPLE POLLO JAMON QUESO', 'TRIPLE POLLO JQ'],
+  'PAN DE MOLDE (PULLMAN)': ['PAN DE MOLDE', 'PAN MOLDE PULLMAN', 'PAN DE MOLDE PULLMAN', 'PULLMAN'],
   'EMPANADA CARNE': ['EMPANADA CARNE', 'EMPANADAS DE CARNE', 'EMPANADITAS DE CARNE'],
   'EMPANADA POLLO': ['EMPANADA POLLO', 'EMPANADAS DE POLLO', 'EMPANADITAS DE POLLO'],
   'EMPANADA ACEITUNA': ['EMPANADA ACEITUNA', 'EMPANADITAS DE ACEITUNA'],
@@ -144,11 +191,37 @@ const PRODUCTOS_COCINA_ALIASES = {
 };
 const PRODUCTOS_COCINA_SET = new Set(PRODUCTOS_COCINA.map((nombre) => normalizarProducto(nombre)));
 
+const FORMULAS_INVENTARIO_PRODUCTOS = {
+  'SANDWICH DE ASADO': 'formula_sandwich_asado',
+  'CROISSANT CON POLLO': 'formula_croissant_pollo',
+  'SANDWICH DE LOMITO': 'formula_sandwich_lomito',
+  'PETIPAN': 'formula_petipan_pollo',
+  'PETIPAN DE POLLO C DURAZNO': 'formula_petipan_pollo_durazno',
+  'PETIPAN DE POLLO C PIÑA': 'formula_petipan_pollo_pina',
+  'SANDWICH DE SALCHICHA NORTEÑA': 'formula_sandwich_salchicha_nortena',
+  'CAPRECCE MOZZARELLA CON TOMATE Y ALBACA': 'formula_caprece_mozzarella',
+  'SANDWICH HAMBURGUESITA': 'formula_sandwich_hamburguesita',
+  'CROISSANT MIXTO': 'formula_croissant_mixto',
+  'BUTIFARRAS': 'formula_butifarras',
+  'TRIPLE DE JAMON Y QUESO': 'formula_triple_jamon_queso',
+  'TRIPLE PALTA TOMATE HUEVO': 'formula_triple_palta_tomate_huevo',
+  'TRIPLE POLLO CON DURAZNO': 'formula_triple_pollo_durazno',
+  'TRIPLE POLLO CON PIÑA': 'formula_triple_pollo_pina',
+  'TRIPLE POLLO PECANAS Y JAMON': 'formula_triple_pollo_pecana_jamon',
+  'TRIPLE POLLO JAMON Y QUESO': 'formula_triple_pollo_jamon_queso',
+  'TRIPLE ESPINACA Y QUESO CREMA': 'formula_triple_espinaca_queso_crema',
+  'TRIPLE MERMELADA Y QUESO CREMA': 'formula_triple_mermelada_queso_crema',
+  'TRIPLE POLLO Y LOMO AHUMADO': 'formula_triple_pollo_lomo_ahumado',
+  'TRIPLE POLLO Y TOCINO': 'formula_triple_pollo_tocino',
+  'TRIPLE POLLO CON ACEITUNA': 'formula_triple_pollo_aceituna'
+};
+
 function normalizarProducto(nombre) {
   return String(nombre || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[´`]/g, '')
+    .replace(/[(),.;:]/g, ' ')
     .toUpperCase()
     .replace(/\bDE\b|\bDEL\b|\bY\b/g, ' ')
     .replace(/\s*[-/]+\s*/g, ' ')
@@ -170,9 +243,19 @@ function resolverNombreCocina(nombre) {
   const mapeado = PRODUCTOS_COCINA_MAPA_TIENDA[valor];
   if (mapeado) return mapeado;
 
+  let mejorAlias = null;
+  let mejorLongitud = -1;
   for (const [clave, aliases] of Object.entries(PRODUCTOS_COCINA_ALIASES)) {
-    if (aliases.some((alias) => normalizarProducto(alias) === valor)) return clave;
+    const aliasExacto = aliases.find((alias) => normalizarProducto(alias) === valor);
+    if (aliasExacto) {
+      const longitud = normalizarProducto(clave).length;
+      if (longitud > mejorLongitud) {
+        mejorAlias = clave;
+        mejorLongitud = longitud;
+      }
+    }
   }
+  if (mejorAlias) return mejorAlias;
 
   for (const [clave, aliases] of Object.entries(PRODUCTOS_COCINA_ALIASES)) {
     const claveNormalizada = normalizarProducto(clave);
@@ -184,12 +267,18 @@ function resolverNombreCocina(nombre) {
     if (aliasCoincide) return clave;
   }
 
+  const productoExtra = PRODUCTOS_COCINA_EXTRA.find((producto) => {
+    const normalizado = normalizarProducto(producto);
+    return normalizado === valor || valor.includes(normalizado) || normalizado.includes(valor);
+  });
+  if (productoExtra) return productoExtra;
+
   return null;
 }
 
 // Middlewares
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Inicialización de tablas SQLite para asegurar la persistencia de datos
@@ -215,18 +304,12 @@ db.serialize(() => {
       metodo_pago TEXT,
       fecha_recoge TEXT,
       hora_recoge TEXT,
+      dedicatoria TEXT DEFAULT '',
+      foto_torta TEXT DEFAULT '',
       estado TEXT DEFAULT 'Registrado',
       fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-
-  db.all(`PRAGMA table_info(pedidos)`, [], (err, columns) => {
-    if (err) return console.error('Error verificando columnas de pedidos:', err.message);
-    const hasEstado = columns && columns.some(col => col.name === 'estado');
-    if (!hasEstado) {
-      db.run(`ALTER TABLE pedidos ADD COLUMN estado TEXT DEFAULT 'Registrado'`);
-    }
-  });
 
   db.run(`
     CREATE TABLE IF NOT EXISTS detalles_pedido (
@@ -248,7 +331,7 @@ app.get('/', (req, res) => {
 
 // Endpoint: Obtener Catálogo de Productos
 app.get('/api/productos', (req, res) => {
-  db.all(`SELECT id, nombre, categoria, precio FROM productos ORDER BY categoria ASC, nombre ASC`, [], (err, rows) => {
+  db.all(`SELECT id, nombre, categoria, precio, precio_x25, precio_x50, precio_x100, precio_unidad FROM productos ORDER BY categoria ASC, nombre ASC`, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
@@ -256,7 +339,7 @@ app.get('/api/productos', (req, res) => {
 
 // Endpoint para registrar un nuevo pedido y asegurar su visualización en producción
 app.post('/api/pedidos', (req, res) => {
-  const { tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, detalles } = req.body;
+  const { tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, detalles } = req.body;
 
     if (!Array.isArray(detalles) || detalles.length === 0) {
       return res.status(400).json({ error: 'El pedido debe incluir al menos un detalle.' });
@@ -265,12 +348,12 @@ app.post('/api/pedidos', (req, res) => {
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
 
-        const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Registrado')`;
+        const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Registrado')`;
 
         const fechaCodigo = String(fecha_recoge || '').replace(/-/g, '');
         const sufijoUnico = crypto.randomBytes(4).toString('hex').toUpperCase();
         const codigoPedido = `PED-${fechaCodigo}-${sufijoUnico}`;
-        db.run(queryPedido, [codigoPedido, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge], function(err) {
+        db.run(queryPedido, [codigoPedido, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, String(dedicatoria || '').trim(), String(foto_torta || '')], function(err) {
             if (err) {
                 db.run('ROLLBACK');
                 return res.status(500).json({ error: err.message });
@@ -305,7 +388,7 @@ app.post('/api/pedidos', (req, res) => {
 app.get('/api/admin/pedidos', (req, res) => {
   db.all(`
     SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-           fecha_recoge, hora_recoge, estado, fecha_registro
+           fecha_recoge, hora_recoge, dedicatoria, foto_torta, estado, fecha_registro
     FROM pedidos
     ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
   `, [], (err, pedidos) => {
@@ -338,6 +421,204 @@ app.get('/api/admin/pedidos', (req, res) => {
     };
 
     cargarDetalles();
+  });
+});
+
+app.get('/api/admin/inventario', (req, res) => {
+  db.all(`SELECT id, nombre, categoria, unidad, cantidad_base, formula, descripcion FROM formulas_inventario ORDER BY categoria, nombre ASC`, [], (err, formulas) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    db.all(`SELECT id, nombre, stock, unidad, actualizado_en FROM stock_inventario ORDER BY nombre ASC`, [], (errStock, stock) => {
+      if (errStock) return res.status(500).json({ error: errStock.message });
+
+      res.json({
+        formulas: (formulas || []).map((item) => ({
+          ...item,
+          formula: item.formula ? JSON.parse(item.formula) : {}
+        })),
+        stock: stock || []
+      });
+    });
+  });
+});
+
+app.post('/api/admin/inventario/calcular', (req, res) => {
+  const { producto, cantidad } = req.body || {};
+  if (!producto || !cantidad || Number(cantidad) <= 0) {
+    return res.status(400).json({ error: 'Se requiere producto y cantidad válida.' });
+  }
+
+  db.get(`SELECT id, nombre, categoria, unidad, cantidad_base, formula, descripcion FROM formulas_inventario WHERE id = ? OR nombre = ? LIMIT 1`, [producto, producto], (err, formulaItem) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!formulaItem) return res.status(404).json({ error: 'Fórmula no encontrada.' });
+
+    const formula = formulaItem.formula ? JSON.parse(formulaItem.formula) : {};
+    const base = Number(formulaItem.cantidad_base || 100);
+    const multiplicador = Number(cantidad) / base;
+    const resultado = {};
+
+    Object.entries(formula).forEach(([insumo, valor]) => {
+      const requerido = Number(valor) * multiplicador;
+      resultado[insumo] = Number(requerido.toFixed(3));
+    });
+
+    res.json({
+      producto: formulaItem.nombre,
+      categoria: formulaItem.categoria,
+      cantidadSolicitada: Number(cantidad),
+      base: Number(formulaItem.cantidad_base || 100),
+      totalNecesario: resultado
+    });
+  });
+});
+
+app.get('/api/admin/inventario/compra-dia', (req, res) => {
+  const fecha = String(req.query.fecha || '').trim();
+  if (!fecha) {
+    return res.status(400).json({ error: 'Se requiere una fecha para calcular la compra del día.' });
+  }
+
+  db.all(`
+    SELECT p.id as pedido_id, p.fecha_recoge, d.producto_nombre, d.cantidad
+    FROM pedidos p
+    INNER JOIN detalles_pedido d ON d.pedido_id = p.id
+    WHERE p.fecha_recoge = ?
+    ORDER BY p.id ASC, d.id ASC
+  `, [fecha], (err, filas) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    const insumos = {};
+    const detalleProductos = {};
+
+    (filas || []).forEach((fila) => {
+      const nombreRaw = fila.producto_nombre || '';
+      const productoNormalizado = normalizarProducto(nombreRaw);
+      const productoKey = Object.keys(FORMULAS_INVENTARIO_PRODUCTOS).find((key) => normalizarProducto(key) === productoNormalizado)
+        || Object.keys(FORMULAS_INVENTARIO_PRODUCTOS).find((key) => normalizarProducto(key).includes(productoNormalizado) || productoNormalizado.includes(normalizarProducto(key)));
+      const formulaId = productoKey ? FORMULAS_INVENTARIO_PRODUCTOS[productoKey] : null;
+      if (!formulaId) return;
+
+      detalleProductos[formulaId] = (detalleProductos[formulaId] || 0) + Number(fila.cantidad || 0);
+    });
+
+    const ids = Object.keys(detalleProductos);
+    if (ids.length === 0) {
+      return res.json({ fecha, resumen: [], totalGeneral: 0, productos: [] });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    db.all(`SELECT id, nombre, categoria, cantidad_base, formula FROM formulas_inventario WHERE id IN (${placeholders})`, ids, (errFormulas, formulas) => {
+      if (errFormulas) return res.status(500).json({ error: errFormulas.message });
+
+      const resumen = [];
+      Object.entries(detalleProductos).forEach(([formulaId, cantidadTotal]) => {
+        const formulaItem = (formulas || []).find((item) => item.id === formulaId);
+        if (!formulaItem) return;
+
+        const formula = formulaItem.formula ? JSON.parse(formulaItem.formula) : {};
+        const base = Number(formulaItem.cantidad_base || 100);
+        const factor = Number(cantidadTotal) / base;
+
+        Object.entries(formula).forEach(([insumo, valor]) => {
+          const unidades = Number(valor) * factor;
+          const actual = insumos[insumo] || 0;
+          insumos[insumo] = Number((actual + unidades).toFixed(3));
+        });
+
+        resumen.push({
+          producto: formulaItem.nombre,
+          cantidadTotal: Number(cantidadTotal),
+          base,
+          formula: formulaItem.formula ? JSON.parse(formulaItem.formula) : {}
+        });
+      });
+
+      const totalGeneral = Object.values(insumos).reduce((sum, value) => sum + Number(value || 0), 0);
+      res.json({
+        fecha,
+        resumen: Object.entries(insumos).map(([insumo, cantidad]) => ({ insumo, cantidad: Number(cantidad.toFixed(3)) })).sort((a, b) => a.insumo.localeCompare(b.insumo)),
+        totalGeneral: Number(totalGeneral.toFixed(3)),
+        productos: resumen
+      });
+    });
+  });
+});
+
+app.get('/api/admin/inventario/compra-dia/excel', (req, res) => {
+  const fecha = String(req.query.fecha || '').trim();
+  if (!fecha) {
+    return res.status(400).json({ error: 'Se requiere una fecha para exportar la compra del día.' });
+  }
+
+  db.all(`
+    SELECT p.id as pedido_id, d.producto_nombre, d.cantidad
+    FROM pedidos p
+    INNER JOIN detalles_pedido d ON d.pedido_id = p.id
+    WHERE p.fecha_recoge = ?
+  `, [fecha], (err, filas) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    const resumen = {};
+    (filas || []).forEach((fila) => {
+      const nombreRaw = fila.producto_nombre || '';
+      const nombreNormalizado = normalizarProducto(nombreRaw);
+      const formulaId = Object.entries(FORMULAS_INVENTARIO_PRODUCTOS)
+        .find(([nombre, id]) => normalizarProducto(nombre) === nombreNormalizado || nombreNormalizado.includes(normalizarProducto(nombre)) || normalizarProducto(nombre).includes(nombreNormalizado))?.[1];
+      if (!formulaId) return;
+      resumen[formulaId] = (resumen[formulaId] || 0) + Number(fila.cantidad || 0);
+    });
+
+    const ids = Object.keys(resumen);
+    if (ids.length === 0) {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Compra del día');
+      sheet.addRow(['Fecha', fecha]);
+      sheet.addRow([]);
+      sheet.addRow(['No hay pedidos para esta fecha.']);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="compra-dia-${fecha}.xlsx"`);
+      return workbook.xlsx.write(res).then(() => res.end());
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    db.all(`SELECT id, nombre, categoria, cantidad_base, formula FROM formulas_inventario WHERE id IN (${placeholders})`, ids, (errFormulas, formulas) => {
+      if (errFormulas) return res.status(500).json({ error: errFormulas.message });
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Compra del día');
+      sheet.addRow(['Fecha', fecha]);
+      sheet.addRow([]);
+      sheet.addRow(['Producto', 'Cantidad pedida', 'Base', 'Insumos necesarios']);
+
+      (formulas || []).forEach((formulaItem) => {
+        const cantidadTotal = resumen[formulaItem.id] || 0;
+        const formula = formulaItem.formula ? JSON.parse(formulaItem.formula) : {};
+        const base = Number(formulaItem.cantidad_base || 100);
+        const factor = Number(cantidadTotal) / base;
+        const requeridos = {};
+        Object.entries(formula).forEach(([insumo, valor]) => {
+          requeridos[insumo] = Number((Number(valor) * factor).toFixed(3));
+        });
+        const insumoText = Object.entries(requeridos).map(([insumo, cantidad]) => `${insumo}: ${cantidad}`).join(' | ');
+        sheet.addRow([formulaItem.nombre, cantidadTotal, base, insumoText]);
+      });
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="compra-dia-${fecha}.xlsx"`);
+      workbook.xlsx.write(res).then(() => res.end());
+    });
+  });
+});
+
+app.post('/api/admin/inventario/stock', (req, res) => {
+  const { id, nombre, stock, unidad } = req.body || {};
+  if (!id || !nombre || stock === undefined) {
+    return res.status(400).json({ error: 'Faltan datos para actualizar inventario.' });
+  }
+
+  db.run(`INSERT OR REPLACE INTO stock_inventario (id, nombre, stock, unidad, actualizado_en)
+          VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`, [id, nombre, Number(stock), String(unidad || 'kg')], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, id, stock: Number(stock) });
   });
 });
 
@@ -412,12 +693,16 @@ app.get('/api/admin/produccion', (req, res) => {
         // (el mismo que aparece en PRODUCTOS_COCINA), así el frontend puede
         // comparar por igualdad exacta sin preocuparse por los alias.
         const detallesFiltrados = (detalles || [])
-          .map((det) => ({ ...det, nombre_canonico: resolverNombreCocina(det.producto_nombre) }))
+          .map((det) => {
+            const nombreCanonico = resolverNombreCocina(det.producto_nombre) ||
+              PRODUCTOS_COCINA_EXTRA.find((producto) => normalizarProducto(producto) === normalizarProducto(det.producto_nombre));
+            return { ...det, nombre_canonico: nombreCanonico || det.producto_nombre };
+          })
           .filter((det) => det.nombre_canonico)
           .map((det) => ({
             pedido_id: det.pedido_id,
-            producto_nombre: det.nombre_canonico,       // <- ya canónico
-            producto_nombre_original: det.producto_nombre, // <- por si lo necesitas mostrar
+            producto_nombre: det.nombre_canonico,
+            producto_nombre_original: det.producto_nombre,
             cantidad: det.cantidad,
             paquetes: det.paquetes ? JSON.parse(det.paquetes) : {}
           }));
