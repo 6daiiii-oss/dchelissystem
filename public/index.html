@@ -71,6 +71,7 @@
       display: flex;
       gap: 10px;
       overflow-x: auto;
+      scrollbar-width: thin;
     }
 
     .cat-btn {
@@ -92,6 +93,46 @@
       border-color: var(--brand-dark);
     }
 
+    .catalog-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-height: 44px;
+      padding: 0 13px;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-muted);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .search-box:focus-within {
+      border-color: var(--brand-main);
+      box-shadow: 0 0 0 3px rgba(0, 150, 64, 0.12);
+    }
+
+    .search-box input {
+      width: 100%;
+      border: 0;
+      outline: 0;
+      color: var(--text-dark);
+      font: inherit;
+    }
+
+    .catalog-help {
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+
     .main-container {
       max-width: 980px;
       margin: 20px auto;
@@ -100,8 +141,8 @@
 
     .product-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 16px;
     }
 
     .product-card {
@@ -114,6 +155,25 @@
       justify-content: space-between;
       box-shadow: var(--shadow-sm);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .product-card.is-extra {
+      border-color: #bbf7d0;
+      background: #fbfffc;
+    }
+    @media (max-width: 640px) {
+      .catalog-toolbar {
+        display: block;
+      }
+
+      .catalog-help {
+        margin-top: 8px;
+        white-space: normal;
+      }
+
+      .product-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .product-card:hover {
@@ -194,6 +254,23 @@
       min-width: 44px;
       text-align: center;
       color: var(--text-dark);
+    }
+
+    .qty-input {
+      width: 64px;
+      height: 36px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 800;
+      font-size: 0.95rem;
+      color: var(--text-dark);
+    }
+
+    .qty-input:focus {
+      outline: none;
+      border-color: var(--brand-main);
+      box-shadow: 0 0 0 2px rgba(0, 150, 64, 0.15);
     }
 
     .preset-row {
@@ -525,6 +602,13 @@
   </div>
 
   <main class="main-container">
+    <div class="catalog-toolbar">
+      <label class="search-box" for="productSearch">
+        <span aria-hidden="true">⌕</span>
+        <input id="productSearch" type="search" placeholder="Busca un producto, por ejemplo: alfajor" autocomplete="off">
+      </label>
+      <div class="catalog-help" id="catalogHelp">Elige una categoría o busca directamente.</div>
+    </div>
     <div class="product-grid" id="catalogGrid"></div>
   </main>
 
@@ -544,6 +628,9 @@
       </div>
 
       <form id="formCliente" onsubmit="procesarDatosCliente(event)">
+        <div id="resumenPedido" class="notice" style="margin-bottom:14px; display:none;"></div>
+        <div id="checkoutCart" class="notice" style="margin-bottom:14px; display:none;"></div>
+
         <div class="form-group">
           <label for="cliNombre">Nombre *</label>
           <input type="text" id="cliNombre" class="form-control" required placeholder="Ej. Gael">
@@ -572,6 +659,19 @@
           <div class="error-msg" id="errHorario">
              Horario fuera de atención. Lun-Sáb (8:00 AM - 7:59 PM) | Dom (8:00 AM - 10:59 AM)
           </div>
+          <div class="error-msg" id="errAnticipacion"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="cliDedicatoria">Dedicatoria o indicaciones para la torta (opcional)</label>
+          <textarea id="cliDedicatoria" class="form-control" rows="3" maxlength="300" placeholder="Ej. Feliz cumpleaños, Ana"></textarea>
+        </div>
+
+        <div class="form-group" id="cliFotoTortaGroup" style="display:none;">
+          <label for="cliFotoTorta">Foto de referencia para la torta *</label>
+          <input type="file" id="cliFotoTorta" class="form-control" accept="image/*">
+          <small style="color:var(--text-muted);">Selecciona una imagen desde tu dispositivo.</small>
+          <img id="cliFotoTortaPreview" alt="Vista previa de la foto de la torta" style="display:none; max-width:100%; max-height:180px; margin-top:10px; border-radius:8px; object-fit:contain;">
         </div>
 
         <div class="form-group" style="display:flex; gap:10px; align-items:center; margin-top:14px;">
@@ -653,105 +753,126 @@ const productosIniciales = [
     ['dulce_biscotelas', 'Biscotelas', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
     ['dulce_brownies', 'Brownies', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
     ['dulce_budin', 'Budin', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
-    ['dulce_cisne', 'Cisne', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_cisne', 'Cisne', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
     ['dulce_cocaditas', 'Cocaditas', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
-    ['dulce_conitos_manjar', 'Conitos de Manjar', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
-    ['dulce_donitas', 'Donitas', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_conitos_manjar', 'Conitos de Manjar', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_donitas', 'Donitas', 'Bocaditos Dulces', 76.0, 25.0, 45.0, 76.0, null],
     ['dulce_kekito_zanahoria', 'Kekito de Zanahoria', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
     ['dulce_merenguitos', 'Merenguitos', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
-    ['dulce_mil_hojas', 'Mil Hojas', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_mil_hojas', 'Mil Hojas', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
     ['dulce_mini_muffin', 'Mini Muffin', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
-    ['dulce_mousse_fresa_maracuya_lucuma', 'Mousse de Fresa, Maracuya o Lucuma', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_mousse_fresa', 'Mousse de Fresa', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_mousse_maracuya', 'Mousse de Maracuyá', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_mousse_lucuma', 'Mousse de Lúcuma', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
     ['dulce_niditos_amor', 'Niditos de Amor', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
     ['dulce_orejitas', 'Orejitas', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
     ['dulce_panuelitos_manjar', 'Pañuelitos de Manjar', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
     ['dulce_pastelito_choclo', 'Pastelito de Choclo', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
     ['dulce_piononitos', 'Piononitos', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
-    ['dulce_piononitos_chantilly', 'Piononitos de Chantilly', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
-    ['dulce_pye_limon', 'Pye de Limón', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_piononitos_chantilly', 'Piononitos de Chantilly', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_pye_limon', 'Pye de Limón', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
     ['dulce_pye_manzana', 'Pye de Manzana', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
-    ['dulce_pye_pina', 'Pye de Piña', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
-    ['dulce_relampago_choco', 'Relámpago de Chocolate', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_pye_pina', 'Pye de Piña', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_relampago_choco', 'Relámpago de Chocolate', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
     ['dulce_tartaleta_coco', 'Tartaleta de Coco', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
-    ['dulce_tartaleta_durazno_fresa', 'Tartaleta de Durazno o fresa', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
-    ['dulce_tartaleta_sauco_lucuma', 'Tartaleta de Sauco o Lúcuma', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
-    ['dulce_tartaleta_guanabana', 'Tartaleta de Guanabana', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
-    ['dulce_tortita_choco', 'Tortita de Chocolate', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
-    ['dulce_tortita_helada_selva', 'Tortita Helada o Selva Negra', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
-    ['dulce_tortita_tres_leches', 'Tortita Tres Leches', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_tartaleta_durazno', 'Tartaleta de Durazno', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_tartaleta_fresa', 'Tartaleta de Fresa', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_tartaleta_sauco', 'Tartaleta de Sauco', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_tartaleta_lucuma', 'Tartaleta de Lúcuma', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_tartaleta_guanabana', 'Tartaleta de Guanabana', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_tortita_choco', 'Tortita de Chocolate', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_tortita_helada', 'Tortita Helada', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_tortita_selva_negra', 'Tortita Selva Negra', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
+    ['dulce_tortita_tres_leches', 'Tortita Tres Leches', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
     ['dulce_trufas', 'Trufas', 'Bocaditos Dulces', 70.0, 19.0, 35.0, 70.0, null],
-    ['dulce_trufa_blanca', 'Trufa blanca', 'Bocaditos Dulces', 80.0, 22.0, 42.0, 80.0, null],
+    ['dulce_trufa_blanca', 'Trufa blanca', 'Bocaditos Dulces', 85.0, 25.0, 45.0, 85.0, null],
 
     // --- BOCADITOS SALADOS ---
-    ['salado_pizzitas', 'Pizzitas', 'Bocaditos Salados', 80.0, 22.0, 42.0, 80.0, null],
-    ['salado_empanaditas_aji_gallina', 'Empanaditas de Aji de Gallina', 'Bocaditos Salados', 80.0, 22.0, 42.0, 80.0, null],
-    ['salado_empanaditas_aceituna', 'Empanaditas de Aceituna', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
-    ['salado_empanaditas_carne', 'Empanaditas de Carne', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
-    ['salado_empanaditas_jamon', 'Empanaditas de Jamón', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
-    ['salado_empanaditas_pollo', 'Empanaditas de Pollo', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
-    ['salado_empanaditas_queso', 'Empanaditas de Queso', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
-    ['salado_empanaditas_mixtas', 'Empanaditas Mixtas', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
-    ['salado_enrollado_acelga', 'Enrollado de Acelga', 'Bocaditos Salados', 80.0, 22.0, 42.0, 80.0, null],
-    ['salado_enrollado_hotdog', 'Enrollado de Hot Dog', 'Bocaditos Salados', 70.0, 19.0, 35.0, 70.0, null],
-    ['salado_soufle_alcachofa', 'Soufle de Alcachofa', 'Bocaditos Salados', 80.0, 22.0, 42.0, 80.0, null],
+    ['salado_pizzitas', 'Pizzitas', 'Bocaditos Salados', 80.0, 22.0, 40.0, 80.0, null],
+    ['salado_empanaditas_aji_gallina', 'Empanaditas de Aji de Gallina', 'Bocaditos Salados', 80.0, 22.0, 40.0, 80.0, null],
+    ['salado_empanaditas_aceituna', 'Empanaditas de Aceituna', 'Bocaditos Salados', 80.0, 22.0, 40.0, 80.0, null],
+    ['salado_empanaditas_carne', 'Empanaditas de Carne', 'Bocaditos Salados', 80.0, 22.0, 40.0, 80.0, null],
+    ['salado_empanaditas_jamon', 'Empanaditas de Jamón', 'Bocaditos Salados', 80.0, 22.0, 40.0, 80.0, null],
+    ['salado_empanaditas_pollo', 'Empanaditas de Pollo', 'Bocaditos Salados', 80.0, 22.0, 40.0, 80.0, null],
+    ['salado_empanaditas_queso', 'Empanaditas de Queso', 'Bocaditos Salados', 80.0, 22.0, 40.0, 80.0, null],
+    ['salado_empanaditas_mixtas', 'Empanaditas Mixtas', 'Bocaditos Salados', 80.0, 22.0, 40.0, 80.0, null],
+    ['salado_enrollado_acelga', 'Enrollado de Acelga', 'Bocaditos Salados', 80.0, 22.0, 40.0, 80.0, null],
+    ['salado_enrollado_hotdog', 'Enrollado de Hot Dog', 'Bocaditos Salados', 80.0, 22.0, 40.0, 80.0, null],
+    ['salado_soufle_alcachofa', 'Soufle de Alcachofa', 'Bocaditos Salados', 80.0, 22.0, 40.0, 80.0, null],
 
     // --- SANDWICHITOS ---
-    ['sw_asado', 'Sandwich de Asado', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
-    ['sw_croissant_pollo', 'Croissant con Pollo', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
-    ['sw_lomito', 'Sandwich de Lomito', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
-    ['sw_petipan_pollo_durazno', 'Petipan de pollo c/durazno', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
-    ['sw_petipan_pollo_pina', 'Petipan de pollo c/piña', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
-    ['sw_salchicha_nortena', 'Sandwich de Salchicha norteña', 'Sandwichitos', 120.0, 38.0, 60.0, 120.0, null],
-    ['sw_petipan_pollo', 'Petipan de Pollo', 'Sandwichitos', 120.0, 38.0, 60.0, 120.0, null],
-    ['sw_caprece', 'Caprece Mozz/Alb/Tomate', 'Sandwichitos', 110.0, 35.0, 58.0, 110.0, null],
-    ['sw_hamburguesita', 'Sandwich Hamburguesita', 'Sandwichitos', 110.0, 35.0, 58.0, 110.0, null],
+    ['sw_asado', 'Sandwich de Asado', 'Sandwichitos', 160.0, 40.0, 80.0, 160.0, null],
+    ['sw_croissant_pollo', 'Croissant con Pollo', 'Sandwichitos', 160.0, 40.0, 80.0, 160.0, null],
+    ['sw_lomito', 'Sandwich de Lomito', 'Sandwichitos', 160.0, 40.0, 80.0, 160.0, null],
+    ['sw_petipan_pollo_durazno', 'Petipan de pollo c/durazno', 'Sandwichitos', 160.0, 40.0, 80.0, 160.0, null],
+    ['sw_petipan_pollo_pina', 'Petipan de pollo c/piña', 'Sandwichitos', 160.0, 40.0, 80.0, 160.0, null],
+    ['sw_salchicha_nortena', 'Sandwich de Salchicha norteña', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
+    ['sw_petipan_pollo', 'Petipan de Pollo', 'Sandwichitos', 140.0, 40.0, 70.0, 140.0, null],
+    ['sw_caprece', 'Caprece Mozz/Alb/Tomate', 'Sandwichitos', 120.0, 35.0, 60.0, 120.0, null],
+    ['sw_hamburguesita', 'Sandwich Hamburguesita', 'Sandwichitos', 120.0, 35.0, 60.0, 120.0, null],
     ['sw_croissant_mixto', 'Croissant Mixto', 'Sandwichitos', 100.0, 28.0, 50.0, 100.0, null],
     ['sw_butifarras', 'Butifarras', 'Sandwichitos', 100.0, 28.0, 50.0, 100.0, null],
 
     // --- TORTA CHANTILLY ---
     ['torta_chantilly_foto', 'Torta Chantilly - Foto', 'Torta Chantilly', 15.0, null, null, null, 15.0],
-    ['torta_chantilly_30_35', 'Torta Chantilly (30-35 Porciones aprox)', 'Torta Chantilly', 70.0, null, null, null, 70.0],
+    ['torta_chantilly_30', 'Torta Chantilly (30 Porciones aprox)', 'Torta Chantilly', 70.0, null, null, null, 70.0],
     ['torta_chantilly_60', 'Torta Chantilly (60 Porciones aprox)', 'Torta Chantilly', 90.0, null, null, null, 90.0],
-    ['torta_chantilly_80', 'Torta Chantilly (80 Porciones aprox)', 'Torta Chantilly', 130.0, null, null, null, 130.0],
-    ['torta_chantilly_tres_leches', 'Torta Chantilly Tres Leches (35 Porciones aprox)', 'Torta Chantilly', 120.0, null, null, null, 120.0],
-    ['torta_chantilly_adicional', 'Torta Chantilly Chocolate o Selva Negra (adicional)', 'Torta Chantilly', 10.0, null, null, null, 10.0],
+    ['torta_chantilly_90', 'Torta Chantilly (90 Porciones aprox)', 'Torta Chantilly', 130.0, null, null, null, 130.0],
 
     // --- MINI TRIPLES ---
-    ['triple_jamon_queso', 'Triple de Jamón y queso', 'Mini Triples', 100.0, 28.0, 50.0, 100.0, null],
-    ['triple_palta_tomate_huevo', 'Triple palta, tomate, huevo', 'Mini Triples', 130.0, 45.0, 65.0, 130.0, null],
-    ['triple_pollo_jamon_queso', 'Triple pollo, jamón, queso', 'Mini Triples', 118.0, 35.0, 59.0, 118.0, null],
-    ['triple_pollo_durazno', 'Triple pollo con durazno', 'Mini Triples', 130.0, 45.0, 65.0, 130.0, null],
-    ['triple_espinaca_queso_crema', 'Triple espinaca y queso crema', 'Mini Triples', 118.0, 35.0, 59.0, 118.0, null],
-    ['triple_mermelada_queso_crema', 'Triple mermelada y queso crema', 'Mini Triples', 110.0, 35.0, 59.0, 110.0, null],
-    ['triple_pollo_lomo_ahumado', 'Triple pollo y lomo ahumado', 'Mini Triples', 118.0, 35.0, 59.0, 118.0, null],
-    ['triple_pollo_tocino', 'Triple pollo y tocino', 'Mini Triples', 118.0, 35.0, 59.0, 118.0, null],
-    ['triple_pollo_aceituna', 'Triple pollo con aceituna', 'Mini Triples', 118.0, 35.0, 59.0, 118.0, null],
-    ['triple_pollo_pina', 'Triple pollo con piña', 'Mini Triples', 130.0, 45.0, 65.0, 130.0, null],
-    ['triple_pollo_pecanas_jamon', 'Triple pollo, pecanas y jamón', 'Mini Triples', 120.0, 40.0, 60.0, 120.0, null],
+    ['triple_jamon_queso', 'Triple de Jamón y queso', 'Mini Triples', 120.0, 30.0, 60.0, 120.0, null],
+    ['triple_palta_tomate_huevo', 'Triple palta, tomate, huevo', 'Mini Triples', 140.0, 45.0, 75.0, 140.0, null],
+    ['triple_pollo_jamon_queso', 'Triple pollo, jamón, queso', 'Mini Triples', 130.0, 40.0, 70.0, 130.0, null],
+    ['triple_pollo_durazno', 'Triple pollo con durazno', 'Mini Triples', 140.0, 45.0, 75.0, 140.0, null],
+    ['triple_espinaca_queso_crema', 'Triple espinaca y queso crema', 'Mini Triples', 130.0, 40.0, 70.0, 130.0, null],
+    ['triple_mermelada_queso_crema', 'Triple mermelada y queso crema', 'Mini Triples', 130.0, 40.0, 70.0, 130.0, null],
+    ['triple_pollo_lomo_ahumado', 'Triple pollo y lomo ahumado', 'Mini Triples', 130.0, 40.0, 70.0, 130.0, null],
+    ['triple_pollo_tocino', 'Triple pollo y tocino', 'Mini Triples', 130.0, 40.0, 70.0, 130.0, null],
+    ['triple_pollo_aceituna', 'Triple pollo con aceituna', 'Mini Triples', 130.0, 40.0, 70.0, 130.0, null],
+    ['triple_pollo_pina', 'Triple pollo con piña', 'Mini Triples', 140.0, 45.0, 75.0, 140.0, null],
+    ['triple_pollo_pecanas_jamon', 'Triple pollo, pecanas y jamón', 'Mini Triples', 130.0, 40.0, 70.0, 130.0, null],
 
     // --- PIQUEOS ---
-    ['piqueo_brochetas_pollo', 'Brochetas de pollo', 'Piqueos', 240.0, 70.0, 120.0, 240.0, null],
-    ['piqueo_alitas_bouchet', 'Alitas bouchet', 'Piqueos', 240.0, 70.0, 120.0, 240.0, null],
-    ['piqueo_guindones_tocino', 'Guindones c/tocino', 'Piqueos', 100.0, 30.0, 50.0, 100.0, null],
-    ['piqueo_enrollado_jamon_esparragos', 'Enrollado de jamón c/espárragos', 'Piqueos', 65.0, 25.0, 35.0, 65.0, null],
-    ['piqueo_hojarascas_aji_gallina', 'Hojarascas de ají de gallina', 'Piqueos', 65.0, 25.0, 35.0, 65.0, null],
-    ['piqueo_piononitos_espinaca', 'Piononitos de espinaca', 'Piqueos', 60.0, 20.0, 30.0, 60.0, null],
-    ['piqueo_tequenos_guacamole', 'Tequeños con guacamole', 'Piqueos', 80.0, 28.0, 42.0, 80.0, null],
-    ['piqueo_voulevans_jamon', 'Voulevans de jamón', 'Piqueos', 65.0, 25.0, 35.0, 65.0, null],
-    ['piqueo_voulevans_tocino', 'Voulevans de tocino', 'Piqueos', 65.0, 25.0, 35.0, 65.0, null],
-    ['piqueo_canapes_jamon_pina_durazno', 'Canapés jamón, piña, durazno', 'Piqueos', 65.0, 25.0, 35.0, 65.0, null],
+    ['piqueo_brochetas_pollo', 'Brochetas de pollo', 'Piqueos', 260.0, 70.0, 130.0, 260.0, null],
+    ['piqueo_alitas_bouchet', 'Alitas bouchet', 'Piqueos', 260.0, 70.0, 130.0, 260.0, null],
+    ['piqueo_guindones_tocino', 'Guindones c/tocino', 'Piqueos', 140.0, 40.0, 70.0, 140.0, null],
+    ['piqueo_enrollado_jamon_esparragos', 'Enrollado de jamón c/esparragos', 'Piqueos', 80.0, 30.0, 40.0, 80.0, null],
+    ['piqueo_hojarascas_aji_gallina', 'Hojarascas de ají de gallina', 'Piqueos', 80.0, 30.0, 40.0, 80.0, null],
+    ['piqueo_piononitos_espinaca', 'Piononitos de espinaca', 'Piqueos', 80.0, 30.0, 40.0, 80.0, null],
+    ['piqueo_tequenos_guacamole', 'Tequeños con guacamole', 'Piqueos', 100.0, 30.0, 50.0, 100.0, null],
+    ['piqueo_voulevans_jamon', 'Voulevans de jamón', 'Piqueos', 80.0, 30.0, 40.0, 80.0, null],
+    ['piqueo_voulevans_tocino', 'Voulevans de tocino', 'Piqueos', 80.0, 30.0, 40.0, 80.0, null],
+    ['piqueo_canapes_jamon_pina_durazno', 'Canapés jamón, piña, durazno', 'Piqueos', 80.0, 30.0, 40.0, 80.0, null],
 
     // --- PASTELES FAMILIARES ---
     ['fam_crema_volteada', 'Crema Volteada', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
-    ['fam_mousse_fresa_maracuya', 'Mousse de Fresa, Maracuya', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
+    ['fam_mousse_fresa', 'Mousse de Fresa', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
+    ['fam_mousse_maracuya', 'Mousse de Maracuyá', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
     ['fam_pastel_acelga', 'Pastel de Acelga', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
     ['fam_torta_tres_leches', 'Torta Tres Leches', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
-    ['fam_pye_manzana_limon', 'Pye de Manzana - Limón', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
+    ['fam_pye_manzana', 'Pye de Manzana', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
+    ['fam_pye_limon', 'Pye de Limón', 'Pasteles Familiares', 60.0, null, null, null, 60.0],
     ['fam_torta_choco', 'Torta de Chocolate', 'Pasteles Familiares', 45.0, null, null, null, 45.0],
     ['fam_torta_helada', 'Torta Helada', 'Pasteles Familiares', 45.0, null, null, null, 45.0],
     ['fam_torta_selva_negra', 'Torta Selva Negra', 'Pasteles Familiares', 45.0, null, null, null, 45.0],
     ['fam_torta_chantilly', 'Torta de Chantilly', 'Pasteles Familiares', 40.0, null, null, null, 40.0],
-    ['fam_keke_variado', 'Keke de pasas-Vainilla-Marmol-Castaña', 'Pasteles Familiares', 16.0, null, null, null, 16.0],
+    ['fam_keke_pasas', 'Keke de Pasas', 'Pasteles Familiares', 16.0, null, null, null, 16.0],
+    ['fam_keke_vainilla', 'Keke de Vainilla', 'Pasteles Familiares', 16.0, null, null, null, 16.0],
+    ['fam_keke_marmol', 'Keke Marmolado', 'Pasteles Familiares', 16.0, null, null, null, 16.0],
+    ['fam_keke_castana', 'Keke de Castaña', 'Pasteles Familiares', 16.0, null, null, null, 16.0],
+
+    // --- EXTRAS PARA TORTAS CHANTILLY ---
+    ['extra_torta_chocolate', 'Extra: Chocolate', 'Extras para tortas', 10.0, null, null, null, 10.0],
+    ['extra_torta_selva_negra', 'Extra: Selva Negra', 'Extras para tortas', 10.0, null, null, null, 10.0],
+    ['extra_torta_helada', 'Extra: Torta Helada', 'Extras para tortas', 10.0, null, null, null, 10.0],
+    ['extra_torta_mousse_fresa', 'Extra: Mousse de Fresa', 'Extras para tortas', 10.0, null, null, null, 10.0],
+    ['extra_torta_mousse_maracuya', 'Extra: Mousse de Maracuyá', 'Extras para tortas', 10.0, null, null, null, 10.0],
+    ['extra_torta_pye_manzana', 'Extra: Pye de Manzana', 'Extras para tortas', 10.0, null, null, null, 10.0],
+    ['extra_torta_pye_limon', 'Extra: Pye de Limón', 'Extras para tortas', 10.0, null, null, null, 10.0],
+    ['extra_torta_keke_pasas', 'Extra: Keke de Pasas', 'Extras para tortas', 10.0, null, null, null, 10.0],
+    ['extra_torta_keke_vainilla', 'Extra: Keke de Vainilla', 'Extras para tortas', 10.0, null, null, null, 10.0],
+    ['extra_torta_keke_marmol', 'Extra: Keke Marmolado', 'Extras para tortas', 10.0, null, null, null, 10.0],
+    ['extra_torta_keke_castana', 'Extra: Keke de Castaña', 'Extras para tortas', 10.0, null, null, null, 10.0],
 
     // --- PAN GOURMET ---
     ['gourmet_mini_aceituna', 'Mini Aceituna', 'Pan Gourmet', 35.0, 12.0, 24.0, 35.0, null],
@@ -776,8 +897,23 @@ const productosIniciales = [
     ['esp_pan_molde_integral_chico', 'Pan de Molde Integral chico', 'Pan Especial', 11.0, null, null, null, 11.0]
 ];
 
+const preciosActualizados = productosIniciales.map((producto) => {
+  const copia = [...producto];
+  const actualizar = (indice, equivalencias) => {
+    if (copia[indice] !== null && equivalencias[copia[indice]] !== undefined) {
+      copia[indice] = equivalencias[copia[indice]];
+    }
+  };
+  actualizar(3, { 70: 76 });
+  actualizar(4, { 19: 22 });
+  actualizar(5, { 35: 40 });
+  actualizar(6, { 70: 76 });
+  actualizar(7, {});
+  return copia;
+});
+
 // Mapeo automático de la estructura de matriz a objetos internos legibles
-const productos = productosIniciales.map((p, index) => {
+const productos = preciosActualizados.map((p, index) => {
   const [id, nombre, categoria, p100, p25, p50, ref100, precioFijo] = p;
   let obj = { id: index + 1, codigo: id, nombre, categoria };
   if (precioFijo !== null) {
@@ -795,7 +931,13 @@ const productos = productosIniciales.map((p, index) => {
 let cantidades = {};
 let paquetesPorProducto = {};
 let datosPedidoActual = {};
+let fotoTortaData = '';
 let categoriaFiltroActual = "todos";
+
+const CATEGORIAS_UNIDAD = ['Torta Chantilly', 'Pasteles Familiares', 'Pan Especial', 'Extras para tortas'];
+const CATEGORIAS_MINIMO_25 = ['Bocaditos Dulces', 'Bocaditos Salados', 'Sandwichitos', 'Mini Triples', 'Piqueos', 'Pan Gourmet'];
+const CAT_BOCADITO = ['Bocaditos Dulces', 'Bocaditos Salados'];
+const CAT_SANDWICH = ['Sandwichitos', 'Mini Triples', 'Piqueos'];
 
 function obtenerPaquetesProducto(id) {
   if (!paquetesPorProducto[id]) paquetesPorProducto[id] = {};
@@ -827,13 +969,113 @@ function actualizarPaquete(id, tamano, delta) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  generarBotonesCategorias();
-  renderizarCatalogo();
-  generarOpcionesHora();
-  const hoy = new Date().toISOString().split('T')[0];
-  const inputFecha = document.getElementById('cliFecha');
-  if (inputFecha) inputFecha.setAttribute('min', hoy);
+generarBotonesCategorias();
+renderizarCatalogo();
+generarOpcionesHora();
+renderResumenCompra();
+  document.getElementById('productSearch')?.addEventListener('input', renderizarCatalogo);
+  document.getElementById('cliFotoTorta')?.addEventListener('change', async (event) => {
+    const archivo = event.target.files?.[0];
+    const preview = document.getElementById('cliFotoTortaPreview');
+    if (!archivo) {
+      fotoTortaData = '';
+      if (preview) preview.style.display = 'none';
+      return;
+    }
+    try {
+      fotoTortaData = await comprimirFotoTorta(archivo);
+      if (preview) {
+        preview.src = fotoTortaData;
+        preview.style.display = 'block';
+      }
+    } catch (error) {
+      fotoTortaData = '';
+      event.target.value = '';
+      alert('No se pudo leer la foto seleccionada. Prueba con otra imagen.');
+    }
+  });
+const hoy = new Date().toISOString().split('T')[0];
+const inputFecha = document.getElementById('cliFecha');
+if (inputFecha) inputFecha.setAttribute('min', hoy);
 });
+
+function comprimirFotoTorta(archivo) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    lector.onload = () => {
+      const imagen = new Image();
+      imagen.onerror = () => reject(new Error('Formato de imagen no válido'));
+      imagen.onload = () => {
+        const maximo = 1600;
+        const escala = Math.min(1, maximo / Math.max(imagen.width, imagen.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(imagen.width * escala));
+        canvas.height = Math.max(1, Math.round(imagen.height * escala));
+        canvas.getContext('2d').drawImage(imagen, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.78));
+      };
+      imagen.src = String(lector.result || '');
+    };
+    lector.readAsDataURL(archivo);
+  });
+}
+
+function renderResumenCompra() {
+const contenedor = document.getElementById('resumenPedido');
+if (!contenedor) return;
+
+const items = obtenerItemsCarrito();
+
+if (!items.length) {
+  contenedor.style.display = 'none';
+  contenedor.innerHTML = '';
+  return;
+}
+
+const texto = items.map((item) => `${item.cantidad} • ${item.producto.nombre}`).join('<br>');
+contenedor.style.display = 'block';
+contenedor.innerHTML = `<strong>Pedido actual:</strong><br>${texto}`;
+}
+
+function obtenerItemsCarrito() {
+  return productos
+    .map((producto) => ({ producto, cantidad: Math.max(0, Number(cantidades[producto.id]) || 0) }))
+    .filter((item) => item.cantidad > 0);
+}
+
+function renderizarCarritoCheckout() {
+  const contenedor = document.getElementById('checkoutCart');
+  if (!contenedor) return;
+  const items = obtenerItemsCarrito();
+  if (!items.length) {
+    contenedor.style.display = 'none';
+    contenedor.innerHTML = '';
+    return;
+  }
+  contenedor.style.display = 'block';
+  contenedor.innerHTML = `
+    <strong>Revisa tu pedido</strong>
+    <div style="margin-top:8px; display:grid; gap:7px;">
+      ${items.map(({ producto, cantidad }) => `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <span>${cantidad} • ${producto.nombre}</span>
+          <button type="button" class="btn-action" style="flex:0 0 auto; padding:5px 9px;" onclick="eliminarItemCarrito(${producto.id})">Eliminar</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function eliminarItemCarrito(id) {
+  cantidades[id] = 0;
+  delete paquetesPorProducto[id];
+  renderizarCatalogo();
+  renderResumenCompra();
+  actualizarBarraCarrito();
+  renderizarCarritoCheckout();
+  if (!obtenerItemsCarrito().length) cerrarModal('modalDatos');
+}
 
 function generarOpcionesHora() {
   const selector = document.getElementById('cliHora');
@@ -871,6 +1113,10 @@ function filtrarCategoria(cat, btn) {
   renderizarCatalogo();
 }
 
+function normalizarTexto(texto) {
+  return String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
 function obtenerTextoPrecio(prod) {
   if (prod.precio !== undefined) {
     return `Precio unitario: <strong>S/. ${prod.precio.toFixed(2)}</strong>`;
@@ -881,20 +1127,38 @@ function obtenerTextoPrecio(prod) {
   return `Precio no disponible`;
 }
 
+function esCategoriaUnidad(categoria) {
+  return CATEGORIAS_UNIDAD.includes(categoria);
+}
+
+function requiereMinimo25(prod) {
+  return CATEGORIAS_MINIMO_25.includes(prod?.categoria);
+}
+
 function renderizarCatalogo() {
   const container = document.getElementById('catalogGrid');
   if (!container) return;
   container.innerHTML = '';
 
+  const busqueda = normalizarTexto(document.getElementById('productSearch')?.value || '');
+
   const filtrados = productos.filter(p => {
-    if (categoriaFiltroActual === 'todos') return true;
-    return p.categoria === categoriaFiltroActual;
+    const coincideCategoria = categoriaFiltroActual === 'todos' || p.categoria === categoriaFiltroActual;
+    const coincideBusqueda = !busqueda || normalizarTexto(`${p.nombre} ${p.categoria}`).includes(busqueda);
+    return coincideCategoria && coincideBusqueda;
   });
+
+  const ayuda = document.getElementById('catalogHelp');
+  if (ayuda) ayuda.textContent = filtrados.length
+    ? `${filtrados.length} opciones disponibles${busqueda ? ' para tu búsqueda' : ''}.`
+    : 'No encontramos ese producto. Prueba con otra palabra.';
 
   filtrados.forEach(prod => {
     cantidades[prod.id] = cantidades[prod.id] || 0;
+    const esUnidad = esCategoriaUnidad(prod.categoria);
+    const minimo25 = requiereMinimo25(prod);
     const card = document.createElement('div');
-    card.className = 'product-card';
+    card.className = `product-card${prod.categoria === 'Extras para tortas' ? ' is-extra' : ''}`;
     card.innerHTML = `
       <div>
         <span class="card-category-badge">${prod.categoria}</span>
@@ -904,36 +1168,92 @@ function renderizarCatalogo() {
       </div>
       <div class="controls-wrapper">
         <div class="stepper-row">
-          <button class="btn-step-main" type="button" onclick="modificarCantidad(${prod.id}, -5)">-5</button>
-          <span class="qty-display" id="qty-${prod.id}">${cantidades[prod.id]}</span>
-          <button class="btn-step-main" type="button" onclick="modificarCantidad(${prod.id}, 5)">+5</button>
+          <button class="btn-step-main" type="button" onclick="modificarCantidad(${prod.id}, ${minimo25 ? -25 : -1})">${minimo25 ? '-25' : '-1'}</button>
+          ${esUnidad
+            ? `<span class="qty-display" id="qty-${prod.id}">${cantidades[prod.id]}</span>`
+            : `<input type="number" class="qty-input" id="qty-input-${prod.id}" min="0" step="1" value="${cantidades[prod.id]}" onchange="establecerCantidadExacta(${prod.id}, this.value)" onblur="establecerCantidadExacta(${prod.id}, this.value)">`
+          }
+          <button class="btn-step-main" type="button" onclick="modificarCantidad(${prod.id}, ${minimo25 ? 25 : 1})">${minimo25 ? '+25' : '+1'}</button>
         </div>
+        ${esUnidad ? '' : `
         <div class="preset-row">
-          <button class="btn-action" type="button" onclick="establecerPaquete(${prod.id}, 25)">25</button>
-          <button class="btn-action" type="button" onclick="establecerPaquete(${prod.id}, 50)">50</button>
-          <button class="btn-action" type="button" onclick="establecerPaquete(${prod.id}, 100)">100</button>
-        </div>
+          <button class="btn-action" type="button" onclick="modificarCantidad(${prod.id}, 25)">+25</button>
+          <button class="btn-action" type="button" onclick="modificarCantidad(${prod.id}, 50)">+50</button>
+          <button class="btn-action" type="button" onclick="modificarCantidad(${prod.id}, 100)">+100</button>
+        </div>`}
       </div>
     `;
     container.appendChild(card);
   });
 }
 
+function obtenerPreciosProducto(prod) {
+  const datos = prod?.precios || {};
+  const x100 = Number(datos.x100 ?? prod?.precio_x100 ?? prod?.precio ?? 0);
+  const x50 = Number(datos.x50 ?? prod?.precio_x50 ?? 0);
+  const x25 = Number(datos.x25 ?? prod?.precio_x25 ?? 0);
+  const precioUnitario = Number(
+    prod?.precio_unidad ??
+    (x100 > 0 ? x100 / 100 : Number(prod?.precio || 0))
+  );
+
+  return {
+    x100,
+    x50,
+    x25,
+    precioUnitario
+  };
+}
+
 function calcularSubtotal(prod, cant) {
   if (cant <= 0) return 0;
-  if (prod.precio !== undefined) return cant * prod.precio;
-  if (prod.precios) {
-    if (cant >= 100 && prod.precios.x100) return cant * (prod.precios.x100 / 100.0);
-    if (cant >= 50 && prod.precios.x50) return cant * (prod.precios.x50 / 50.0);
-    if (cant >= 25 && prod.precios.x25) return cant * (prod.precios.x25 / 25.0);
-    if (prod.precios.x100) return cant * (prod.precios.x100 / 100.0);
+
+  if (prod.precio !== undefined && !prod.precios) {
+    return Number((cant * Number(prod.precio)).toFixed(2));
   }
-  return 0;
+
+  const precios = obtenerPreciosProducto(prod);
+  const tienePaquetes = [precios.x25, precios.x50, precios.x100].some((valor) => Number(valor || 0) > 0);
+  if (!tienePaquetes && prod.precio !== undefined) return Number((cant * Number(prod.precio)).toFixed(2));
+
+  let total = 0;
+  let restante = cant;
+  const paquetes = [
+    { tamano: 100, precio: precios.x100 },
+    { tamano: 50, precio: precios.x50 },
+    { tamano: 25, precio: precios.x25 }
+  ];
+
+  paquetes.forEach(({ tamano, precio }) => {
+    if (!(precio > 0)) return;
+    const cantidadPaquetes = Math.floor(restante / tamano);
+    if (cantidadPaquetes > 0) {
+      total += cantidadPaquetes * Number(precio);
+      restante -= cantidadPaquetes * tamano;
+    }
+  });
+
+  if (restante > 0) {
+    if (precios.precioUnitario > 0) {
+      total += restante * precios.precioUnitario;
+    } else if (Number(prod.precio || 0) > 0) {
+      total += restante * Number(prod.precio);
+    }
+  }
+
+  return Number(total.toFixed(2));
 }
 
 function modificarCantidad(id, delta) {
   const prod = productos.find(p => p.id === id);
   if (!prod) return;
+
+  if (prod.categoria === 'Extras para tortas' && !hayTortaChantillySeleccionada()) {
+    alert('Primero selecciona una Torta Chantilly en la pestaña correspondiente.');
+    return;
+  }
+
+  if (requiereMinimo25(prod) && Math.abs(delta) < 25) delta = delta < 0 ? -25 : 25;
 
   if ([25, 50, 100].includes(Math.abs(delta))) {
     const tamano = Math.abs(delta);
@@ -946,9 +1266,29 @@ function modificarCantidad(id, delta) {
 
   const subtotal = calcularSubtotal(prod, cantidades[id]);
   const elemQty = document.getElementById(`qty-${id}`);
+  const elemInput = document.getElementById(`qty-input-${id}`);
   const elemSub = document.getElementById(`subtotal-${id}`);
   if (elemQty) elemQty.innerText = cantidades[id];
+  if (elemInput) elemInput.value = cantidades[id];
   if (elemSub) elemSub.innerText = `S/. ${subtotal.toFixed(2)}`;
+  renderResumenCompra();
+  actualizarBarraCarrito();
+}
+
+function establecerCantidadExacta(id, valor) {
+  const prod = productos.find(p => p.id === id);
+  if (!prod) return;
+  const cantidadIngresada = Math.max(0, Math.floor(Number(valor) || 0));
+  const cantidad = requiereMinimo25(prod) && cantidadIngresada > 0
+    ? Math.max(25, cantidadIngresada)
+    : cantidadIngresada;
+  cantidades[id] = cantidad;
+  paquetesPorProducto[id] = {};
+  const input = document.getElementById(`qty-input-${id}`);
+  const subtotal = document.getElementById(`subtotal-${id}`);
+  if (input) input.value = cantidad;
+  if (subtotal) subtotal.innerText = `S/. ${calcularSubtotal(prod, cantidad).toFixed(2)}`;
+  renderResumenCompra();
   actualizarBarraCarrito();
 }
 
@@ -964,16 +1304,16 @@ function establecerPaquete(id, tamano) {
   const elemSub = document.getElementById(`subtotal-${id}`);
   if (elemQty) elemQty.innerText = cantidades[id];
   if (elemSub) elemSub.innerText = `S/. ${subtotal.toFixed(2)}`;
+  renderResumenCompra();
   actualizarBarraCarrito();
 }
 
 function calcularTotalGlobal() {
   let total = 0;
   let bocaditos = 0;
-  productos.forEach(p => {
-    const cant = cantidades[p.id] || 0;
-    bocaditos += cant;
-    total += calcularSubtotal(p, cant);
+  obtenerItemsCarrito().forEach(({ producto, cantidad }) => {
+    bocaditos += cantidad;
+    total += calcularSubtotal(producto, cantidad);
   });
   return { total, bocaditos };
 }
@@ -1000,7 +1340,34 @@ function iniciarCheckout() {
     alert('Por favor selecciona al menos una cantidad de productos.');
     return;
   }
+  const hayExtras = productos.some((producto) => producto.categoria === 'Extras para tortas' && (cantidades[producto.id] || 0) > 0);
+  if (hayExtras && !hayTortaChantillySeleccionada()) {
+    alert('Los extras deben acompañar una Torta Chantilly.');
+    return;
+  }
+  actualizarCampoDedicatoria();
+  renderizarCarritoCheckout();
   abrirModal('modalDatos');
+}
+
+function hayTortaChantillySeleccionada() {
+  return productos.some((producto) =>
+    producto.categoria === 'Torta Chantilly' && (cantidades[producto.id] || 0) > 0
+  );
+}
+
+function actualizarCampoDedicatoria() {
+  const campo = document.getElementById('cliDedicatoria');
+  if (!campo) return;
+  const hayTorta = productos.some((producto) =>
+    (cantidades[producto.id] || 0) > 0 && producto.categoria === 'Torta Chantilly'
+  );
+  campo.closest('.form-group').style.display = hayTorta ? 'block' : 'none';
+  if (!hayTorta) campo.value = '';
+  const fotoGroup = document.getElementById('cliFotoTortaGroup');
+  const fotoInput = document.getElementById('cliFotoTorta');
+  if (fotoGroup) fotoGroup.style.display = hayTorta ? 'block' : 'none';
+  if (fotoInput) fotoInput.required = hayTorta;
 }
 
 function validarHorarioAtencion() {
@@ -1026,13 +1393,42 @@ function validarHorarioAtencion() {
   if (errElem) {
     errElem.style.display = esValido ? 'none' : 'block';
   }
-  return esValido;
+
+  const soloSandwiches = productos
+    .filter((producto) => (cantidades[producto.id] || 0) > 0)
+    .every((producto) => CAT_SANDWICH.includes(producto.categoria));
+  const ahora = new Date();
+  const fechaPedido = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  const fechaSeleccionada = new Date(year, month - 1, day, hours, minutes);
+  const fechaMinima = new Date(fechaPedido);
+  fechaMinima.setDate(fechaMinima.getDate() + 1);
+  fechaMinima.setHours(soloSandwiches ? 8 : (ahora.getHours() < 8 ? 8 : 17), soloSandwiches ? 0 : 0, 0, 0);
+  const fueraDeCorte = soloSandwiches
+    ? ahora.getHours() >= 22
+    : ahora.getHours() >= 8;
+  if (!fueraDeCorte && !soloSandwiches) fechaMinima.setHours(8, 0, 0, 0);
+  const cumpleAnticipacion = fechaSeleccionada >= fechaMinima;
+  const anticipacion = document.getElementById('errAnticipacion');
+  if (anticipacion) {
+    anticipacion.textContent = soloSandwiches
+      ? 'Los pedidos de sandwichitos, triples y piqueos se atienden desde las 8:00 a. m. del día siguiente.'
+      : (fueraDeCorte
+        ? 'Después de las 8:00 a. m., estos pedidos pasan a prepararse desde las 5:00 p. m. del día siguiente.'
+        : 'Los pedidos realizados antes de las 8:00 a. m. se atienden desde las 8:00 a. m. del día siguiente.');
+    anticipacion.style.display = cumpleAnticipacion ? 'none' : 'block';
+  }
+  return esValido && cumpleAnticipacion;
 }
 
 function procesarDatosCliente(e) {
   e.preventDefault();
   if (!validarHorarioAtencion()) {
-    alert('Por favor elige una hora dentro del rango de atención especificado.');
+    alert('Por favor elige una hora válida y respeta la anticipación mínima indicada.');
+    return;
+  }
+
+  if (hayTortaChantillySeleccionada() && !fotoTortaData) {
+    alert('Selecciona una foto de referencia para la torta Chantilly.');
     return;
   }
 
@@ -1042,7 +1438,9 @@ function procesarDatosCliente(e) {
     apellido: document.getElementById('cliApellido').value,
     telefono: document.getElementById('cliTelefono').value,
     fecha: document.getElementById('cliFecha').value,
-    hora: document.getElementById('cliHora').value
+    hora: document.getElementById('cliHora').value,
+    dedicatoria: document.getElementById('cliDedicatoria')?.value.trim() || '',
+    foto_torta: fotoTortaData
   };
   datosPedidoActual.monto = total;
 
@@ -1061,13 +1459,12 @@ async function confirmarPagoYape(e) {
   const fechaCodigo = datosPedidoActual.cliente.fecha.replace(/-/g, '');
   const sufijoTemporal = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   datosPedidoActual.idPedido = `PED-${fechaCodigo}-${sufijoTemporal}`;
-  datosPedidoActual.items = productos
-    .filter(p => (cantidades[p.id] || 0) > 0)
-    .map(p => ({
-      nombre: p.nombre,
-      cantidad: cantidades[p.id],
-      subtotal: calcularSubtotal(p, cantidades[p.id]),
-      paquetes: obtenerPaquetesProducto(p.id)
+  datosPedidoActual.items = obtenerItemsCarrito()
+    .map(({ producto, cantidad }) => ({
+      nombre: producto.nombre,
+      cantidad,
+      subtotal: calcularSubtotal(producto, cantidad),
+      paquetes: obtenerPaquetesProducto(producto.id)
     }));
 
   const payload = {
@@ -1080,6 +1477,8 @@ async function confirmarPagoYape(e) {
     metodo_pago: 'Yape',
     fecha_recoge: datosPedidoActual.cliente.fecha,
     hora_recoge: datosPedidoActual.cliente.hora,
+    dedicatoria: datosPedidoActual.cliente.dedicatoria,
+    foto_torta: datosPedidoActual.cliente.foto_torta,
     detalles: datosPedidoActual.items.map(item => ({
       producto_nombre: item.nombre,
       cantidad: item.cantidad,
@@ -1097,10 +1496,11 @@ async function confirmarPagoYape(e) {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data.error || 'No se pudo guardar el pedido.');
+      throw new Error(data.error || `No se pudo guardar el pedido (${response.status}).`);
     }
 
     if (data.codigo) datosPedidoActual.idPedido = data.codigo;
+    datosPedidoActual.dbId = data.id;
     guardarEnControlProduccion(datosPedidoActual);
     cerrarModal('modalYape');
     prepararBoletaHTML();
@@ -1132,7 +1532,8 @@ function prepararBoletaHTML() {
       <p><strong>Cliente:</strong> ${datosPedidoActual.cliente.nombre} ${datosPedidoActual.cliente.apellido}</p>
       <p><strong>Teléfono:</strong> ${datosPedidoActual.cliente.telefono}</p>
       <p><strong>Fecha/Hora Recojo:</strong> ${datosPedidoActual.cliente.fecha} ${datosPedidoActual.cliente.hora}</p>
-      <p><strong>N° Operación Yape:</strong> ${datosPedidoActual.codigoOperacion}</p>
+       <p><strong>N° Operación Yape:</strong> ${datosPedidoActual.codigoOperacion}</p>
+       ${datosPedidoActual.cliente.dedicatoria ? `<p><strong>Dedicatoria:</strong> ${datosPedidoActual.cliente.dedicatoria}</p>` : ''}
     `;
   }
 
@@ -1195,7 +1596,8 @@ async function descargarBoletaPDF() {
     ['Cliente:', nombreCliente],
     ['Telefono:', cliente.telefono],
     ['Fecha/Hora de recojo:', `${cliente.fecha || '-'} ${cliente.hora || ''}`],
-    ['Operacion Yape:', datosPedidoActual.codigoOperacion]
+    ['Operacion Yape:', datosPedidoActual.codigoOperacion],
+    ['Dedicatoria:', cliente.dedicatoria || '-']
   ];
   let y = 37;
   datos.forEach(([etiqueta, valor]) => {
@@ -1251,6 +1653,14 @@ function cerrarTodoYReiniciar() {
   cantidades = {};
   paquetesPorProducto = {};
   datosPedidoActual = {};
+  fotoTortaData = '';
+  const fotoInput = document.getElementById('cliFotoTorta');
+  const fotoPreview = document.getElementById('cliFotoTortaPreview');
+  if (fotoInput) fotoInput.value = '';
+  if (fotoPreview) {
+    fotoPreview.src = '';
+    fotoPreview.style.display = 'none';
+  }
   document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
   renderizarCatalogo();
   actualizarBarraCarrito();
