@@ -815,6 +815,7 @@
           <input id="loginPass" type="password" required autocomplete="current-password" />
         </div>
         <button class="btn btn-primary" type="submit">Entrar</button>
+        <button class="btn btn-ghost" id="resetCredentialsBtn" type="button" style="width:100%; margin-top:10px;">Restablecer acceso en esta PC</button>
       </form>
     </div>
   </div>
@@ -1681,9 +1682,14 @@
       }
     }
 
+    let adminStarted = false;
     function openDashboard() {
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('adminApp').classList.remove('hidden');
+      if (!adminStarted) {
+        adminStarted = true;
+        iniciarAdmin();
+      }
     }
 
     function closeDashboard() {
@@ -1716,6 +1722,13 @@
 
     document.getElementById('logoutBtn').addEventListener('click', () => {
       closeDashboard();
+    });
+
+    document.getElementById('resetCredentialsBtn').addEventListener('click', () => {
+      localStorage.removeItem(AUTH_KEY);
+      document.getElementById('loginUser').value = '';
+      document.getElementById('loginPass').value = '';
+      alert('Acceso restablecido. Escribe el nuevo usuario y contraseña para crearlos en esta PC.');
     });
 
     document.getElementById('guardarCredenciales').addEventListener('click', () => {
@@ -2370,7 +2383,7 @@
       }, 5000);
     }
 
-    iniciarAdmin();
+    loadCredentialFields();
   </script>
 </body>
 </html>
