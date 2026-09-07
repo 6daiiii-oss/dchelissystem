@@ -348,12 +348,14 @@ app.post('/api/pedidos', (req, res) => {
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
 
-        const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Registrado')`;
+        const pagoPendiente = String(metodo_pago || '').includes('verificación pendiente');
+        const estadoInicial = pagoPendiente ? 'Pendiente de verificación de pago' : 'Registrado';
+        const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
         const fechaCodigo = String(fecha_recoge || '').replace(/-/g, '');
         const sufijoUnico = crypto.randomBytes(4).toString('hex').toUpperCase();
         const codigoPedido = `PED-${fechaCodigo}-${sufijoUnico}`;
-        db.run(queryPedido, [codigoPedido, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, String(dedicatoria || '').trim(), String(foto_torta || '')], function(err) {
+        db.run(queryPedido, [codigoPedido, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, String(dedicatoria || '').trim(), String(foto_torta || ''), estadoInicial], function(err) {
             if (err) {
                 db.run('ROLLBACK');
                 return res.status(500).json({ error: err.message });
@@ -424,6 +426,36 @@ app.get('/api/admin/pedidos', (req, res) => {
   });
 });
 
+// Vista de solo lectura para el personal de despacho. No expone acciones de
+// edición, eliminación, teléfonos ni importes de los clientes.
+app.get('/api/colaboradores/salidas', (req, res) => {
+  const fecha = String(req.query.fecha || new Date().toISOString().slice(0, 10)).trim();
+  db.all(`
+    SELECT p.id, p.codigo, p.cliente_nombre, p.fecha_recoge, p.hora_recoge, p.estado,
+           d.producto_nombre, d.cantidad, d.paquetes
+    FROM pedidos p
+    LEFT JOIN detalles_pedido d ON d.pedido_id = p.id
+    WHERE p.fecha_recoge = ? AND p.estado <> 'Pendiente de verificación de pago'
+    ORDER BY p.hora_recoge ASC, p.id ASC, d.id ASC
+  `, [fecha], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const pedidos = new Map();
+    (rows || []).forEach((row) => {
+      if (!pedidos.has(row.id)) {
+        pedidos.set(row.id, {
+          id: row.id, codigo: row.codigo, cliente_nombre: row.cliente_nombre,
+          fecha_recoge: row.fecha_recoge, hora_recoge: row.hora_recoge,
+          estado: row.estado, detalles: []
+        });
+      }
+      if (row.producto_nombre) {
+        pedidos.get(row.id).detalles.push({ producto_nombre: row.producto_nombre, cantidad: row.cantidad, paquetes: row.paquetes });
+      }
+    });
+    res.json({ fecha, pedidos: [...pedidos.values()] });
+  });
+});
+
 app.get('/api/admin/inventario', (req, res) => {
   db.all(`SELECT id, nombre, categoria, unidad, cantidad_base, formula, descripcion FROM formulas_inventario ORDER BY categoria, nombre ASC`, [], (err, formulas) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -482,7 +514,7 @@ app.get('/api/admin/inventario/compra-dia', (req, res) => {
     SELECT p.id as pedido_id, p.fecha_recoge, d.producto_nombre, d.cantidad
     FROM pedidos p
     INNER JOIN detalles_pedido d ON d.pedido_id = p.id
-    WHERE p.fecha_recoge = ?
+    WHERE p.fecha_recoge = ? AND p.estado <> 'Pendiente de verificación de pago'
     ORDER BY p.id ASC, d.id ASC
   `, [fecha], (err, filas) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -677,14 +709,14 @@ app.get('/api/admin/produccion', (req, res) => {
   // sin importar si un producto tuvo pedidos ese día o no.
   const listaProductos = PRODUCTOS_COCINA;
 
-  db.all(`SELECT id, cliente_nombre, tipo_cliente FROM pedidos WHERE fecha_recoge = ? ORDER BY id ASC`, [fecha], (err, clientes) => {
+  db.all(`SELECT id, cliente_nombre, tipo_cliente FROM pedidos WHERE fecha_recoge = ? AND estado <> 'Pendiente de verificación de pago' ORDER BY id ASC`, [fecha], (err, clientes) => {
     if (err) return res.status(500).json({ error: err.message });
 
     db.all(
       `SELECT p.id as pedido_id, dp.producto_nombre, dp.cantidad, dp.paquetes 
        FROM detalles_pedido dp 
        JOIN pedidos p ON dp.pedido_id = p.id 
-       WHERE p.fecha_recoge = ?`,
+       WHERE p.fecha_recoge = ? AND p.estado <> 'Pendiente de verificación de pago'`,
       [fecha],
       (err, detalles) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -726,7 +758,7 @@ app.get('/api/admin/exportar-excel', (req, res) => {
   // 47 filas fijas, igual que el papel de la dueña (no depende de lo que se pidió ese día)
   const listaProductos = PRODUCTOS_COCINA;
 
-  db.all(`SELECT id, cliente_nombre FROM pedidos WHERE fecha_recoge = ? ORDER BY id ASC`, [fecha], async (err, clientes) => {
+  db.all(`SELECT id, cliente_nombre FROM pedidos WHERE fecha_recoge = ? AND estado <> 'Pendiente de verificación de pago' ORDER BY id ASC`, [fecha], async (err, clientes) => {
       if (err) return res.status(500).send(err.message);
       const listaClientes = clientes || [];
 
@@ -734,7 +766,7 @@ app.get('/api/admin/exportar-excel', (req, res) => {
         `SELECT p.id as pedido_id, dp.producto_nombre, dp.cantidad, dp.paquetes 
          FROM detalles_pedido dp 
          JOIN pedidos p ON dp.pedido_id = p.id 
-         WHERE p.fecha_recoge = ?`,
+         WHERE p.fecha_recoge = ? AND p.estado <> 'Pendiente de verificación de pago'`,
         [fecha],
         async (err, detalles) => {
           if (err) return res.status(500).send(err.message);
