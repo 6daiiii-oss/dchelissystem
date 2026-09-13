@@ -1082,7 +1082,8 @@
       'Empanada de Pollo': ['EMPANADA POLLO', 'EMPANADITA POLLO', 'POLLO'],
       'Empanada de Queso': ['EMPANADA QUESO', 'EMPANADITA QUESO', 'QUESO'],
       'Empanada de Jamón': ['EMPANADA JAMON', 'EMPANADITA JAMON', 'JAMON'],
-      'Pizzitas': ['PIZZITA', 'PIZZITAS', 'PIZZA']
+      'Pizzitas': ['PIZZITA', 'PIZZITAS', 'PIZZA'],
+      'Tartaleta de Fresa': ['TARTALETA DE FRESA', 'TARTALETA FRESA', 'TARTA DE FRESA', 'TARTALITA FRESA']
     };
 
     async function cargarInventarioAdmin() {
@@ -1517,7 +1518,15 @@
         const cantidad = match ? Number(match[1]) : null;
         const producto = match ? resolverProductoDigitado(match[2]) : resolverProductoDigitado(linea);
         const nombre = producto || 'Producto no identificado';
-        return `<li><span>${cantidad ? `${cantidad} • ${nombre}` : linea}</span><strong>${cantidad || 1}</strong></li>`;
+        const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
+        const item = catalogo.find((entry) => {
+          const nombreCanon = normalizarNombreProducto(entry.nombre || '');
+          const analizado = normalizarNombreProducto(producto || '');
+          return nombreCanon === analizado || nombreCanon.includes(analizado) || analizado.includes(nombreCanon);
+        }) || catalogo.find((entry) => normalizarNombreProducto(entry.nombre || '').includes(normalizarNombreProducto(producto || '')));
+        const subtotal = calcularSubtotalCatalogo(item, Math.max(1, cantidad || 1));
+        const priceText = item ? ` • S/. ${subtotal.toFixed(2)}` : '';
+        return `<li><span>${cantidad ? `${cantidad} • ${nombre}${priceText}` : linea}</span><strong>${cantidad || 1}</strong></li>`;
       });
 
       const total = lineas.length ? lista.reduce((sum, linea) => {
@@ -1567,6 +1576,10 @@
         return Number((cant * Number(item.precio)).toFixed(2));
       }
 
+      if (cant >= 75 && precios.x100 > 0) {
+        return Number((cant * (precios.x100 / 100)).toFixed(2));
+      }
+
       let total = 0;
       let restante = cant;
       const paquetes = [
@@ -1607,7 +1620,7 @@
       const texto = document.getElementById('quickEntryInput')?.value || '';
 
       if (!nombreCliente || !apellidoCliente || !celular || !texto.trim()) {
-        alert('Completa nombre, apellido, celular y al menos una línea de digitación rápida.');
+        mostrarError('Falta nombre, apellido, celular o producto.', 'quickCustomerName');
         return;
       }
 
@@ -1621,7 +1634,7 @@
         const productoTexto = match ? match[2] : linea;
         const producto = resolverProductoDigitado(productoTexto);
         if (!producto || !cantidad || cantidad <= 0) {
-          alert(`No se pudo interpretar la línea: "${linea}". Usa formato como "25 triples PJQ".`);
+          mostrarError(`No se pudo interpretar: "${linea}". Usa formato como "25 triples PJQ".`, 'quickEntryInput');
           return;
         }
 
@@ -1642,7 +1655,7 @@
       const montoTotal = detalles.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
       const adelanto = Number.isFinite(adelantoInput) ? Math.max(0, adelantoInput) : 0;
       if (adelanto > montoTotal) {
-        alert('El adelanto no puede ser mayor que el total del pedido.');
+        mostrarError('El adelanto no puede ser mayor que el total del pedido.', 'quickAdelanto');
         return;
       }
 

@@ -657,6 +657,7 @@
   </style>
 </head>
 <body>
+<div id="floatingError" class="floating-error" aria-live="polite"></div>
 
   <header>
     <h1>Panadería - Pastelería D'chelis</h1>
@@ -694,6 +695,7 @@
       </div>
 
       <form id="formCliente" onsubmit="procesarDatosCliente(event)">
+        <div id="checkoutErrors" class="modal-inline-error" role="alert" style="display:none;"></div>
         <div id="resumenPedido" class="notice" style="margin-bottom:14px; display:none;"></div>
         <div id="checkoutCart" class="notice" style="margin-bottom:14px; display:none;"></div>
 
@@ -1007,11 +1009,29 @@ const productos = preciosActualizados.map((p, index) => {
   return obj;
 });
 
+const pricing = typeof DchelisPricing !== 'undefined' ? DchelisPricing : null;
+function mostrarError(msj, foco = null) {
+  const box = document.getElementById('floatingError');
+  if (!box) return;
+  box.textContent = msj;
+  box.classList.add('visible');
+  if (foco) {
+    const elemento = typeof foco === 'string' ? document.getElementById(foco) : foco;
+    if (elemento) {
+      elemento.classList.add('danger-flash');
+      setTimeout(() => elemento.classList.remove('danger-flash'), 450);
+    }
+  }
+  setTimeout(() => box.classList.remove('visible'), 2600);
+}
+
 let cantidades = {};
 let paquetesPorProducto = {};
 let datosPedidoActual = {};
 let fotoTortaData = '';
 let categoriaFiltroActual = "todos";
+
+const CART_KEY = 'dchelis_cart_v1';
 
 const CATEGORIAS_UNIDAD = ['Torta Chantilly', 'Pasteles Familiares', 'Pan Especial', 'Extras para tortas'];
 const CATEGORIAS_MINIMO_25 = ['Bocaditos Dulces', 'Bocaditos Salados', 'Sandwichitos', 'Mini Triples', 'Piqueos', 'Pan Gourmet'];
@@ -1117,6 +1137,26 @@ contenedor.style.display = 'block';
 contenedor.innerHTML = `<strong>Pedido actual:</strong><br>${texto}`;
 }
 
+function persistCart() {
+  localStorage.setItem(CART_KEY, JSON.stringify({ cantidades, paquetesPorProducto }));
+}
+
+function restaurarCarritoDesdeLocalStorage() {
+  try {
+    const raw = localStorage.getItem(CART_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.cantidades) {
+      cantidades = { ...cantidades, ...parsed.cantidades };
+    }
+    if (parsed && parsed.paquetesPorProducto) {
+      paquetesPorProducto = parsed.paquetesPorProducto;
+    }
+  } catch (error) {
+    console.warn('No se pudo restaurar el carrito desde localStorage', error);
+  }
+}
+
 function obtenerItemsCarrito() {
   return productos
     .map((producto) => ({ producto, cantidad: Math.max(0, Number(cantidades[producto.id]) || 0) }))
@@ -1138,7 +1178,7 @@ function renderizarCarritoCheckout() {
     <div style="margin-top:8px; display:grid; gap:7px;">
       ${items.map(({ producto, cantidad }) => `
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-          <span>${cantidad} • ${producto.nombre}</span>
+          <span>${cantidad} • ${producto.nombre} • ${calcularSubtotal(producto, cantidad).toFixed(2)}</span>
           <button type="button" class="btn-action" style="flex:0 0 auto; padding:5px 9px;" onclick="eliminarItemCarrito(${producto.id})">Eliminar</button>
         </div>
       `).join('')}
@@ -1222,6 +1262,7 @@ function renderizarCatalogo() {
   const busqueda = normalizarTexto(document.getElementById('productSearch')?.value || '');
 
   const filtrados = productos.filter(p => {
+    if (p.categoria === 'Pruebas Ocultas') return false;
     const coincideCategoria = categoriaFiltroActual === 'todos' || p.categoria === categoriaFiltroActual;
     const coincideBusqueda = !busqueda || normalizarTexto(`${p.nombre} ${p.categoria}`).includes(busqueda);
     return coincideCategoria && coincideBusqueda;
@@ -1267,6 +1308,8 @@ function renderizarCatalogo() {
 }
 
 function obtenerPreciosProducto(prod) {
+  if (pricing && typeof pricing.obtenerPreciosProducto === 'function') return pricing.obtenerPreciosProducto(prod);
+
   const datos = prod?.precios || {};
   const x100 = Number(datos.x100 ?? prod?.precio_x100 ?? prod?.precio ?? 0);
   const x50 = Number(datos.x50 ?? prod?.precio_x50 ?? 0);
@@ -1276,24 +1319,28 @@ function obtenerPreciosProducto(prod) {
     (x100 > 0 ? x100 / 100 : Number(prod?.precio || 0))
   );
 
-  return {
-    x100,
-    x50,
-    x25,
-    precioUnitario
-  };
+  return { x100, x50, x25, precioUnitario };
 }
 
 function calcularSubtotal(prod, cant) {
-  if (cant <= 0) return 0;
+  if (pricing && typeof pricing.calcularSubtotal === 'function') {
+    return pricing.calcularSubtotal(prod, cant);
+  }
 
-  if (prod.precio !== undefined && !prod.precios) {
+  if (cant <= 0) return 0;
+  if (prod && prod.precio !== undefined && prod.precio !== null && !prod.precios) {
     return Number((cant * Number(prod.precio)).toFixed(2));
   }
 
   const precios = obtenerPreciosProducto(prod);
   const tienePaquetes = [precios.x25, precios.x50, precios.x100].some((valor) => Number(valor || 0) > 0);
-  if (!tienePaquetes && prod.precio !== undefined) return Number((cant * Number(prod.precio)).toFixed(2));
+  if (!tienePaquetes && prod.precio !== undefined && prod.precio !== null && Number(prod.precio) > 0) {
+    return Number((cant * Number(prod.precio)).toFixed(2));
+  }
+
+  if (cant >= 75 && precios.x100 > 0) {
+    return Number((cant * (precios.x100 / 100)).toFixed(2));
+  }
 
   let total = 0;
   let restante = cant;
@@ -1323,12 +1370,18 @@ function calcularSubtotal(prod, cant) {
   return Number(total.toFixed(2));
 }
 
+function actualizarCarritoYUI() {
+  persistCart();
+  renderResumenCompra();
+  actualizarBarraCarrito();
+}
+
 function modificarCantidad(id, delta) {
   const prod = productos.find(p => p.id === id);
   if (!prod) return;
 
   if (prod.categoria === 'Extras para tortas' && !hayTortaChantillySeleccionada()) {
-    alert('Primero selecciona una Torta Chantilly en la pestaña correspondiente.');
+    mostrarError('Primero selecciona una Torta Chantilly.', 'cliFotoTortaGroup');
     return;
   }
 
@@ -1350,8 +1403,7 @@ function modificarCantidad(id, delta) {
   if (elemQty) elemQty.innerText = cantidades[id];
   if (elemInput) elemInput.value = cantidades[id];
   if (elemSub) elemSub.innerText = `S/. ${subtotal.toFixed(2)}`;
-  renderResumenCompra();
-  actualizarBarraCarrito();
+  actualizarCarritoYUI();
 }
 
 function establecerCantidadExacta(id, valor) {
@@ -1367,6 +1419,7 @@ function establecerCantidadExacta(id, valor) {
   const subtotal = document.getElementById(`subtotal-${id}`);
   if (input) input.value = cantidad;
   if (subtotal) subtotal.innerText = `S/. ${calcularSubtotal(prod, cantidad).toFixed(2)}`;
+  persistCart();
   renderResumenCompra();
   actualizarBarraCarrito();
 }
@@ -1383,6 +1436,7 @@ function establecerPaquete(id, tamano) {
   const elemSub = document.getElementById(`subtotal-${id}`);
   if (elemQty) elemQty.innerText = cantidades[id];
   if (elemSub) elemSub.innerText = `S/. ${subtotal.toFixed(2)}`;
+  persistCart();
   renderResumenCompra();
   actualizarBarraCarrito();
 }
@@ -1413,15 +1467,43 @@ function cerrarModal(id) {
   if (m) m.classList.remove('active');
 }
 
+function mostrarInlineError(msj, campo = null) {
+  const caja = document.getElementById('checkoutErrors');
+  if (!caja) {
+    mostrarError(msj, campo || 'checkoutErrors');
+    return;
+  }
+  caja.textContent = msj;
+  caja.style.display = 'block';
+  caja.classList.add('visible');
+  if (campo) {
+    const target = typeof campo === 'string' ? document.getElementById(campo) : campo;
+    if (target) {
+      target.classList.add('danger-flash');
+      setTimeout(() => target.classList.remove('danger-flash'), 420);
+    }
+  }
+}
+
+function limpiarInlineError() {
+  const caja = document.getElementById('checkoutErrors');
+  if (caja) {
+    caja.textContent = '';
+    caja.style.display = 'none';
+    caja.classList.remove('visible');
+  }
+}
+
 function iniciarCheckout() {
+  limpiarInlineError();
   const { bocaditos } = calcularTotalGlobal();
   if (bocaditos === 0) {
-    alert('Por favor selecciona al menos una cantidad de productos.');
+    mostrarInlineError('Selecciona al menos un producto antes de continuar.', 'cartCount');
     return;
   }
   const hayExtras = productos.some((producto) => producto.categoria === 'Extras para tortas' && (cantidades[producto.id] || 0) > 0);
   if (hayExtras && !hayTortaChantillySeleccionada()) {
-    alert('Los extras deben acompañar una Torta Chantilly.');
+    mostrarInlineError('Los extras deben acompañar una Torta Chantilly.', 'catalogGrid');
     return;
   }
   actualizarCampoDedicatoria();
@@ -1501,20 +1583,36 @@ function validarHorarioAtencion() {
 
 function procesarDatosCliente(e) {
   e.preventDefault();
+  limpiarInlineError();
+
+  const nombre = document.getElementById('cliNombre').value.trim();
+  const apellido = document.getElementById('cliApellido').value.trim();
+  const telefono = document.getElementById('cliTelefono').value.trim();
+
+  if (!nombre || !apellido || !telefono) {
+    mostrarInlineError('Falta nombre, apellido o teléfono.', 'cliNombre');
+    return;
+  }
+
   if (!validarHorarioAtencion()) {
-    alert('Por favor elige una hora válida y respeta la anticipación mínima indicada.');
+    mostrarInlineError('Elige una hora válida y respeta la anticipación mínima.', 'cliHora');
     return;
   }
 
   if (hayTortaChantillySeleccionada() && !fotoTortaData) {
-    alert('Selecciona una foto de referencia para la torta Chantilly.');
+    mostrarInlineError('Selecciona una foto de referencia para la torta Chantilly.', 'cliFotoTorta');
     return;
   }
 
   const { total } = calcularTotalGlobal();
   const adelanto = Number(document.getElementById('cliAdelanto').value || 0);
   if (!Number.isFinite(adelanto) || adelanto < 0 || adelanto > total) {
-    alert('El adelanto debe ser un monto entre S/. 0.00 y el total del pedido.');
+    mostrarInlineError('El adelanto debe ser un monto entre S/. 0.00 y el total.', 'cliAdelanto');
+    return;
+  }
+
+  if (adelanto < total * 0.5) {
+    mostrarInlineError('El adelanto mínimo es al menos el 50% del total.', 'cliAdelanto');
     return;
   }
   datosPedidoActual.cliente = {
@@ -1536,6 +1634,33 @@ function procesarDatosCliente(e) {
 
   cerrarModal('modalDatos');
   abrirModal('modalYape');
+}
+
+async function esperarPagoMacrodroid(codigoPedido, maxSeconds = 600) {
+  const started = Date.now();
+  let estado = 'Pendiente de verificación de pago';
+
+  while (Date.now() - started < maxSeconds * 1000) {
+    try {
+      const respuesta = await fetch(apiUrl(`/api/pedidos/estado/${encodeURIComponent(codigoPedido)}`), {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (respuesta.ok) {
+        const data = await respuesta.json().catch(() => ({}));
+        estado = String(data.estado || estado);
+        if (estado === 'Pagado') {
+          return true;
+        }
+      }
+    } catch (error) {
+      console.warn('Polling de Macrodroid pago:', error.message);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  return false;
 }
 
 async function confirmarPagoYape(e) {
@@ -1587,6 +1712,26 @@ async function confirmarPagoYape(e) {
 
     if (data.codigo) datosPedidoActual.idPedido = data.codigo;
     datosPedidoActual.dbId = data.id;
+
+    await fetch(apiUrl('/api/macrodroid/emit'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        codigo: datosPedidoActual.idPedido,
+        tipo: 'explode',
+        ttl: 600,
+        nombre: datosPedidoActual.cliente.nombre,
+        apellido: datosPedidoActual.cliente.apellido,
+        telefono: datosPedidoActual.cliente.telefono,
+        monto: datosPedidoActual.adelanto
+      })
+    }).catch(() => {});
+
+    const yaPago = await esperarPagoMacrodroid(datosPedidoActual.idPedido, 600);
+    if (!yaPago) {
+      throw new Error('El cliente aún no verificó el pago con Macrodroid.');
+    }
+
     guardarEnControlProduccion(datosPedidoActual);
     cerrarModal('modalYape');
     prepararBoletaHTML();
