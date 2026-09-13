@@ -236,6 +236,7 @@ db.serialize(() => {
     ['gourmet_petipan', 'Petipan', 'Pan Gourmet', 30.0, 9.0, 18.0, 30.0, null],
     ['gourmet_hamburguesa_grande', 'Hamburguesa grande', 'Pan Gourmet', 0.80, null, null, null, 0.80],
     ['gourmet_croissant_grande', 'Croissant grande', 'Pan Gourmet', 1.50, null, null, null, 1.50],
+    ['prueba_macrodroid_010', 'Prueba MacroDroid 0.10', 'Pruebas Ocultas', 0.10, null, null, null, 0.10],
 
     // --- PAN ESPECIAL ---
     ['esp_pan_molde_pullman', 'Pan de Molde (Pullman)', 'Pan Especial', 18.0, null, null, null, 18.0],

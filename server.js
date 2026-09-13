@@ -337,6 +337,81 @@ app.get('/api/productos', (req, res) => {
   });
 });
 
+app.post('/api/macrodroid/emit', async (req, res) => {
+  const payload = req.body || {};
+  const url = process.env.MACRODROID_URL;
+  const event = {
+    event: 'dchelis_pedido',
+    codigo: payload.codigo || 'PEDIDO',
+    tipo: payload.tipo || 'explode',
+    ttlSeconds: Number(payload.ttlSeconds || payload.ttl || 600),
+    nombre: payload.nombre || '',
+    apellido: payload.apellido || '',
+    telefono: payload.telefono || '',
+    monto: payload.monto || payload.monto_total || 0,
+    createdAt: new Date().toISOString()
+  };
+
+  if (!url) {
+    return res.json({
+      ok: true,
+      dryRun: true,
+      mode: 'macrodroid-disabled',
+      event,
+      signal: event.tipo,
+      code: event.codigo,
+      ttlSeconds: event.ttlSeconds,
+      waitingForPayment: true
+    });
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(event)
+    });
+
+    const text = await response.text().catch(() => '');
+    return res.json({ ok: response.ok, status: response.status, code: event.codigo, macrodroid: text || 'ok', signal: event.tipo, mode: 'macrodroid-live', waitingForPayment: true });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'Macrodroid no respondió', detail: error.message });
+  }
+});
+
+app.post('/api/macrodroid/callback', (req, res) => {
+  const payload = req.body || {};
+  const codigo = String(payload.codigo || '').trim();
+  if (!codigo) {
+    return res.status(400).json({ ok: false, error: 'Falta codigo de pedido en la señal de Macrodroid.' });
+  }
+
+  db.run(`UPDATE pedidos SET estado = 'Pagado' WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [codigo], function (err) {
+    if (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+
+    if (this.changes === 0) {
+      return res.status(404).json({ ok: false, error: 'Pedido no encontrado o ya no está pendiente.' });
+    }
+
+    return res.json({ ok: true, codigo, estado: 'Pagado', mode: 'macrodroid-callback' });
+  });
+});
+
+app.get('/api/pedidos/estado/:codigo', (req, res) => {
+  const codigo = req.params.codigo;
+  if (!codigo) {
+    return res.status(400).json({ ok: false, error: 'Falta el codigo del pedido.' });
+  }
+
+  db.get(`SELECT codigo, estado, metodo_pago, monto_total, adelanto FROM pedidos WHERE codigo = ?`, [codigo], (err, row) => {
+    if (err) return res.status(500).json({ ok: false, error: err.message });
+    if (!row) return res.status(404).json({ ok: false, error: 'Pedido no encontrado.' });
+    return res.json({ ok: true, codigo: row.codigo, estado: row.estado, metodo_pago: row.metodo_pago, monto_total: row.monto_total, adelanto: row.adelanto });
+  });
+});
+
 // Endpoint para registrar un nuevo pedido y asegurar su visualización en producción
 app.post('/api/pedidos', (req, res) => {
   const { tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, detalles } = req.body;
@@ -369,16 +444,41 @@ app.post('/api/pedidos', (req, res) => {
                 const paquetes = det.paquetes && typeof det.paquetes === 'object' ? JSON.stringify(det.paquetes) : '{}';
                 stmt.run(pedidoId, det.producto_nombre, det.cantidad, det.subtotal, paquetes);
             });
-            stmt.finalize((err) => {
+            stmt.finalize(async (err) => {
                 if (err) {
                     db.run('ROLLBACK');
                     return res.status(500).json({ error: err.message });
                 }
 
-                db.run('COMMIT', (err) => {
+                db.run('COMMIT', async (err) => {
                     if (err) {
                         return res.status(500).json({ error: err.message });
                     }
+
+                    const url = process.env.MACRODROID_URL;
+                    if (url) {
+                      try {
+                        const [nombre, ...restApellido] = String(cliente_nombre || '').trim().split(/\s+/);
+                        const apellido = restApellido.join(' ');
+                        await fetch(url, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            event: 'dchelis_pedido',
+                            codigo: codigoPedido,
+                            tipo: 'explode',
+                            ttlSeconds: 600,
+                            nombre,
+                            apellido,
+                            telefono: celular,
+                            monto: Number(monto_total || adelanto || 0)
+                          })
+                        });
+                      } catch (e) {
+                        console.warn('Macrodroid signal ignored:', e.message);
+                      }
+                    }
+
                     res.status(201).json({ message: 'Pedido registrado con éxito', id: pedidoId, codigo: codigoPedido });
                 });
             });
