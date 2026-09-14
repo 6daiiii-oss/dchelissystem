@@ -7,7 +7,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-  <script src="pricing.js"></script>
   <script src="config.js"></script>
   <style>
     :root {
@@ -819,9 +818,13 @@
       </div>
 
       <form onsubmit="confirmarPagoYape(event)">
-        <small style="display:block; margin-top:10px; color:var(--text-muted); line-height:1.45;">La operación Yape se tomará como notificación externa y no se bloqueará el registro del pedido.</small>
-        <button id="yapeSubmit" type="submit" class="btn-yape">Registrar solicitud de pago</button>
-      </form>
+        <div class="form-group">
+          <label for="yapeCodigoOp">Número de Operación Yape (6 dígitos) *</label>
+          <input type="text" id="yapeCodigoOp" class="form-control" pattern="[0-9]{6}" required placeholder="Ej. 946227" maxlength="6">
+        </div>
+        <small style="display:block; margin-top:10px; color:var(--text-muted); line-height:1.45;">El número de operación será revisado por D'chelis antes de confirmar el pago.</small>
+      <button id="yapeSubmit" type="submit" class="btn-yape">Registrar solicitud de pago</button>
+    </form>
   </div>
 </div>
 
@@ -1021,8 +1024,23 @@ const productosIniciales = [
     ['esp_pan_molde_integral_chico', 'Pan de Molde Integral chico', 'Pan Especial', 11.0, null, null, null, 11.0]
 ];
 
+const preciosActualizados = productosIniciales.map((producto) => {
+  const copia = [...producto];
+  const actualizar = (indice, equivalencias) => {
+    if (copia[indice] !== null && equivalencias[copia[indice]] !== undefined) {
+      copia[indice] = equivalencias[copia[indice]];
+    }
+  };
+  actualizar(3, { 70: 76 });
+  actualizar(4, { 19: 22 });
+  actualizar(5, { 35: 40 });
+  actualizar(6, { 70: 76 });
+  actualizar(7, {});
+  return copia;
+});
+
 // Mapeo automático de la estructura de matriz a objetos internos legibles
-let productos = productosIniciales.map((p, index) => {
+let productos = preciosActualizados.map((p, index) => {
   const [id, nombre, categoria, p100, p25, p50, ref100, precioFijo] = p;
   let obj = { id: index + 1, codigo: id, nombre, categoria };
   if (precioFijo !== null) {
@@ -1052,17 +1070,14 @@ async function cargarProductosDesdeApi() {
         categoria: row.categoria
       };
 
-      const precioUnidad = Number(row.precio_unidad ?? 0);
-      if (row.precio_unidad !== undefined && row.precio_unidad !== null && precioUnidad > 0) {
-        producto.precio = precioUnidad;
-      } else if (Number(row.precio_x100 ?? 0) > 0 || Number(row.precio_x50 ?? 0) > 0 || Number(row.precio_x25 ?? 0) > 0) {
+      if (row.precio !== undefined && row.precio !== null) {
+        producto.precio = Number(row.precio);
+      } else {
         producto.precios = {
           x100: Number(row.precio_x100 ?? row.precio ?? 0),
           x50: Number(row.precio_x50 ?? 0),
           x25: Number(row.precio_x25 ?? 0)
         };
-      } else if (Number(row.precio ?? 0) > 0) {
-        producto.precio = Number(row.precio);
       }
 
       return producto;
@@ -1735,12 +1750,18 @@ async function confirmarPagoYape(e) {
 
   const form = e.currentTarget;
   const submitButton = document.getElementById('yapeSubmit');
+  const codOp = document.getElementById('yapeCodigoOp').value.trim();
+  if (!codOp || codOp.length < 6) {
+    mostrarInlineError('Ingresa un número de operación Yape válido.', 'yapeCodigoOp');
+    return;
+  }
 
   yapeOrderInFlight = true;
   if (submitButton) submitButton.disabled = true;
   const loader = document.getElementById('yapeLoadingScreen');
   if (loader) loader.classList.add('visible');
 
+  datosPedidoActual.codigoOperacion = codOp;
   const fechaCodigo = datosPedidoActual.cliente.fecha.replace(/-/g, '');
   const sufijoTemporal = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   datosPedidoActual.idPedido = `PED-${fechaCodigo}-${sufijoTemporal}`;
@@ -1759,7 +1780,8 @@ async function confirmarPagoYape(e) {
     celular: datosPedidoActual.cliente.telefono,
     monto_total: datosPedidoActual.monto,
     adelanto: datosPedidoActual.adelanto,
-    metodo_pago: 'Yape - verificación pendiente',
+    metodo_pago: `Yape - operación ${codOp} (verificación pendiente)`,
+    nro_operacion: codOp,
     fecha_recoge: datosPedidoActual.cliente.fecha,
     hora_recoge: datosPedidoActual.cliente.hora,
     dedicatoria: datosPedidoActual.cliente.dedicatoria || '',

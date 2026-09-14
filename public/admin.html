@@ -1608,8 +1608,14 @@
       return Number(total.toFixed(2));
     }
 
+    let quickOrderInFlight = false;
+
     async function registrarPedidoRapido(event) {
       event.preventDefault();
+      if (quickOrderInFlight) return;
+
+      const form = event.currentTarget;
+      const submitButton = form?.querySelector('button[type="submit"]');
 
       const nombreCliente = document.getElementById('quickCustomerName')?.value.trim();
       const apellidoCliente = document.getElementById('quickCustomerSurname')?.value.trim();
@@ -1659,6 +1665,9 @@
         return;
       }
 
+      quickOrderInFlight = true;
+      if (submitButton) submitButton.disabled = true;
+
       try {
         const respuesta = await fetch('/api/pedidos', {
           method: 'POST',
@@ -1692,6 +1701,9 @@
         alert(`Pedido ${resultado.codigo || 'registrado'} generado correctamente.`);
       } catch (error) {
         alert(error.message || 'No se pudo registrar el pedido rápido.');
+      } finally {
+        quickOrderInFlight = false;
+        if (submitButton) submitButton.disabled = false;
       }
     }
 

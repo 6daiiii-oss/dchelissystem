@@ -6,7 +6,7 @@
     const x25 = Number(datos.x25 ?? prod?.precio_x25 ?? 0);
     const precioUnitario = Number(
       prod?.precio_unidad ??
-      (x100 > 0 ? x100 / 100 : Number(prod?.precio || 0))
+      (prod?.precio !== undefined && prod?.precio !== null && !prod?.precios ? Number(prod.precio) : (x100 > 0 ? x100 / 100 : Number(prod?.precio || 0)))
     );
 
     return { x100, x50, x25, precioUnitario };

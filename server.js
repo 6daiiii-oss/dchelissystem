@@ -329,6 +329,26 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+app.get('/index.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/admin.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/colaboradores', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'colaboradores.html'));
+});
+
+app.get('/colaboradores.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'colaboradores.html'));
+});
+
 // Endpoint: Obtener Catálogo de Productos
 app.get('/api/productos', (req, res) => {
   db.all(`SELECT id, nombre, categoria, precio, precio_x25, precio_x50, precio_x100, precio_unidad FROM productos ORDER BY categoria ASC, nombre ASC`, [], (err, rows) => {
@@ -337,10 +357,8 @@ app.get('/api/productos', (req, res) => {
   });
 });
 
-app.post('/api/macrodroid/emit', async (req, res) => {
-  const payload = req.body || {};
-  const url = process.env.MACRODROID_URL;
-  const event = {
+function buildMacrodroidEventFromPayload(payload = {}) {
+  return {
     event: 'dchelis_pedido',
     codigo: payload.codigo || 'PEDIDO',
     tipo: payload.tipo || 'explode',
@@ -351,6 +369,12 @@ app.post('/api/macrodroid/emit', async (req, res) => {
     monto: payload.monto || payload.monto_total || 0,
     createdAt: new Date().toISOString()
   };
+}
+
+async function emitMacrodroid(req, res) {
+  const payload = req.body && Object.keys(req.body).length ? req.body : req.query || {};
+  const url = process.env.MACRODROID_URL;
+  const event = buildMacrodroidEventFromPayload(payload);
 
   if (!url) {
     return res.json({
@@ -377,16 +401,39 @@ app.post('/api/macrodroid/emit', async (req, res) => {
   } catch (error) {
     return res.status(500).json({ ok: false, error: 'Macrodroid no respondió', detail: error.message });
   }
-});
+}
 
-app.post('/api/macrodroid/callback', (req, res) => {
-  const payload = req.body || {};
-  const codigo = String(payload.codigo || '').trim();
+app.get('/api/macrodroid/emit', emitMacrodroid);
+app.post('/api/macrodroid/emit', emitMacrodroid);
+
+app.get('/api/macrodroid/callback', (req, res) => {
+  const payload = req.query || {};
+  const codigo = String(payload.codigo || payload.pedido || '').trim();
+  const nroOperacion = String(payload.nro_operacion || payload.numero_operacion || payload.op || '').trim();
+  const monto = Number(payload.monto || payload.monto_total || 0);
+
   if (!codigo) {
     return res.status(400).json({ ok: false, error: 'Falta codigo de pedido en la señal de Macrodroid.' });
   }
 
-  db.run(`UPDATE pedidos SET estado = 'Pagado' WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [codigo], function (err) {
+  db.run(`UPDATE pedidos SET estado = 'Pagado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
+    if (err) return res.status(500).json({ ok: false, error: err.message });
+    if (this.changes === 0) return res.status(404).json({ ok: false, error: 'Pedido no encontrado o ya no está pendiente.' });
+    return res.json({ ok: true, codigo, estado: 'Pagado', monto, mode: 'macrodroid-callback' });
+  });
+});
+
+app.post('/api/macrodroid/callback', (req, res) => {
+  const payload = req.body || {};
+  const codigo = String(payload.codigo || payload.pedido || '').trim();
+  const nroOperacion = String(payload.nro_operacion || payload.numero_operacion || payload.op || '').trim();
+  const monto = Number(payload.monto || payload.monto_total || 0);
+
+  if (!codigo) {
+    return res.status(400).json({ ok: false, error: 'Falta codigo de pedido en la señal de Macrodroid.' });
+  }
+
+  db.run(`UPDATE pedidos SET estado = 'Pagado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
     if (err) {
       return res.status(500).json({ ok: false, error: err.message });
     }
@@ -395,7 +442,7 @@ app.post('/api/macrodroid/callback', (req, res) => {
       return res.status(404).json({ ok: false, error: 'Pedido no encontrado o ya no está pendiente.' });
     }
 
-    return res.json({ ok: true, codigo, estado: 'Pagado', mode: 'macrodroid-callback' });
+    return res.json({ ok: true, codigo, estado: 'Pagado', monto, mode: 'macrodroid-callback' });
   });
 });
 
@@ -416,74 +463,74 @@ app.get('/api/pedidos/estado/:codigo', (req, res) => {
 app.post('/api/pedidos', (req, res) => {
   const { tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, detalles } = req.body;
 
-    if (!Array.isArray(detalles) || detalles.length === 0) {
-      return res.status(400).json({ error: 'El pedido debe incluir al menos un detalle.' });
-    }
+  if (!Array.isArray(detalles) || detalles.length === 0) {
+    return res.status(400).json({ error: 'El pedido debe incluir al menos un detalle.' });
+  }
 
-    db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
 
-        const pagoPendiente = String(metodo_pago || '').includes('verificación pendiente');
-        const estadoInicial = pagoPendiente ? 'Pendiente de verificación de pago' : 'Registrado';
-        const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const pagoPendiente = String(metodo_pago || '').includes('verificación pendiente');
+    const estadoInicial = pagoPendiente ? 'Pendiente de verificación de pago' : 'Registrado';
+    const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, nro_operacion, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-        const fechaCodigo = String(fecha_recoge || '').replace(/-/g, '');
-        const sufijoUnico = crypto.randomBytes(4).toString('hex').toUpperCase();
-        const codigoPedido = `PED-${fechaCodigo}-${sufijoUnico}`;
-        db.run(queryPedido, [codigoPedido, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, String(dedicatoria || '').trim(), String(foto_torta || ''), estadoInicial], function(err) {
-            if (err) {
-                db.run('ROLLBACK');
-                return res.status(500).json({ error: err.message });
+    const fechaCodigo = String(fecha_recoge || '').replace(/-/g, '');
+    const sufijoUnico = crypto.randomBytes(4).toString('hex').toUpperCase();
+    const codigoPedido = `PED-${fechaCodigo}-${sufijoUnico}`;
+    db.run(queryPedido, [codigoPedido, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, String(dedicatoria || '').trim(), String(foto_torta || ''), '', estadoInicial], function (err) {
+      if (err) {
+        db.run('ROLLBACK');
+        return res.status(500).json({ error: err.message });
+      }
+
+      const pedidoId = this.lastID;
+      const queryDetalle = `INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes) VALUES (?, ?, ?, ?, ?)`;
+      const stmt = db.prepare(queryDetalle);
+      detalles.forEach((det) => {
+        const paquetes = det.paquetes && typeof det.paquetes === 'object' ? JSON.stringify(det.paquetes) : '{}';
+        stmt.run(pedidoId, det.producto_nombre, det.cantidad, det.subtotal, paquetes);
+      });
+
+      stmt.finalize(async (err) => {
+        if (err) {
+          db.run('ROLLBACK');
+          return res.status(500).json({ error: err.message });
+        }
+
+        db.run('COMMIT', async (err) => {
+          if (err) {
+            return res.status(500).json({ error: err.message });
+          }
+
+          const url = process.env.MACRODROID_URL;
+          if (url) {
+            try {
+              const [nombre, ...restApellido] = String(cliente_nombre || '').trim().split(/\s+/);
+              const apellido = restApellido.join(' ');
+              await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  event: 'dchelis_pedido',
+                  codigo: codigoPedido,
+                  tipo: 'explode',
+                  ttlSeconds: 600,
+                  nombre,
+                  apellido,
+                  telefono: celular,
+                  monto: Number(monto_total || adelanto || 0)
+                })
+              });
+            } catch (e) {
+              console.warn('Macrodroid signal ignored:', e.message);
             }
+          }
 
-            const pedidoId = this.lastID;
-            const queryDetalle = `INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes) VALUES (?, ?, ?, ?, ?)`;
-
-            let stmt = db.prepare(queryDetalle);
-            detalles.forEach(det => {
-                const paquetes = det.paquetes && typeof det.paquetes === 'object' ? JSON.stringify(det.paquetes) : '{}';
-                stmt.run(pedidoId, det.producto_nombre, det.cantidad, det.subtotal, paquetes);
-            });
-            stmt.finalize(async (err) => {
-                if (err) {
-                    db.run('ROLLBACK');
-                    return res.status(500).json({ error: err.message });
-                }
-
-                db.run('COMMIT', async (err) => {
-                    if (err) {
-                        return res.status(500).json({ error: err.message });
-                    }
-
-                    const url = process.env.MACRODROID_URL;
-                    if (url) {
-                      try {
-                        const [nombre, ...restApellido] = String(cliente_nombre || '').trim().split(/\s+/);
-                        const apellido = restApellido.join(' ');
-                        await fetch(url, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            event: 'dchelis_pedido',
-                            codigo: codigoPedido,
-                            tipo: 'explode',
-                            ttlSeconds: 600,
-                            nombre,
-                            apellido,
-                            telefono: celular,
-                            monto: Number(monto_total || adelanto || 0)
-                          })
-                        });
-                      } catch (e) {
-                        console.warn('Macrodroid signal ignored:', e.message);
-                      }
-                    }
-
-                    res.status(201).json({ message: 'Pedido registrado con éxito', id: pedidoId, codigo: codigoPedido });
-                });
-            });
+          return res.status(201).json({ message: 'Pedido registrado con éxito', id: pedidoId, codigo: codigoPedido });
         });
+      });
     });
+  });
 });
 
 // Endpoint: Obtener Pedidos Generales
@@ -849,6 +896,76 @@ app.get('/api/admin/produccion', (req, res) => {
     );
   });
 });
+// Endpoint para recibir la notificación desde MacroDroid / Yape
+app.post('/api/yape-webhook', (req, res) => {
+  const payload = req.body || {};
+  const texto = String(payload.texto_notificacion || payload.notificacion || payload.text || '').trim();
+  const codigo = String(payload.codigo || payload.codigoPedido || payload.codigo_pedido || payload.pedido || payload.pedido_codigo || '').trim();
+  const nroOperacion = String(payload.nro_operacion || payload.numero_operacion || payload.op || payload.operacion || payload.nroOperacion || '').trim();
+  const monto = Number(payload.monto || payload.monto_total || payload.total || 0);
+  const tipo = String(payload.tipo || payload.event || payload.signal || '').trim();
+  const origen = String(payload.origen || payload.source || '').trim();
+
+  if (!texto && !codigo && !nroOperacion) {
+    return res.status(400).json({ error: 'No se recibió texto de notificación ni codigo de pedido ni nro_operacion.' });
+  }
+
+  const responder = (pedido, message) => {
+    if (!pedido) {
+      return res.status(404).json({ ok: false, status: 'not_found', message: message || 'No se encontró pedido coincidente' });
+    }
+
+    return res.json({ ok: true, codigo: pedido.codigo || codigo, estado: 'Pagado', nro_operacion: pedido.nro_operacion || nroOperacion || '', monto, tipo, origen, mode: 'yape-webhook' });
+  };
+
+  if (codigo) {
+    return db.run(`UPDATE pedidos SET estado = 'Pagado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) {
+        return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE codigo = ? LIMIT 1`, [codigo], (lookupErr, pedido) => {
+          if (lookupErr) return res.status(500).json({ error: lookupErr.message });
+          if (!pedido) return res.status(404).json({ ok: false, error: 'Pedido no encontrado o ya no está pendiente.', codigo, nro_operacion: nroOperacion, tipo, origen });
+          return responder(pedido, 'Pedido coincidente encontrado, pero el estado no permite pagarlo desde webhook.');
+        });
+      }
+      return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE codigo = ? LIMIT 1`, [codigo], (lookupErr, pedido) => {
+        if (lookupErr) return res.status(500).json({ error: lookupErr.message });
+        return responder(pedido, 'Pedido no encontrado en la confirmación del webhook.');
+      });
+    });
+  }
+
+  if (nroOperacion) {
+    return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE nro_operacion = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado') LIMIT 1`, [nroOperacion], (err, pedido) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!pedido) return res.status(404).json({ ok: false, status: 'not_found', message: 'No se encontró pedido con esa operación Yape.' });
+
+      return db.run(`UPDATE pedidos SET estado = 'Pagado', nro_operacion = ? WHERE id = ?`, [nroOperacion, pedido.id], function (updateErr) {
+        if (updateErr) return res.status(500).json({ ok: false, error: updateErr.message });
+        return responder(pedido, 'No se encontró pedido con esa operación Yape.');
+      });
+    });
+  }
+
+  const textoBusqueda = texto || '';
+  const opMatch = textoBusqueda.match(/(?:operaci[oó]n|op\.?)\s*:?\s*(\d+)/i) || textoBusqueda.match(/\b\d{6,10}\b/);
+  const nroFromText = opMatch ? (opMatch[1] || opMatch[0]) : '';
+  const montoMatch = textoBusqueda.match(/S\/\s*([\d\.]+)/i);
+  const montoFromText = montoMatch ? parseFloat(montoMatch[1]) : null;
+
+  if (nroFromText) {
+    return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE nro_operacion = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado') LIMIT 1`, [nroFromText], (err, pedido) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!pedido) return res.status(404).json({ ok: false, status: 'not_found', message: 'No se encontró pedido coincidente con la operación extraída del texto.' });
+      return db.run(`UPDATE pedidos SET estado = 'Pagado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE id = ?`, [nroFromText, pedido.id], function (updateErr) {
+        if (updateErr) return res.status(500).json({ ok: false, error: updateErr.message });
+        return responder(pedido, 'No se encontró pedido coincidente con la operación extraída del texto.');
+      });
+    });
+  }
+
+  return res.status(404).json({ ok: false, status: 'not_found', message: 'No se encontró pedido coincidente' });
+});
 
 // Endpoint: Descargar Excel
 app.get('/api/admin/exportar-excel', (req, res) => {
@@ -932,4 +1049,4 @@ app.get('/api/admin/exportar-excel', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor D'chelis ejecutándose en http://localhost:${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Servidor D'chelis ejecutándose en http://localhost:${PORT}`));

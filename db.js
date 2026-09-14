@@ -73,6 +73,9 @@ db.serialize(() => {
       if (!columns.some((col) => col.name === 'foto_torta')) {
         db.run(`ALTER TABLE pedidos ADD COLUMN foto_torta TEXT DEFAULT ''`);
       }
+      if (!columns.some((col) => col.name === 'nro_operacion')) {
+         db.run(`ALTER TABLE pedidos ADD COLUMN nro_operacion TEXT DEFAULT ''`);
+      }
     }
   });
 
@@ -236,7 +239,8 @@ db.serialize(() => {
     ['gourmet_petipan', 'Petipan', 'Pan Gourmet', 30.0, 9.0, 18.0, 30.0, null],
     ['gourmet_hamburguesa_grande', 'Hamburguesa grande', 'Pan Gourmet', 0.80, null, null, null, 0.80],
     ['gourmet_croissant_grande', 'Croissant grande', 'Pan Gourmet', 1.50, null, null, null, 1.50],
-    ['prueba_macrodroid_010', 'Prueba MacroDroid 0.10', 'Pruebas Ocultas', 0.10, null, null, null, 0.10],
+    ['test', 'test', 'Pruebas', 0.10, null, null, null, 0.10],
+    ['prueba_macrodroid_010', 'Prueba MacroDroid 0.10', 'Pruebas', 0.10, null, null, null, 0.10],
 
     // --- PAN ESPECIAL ---
     ['esp_pan_molde_pullman', 'Pan de Molde (Pullman)', 'Pan Especial', 18.0, null, null, null, 18.0],
@@ -247,23 +251,8 @@ db.serialize(() => {
     ['esp_pan_molde_integral_chico', 'Pan de Molde Integral chico', 'Pan Especial', 11.0, null, null, null, 11.0]
   ];
 
-  const preciosActualizados = productosIniciales.map((producto) => {
-    const copia = [...producto];
-    const actualizar = (indice, equivalencias) => {
-      if (copia[indice] !== null && equivalencias[copia[indice]] !== undefined) {
-        copia[indice] = equivalencias[copia[indice]];
-      }
-    };
-    if (copia[7] === null) actualizar(3, { 70: 76 });
-    actualizar(4, { 19: 22 });
-    actualizar(5, { 35: 40 });
-    if (copia[7] === null) actualizar(6, { 70: 76 });
-    actualizar(7, {});
-    return copia;
-  });
-
   const stmt = db.prepare(`INSERT OR REPLACE INTO productos VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-  preciosActualizados.forEach(p => stmt.run(p));
+  productosIniciales.forEach((p) => stmt.run(p));
   stmt.finalize();
   db.run(`DELETE FROM productos WHERE id IN (
     'dulce_mousse_fresa_maracuya_lucuma', 'fam_mousse_fresa_maracuya', 'fam_pye_manzana_limon',
