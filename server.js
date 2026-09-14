@@ -416,10 +416,10 @@ app.get('/api/macrodroid/callback', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Falta codigo de pedido en la señal de Macrodroid.' });
   }
 
-  db.run(`UPDATE pedidos SET estado = 'Pagado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
+  db.run(`UPDATE pedidos SET estado = 'Registrado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
     if (err) return res.status(500).json({ ok: false, error: err.message });
     if (this.changes === 0) return res.status(404).json({ ok: false, error: 'Pedido no encontrado o ya no está pendiente.' });
-    return res.json({ ok: true, codigo, estado: 'Pagado', monto, mode: 'macrodroid-callback' });
+    return res.json({ ok: true, codigo, estado: 'Registrado', monto, mode: 'macrodroid-callback' });
   });
 });
 
@@ -433,7 +433,7 @@ app.post('/api/macrodroid/callback', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Falta codigo de pedido en la señal de Macrodroid.' });
   }
 
-  db.run(`UPDATE pedidos SET estado = 'Pagado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
+  db.run(`UPDATE pedidos SET estado = 'Registrado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
     if (err) {
       return res.status(500).json({ ok: false, error: err.message });
     }
@@ -442,7 +442,7 @@ app.post('/api/macrodroid/callback', (req, res) => {
       return res.status(404).json({ ok: false, error: 'Pedido no encontrado o ya no está pendiente.' });
     }
 
-    return res.json({ ok: true, codigo, estado: 'Pagado', monto, mode: 'macrodroid-callback' });
+    return res.json({ ok: true, codigo, estado: 'Registrado', monto, mode: 'macrodroid-callback' });
   });
 });
 
@@ -906,7 +906,20 @@ app.post('/api/yape-webhook', (req, res) => {
   const tipo = String(payload.tipo || payload.event || payload.signal || '').trim();
   const origen = String(payload.origen || payload.source || '').trim();
 
+  console.log('🔔 WEBHOOK RECIBIDO:', {
+    codigo,
+    nroOperacion,
+    monto,
+    tipo,
+    origen,
+    payload_completo: payload,
+    tiene_texto: !!texto,
+    tiene_codigo: !!codigo,
+    tiene_nroOperacion: !!nroOperacion
+  });
+
   if (!texto && !codigo && !nroOperacion) {
+    console.log('❌ RECHAZO: No se recibió texto, codigo ni nro_operacion');
     return res.status(400).json({ error: 'No se recibió texto de notificación ni codigo de pedido ni nro_operacion.' });
   }
 
@@ -915,56 +928,169 @@ app.post('/api/yape-webhook', (req, res) => {
       return res.status(404).json({ ok: false, status: 'not_found', message: message || 'No se encontró pedido coincidente' });
     }
 
-    return res.json({ ok: true, codigo: pedido.codigo || codigo, estado: 'Pagado', nro_operacion: pedido.nro_operacion || nroOperacion || '', monto, tipo, origen, mode: 'yape-webhook' });
+    return res.json({ ok: true, codigo: pedido.codigo || codigo, estado: 'Registrado', nro_operacion: pedido.nro_operacion || nroOperacion || '', monto, tipo, origen, mode: 'yape-webhook' });
   };
 
+  // ESTRATEGIA: Si viene nro_operacion (de MacroDroid), usar eso primero
+  // porque es más simple que pasar el código dinámicamente por variables
+  if (nroOperacion && !codigo) {
+    console.log('🔍 Buscando pedido por NRO_OPERACION (estrategia MacroDroid):', nroOperacion);
+    return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE estado IN ('Pendiente de verificación de pago', 'Registrado') ORDER BY id DESC LIMIT 1`, [], (err, pedido) => {
+      if (err) {
+        console.log('❌ Error en SELECT:', err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      if (!pedido) {
+        console.log('❌ No hay pedidos pendientes en la base de datos');
+        return res.status(404).json({ ok: false, error: 'No hay pedidos pendientes.' });
+      }
+      console.log('✅ Pedido pendiente encontrado:', pedido.codigo, '- Actualizando con nro_operacion:', nroOperacion);
+      return db.run(`UPDATE pedidos SET estado = 'Registrado', nro_operacion = ? WHERE id = ?`, [nroOperacion, pedido.id], function (updateErr) {
+        if (updateErr) {
+          console.log('❌ Error en UPDATE:', updateErr.message);
+          return res.status(500).json({ ok: false, error: updateErr.message });
+        }
+        console.log('✅ Pedido actualizado exitosamente');
+        return responder(pedido);
+      });
+    });
+  }
+
+  // Si viene código (formato antiguo o manual), usar eso
   if (codigo) {
-    return db.run(`UPDATE pedidos SET estado = 'Pagado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+    console.log('🔍 Buscando pedido por CODIGO:', codigo);
+    return db.run(`UPDATE pedidos SET estado = 'Registrado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
+      if (err) {
+        console.log('❌ Error en UPDATE:', err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      console.log('✅ UPDATE ejecutado, filas afectadas:', this.changes);
       if (this.changes === 0) {
+        console.log('⚠️ 0 filas afectadas, verificando si el pedido existe...');
         return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE codigo = ? LIMIT 1`, [codigo], (lookupErr, pedido) => {
-          if (lookupErr) return res.status(500).json({ error: lookupErr.message });
-          if (!pedido) return res.status(404).json({ ok: false, error: 'Pedido no encontrado o ya no está pendiente.', codigo, nro_operacion: nroOperacion, tipo, origen });
+          if (lookupErr) {
+            console.log('❌ Error en SELECT:', lookupErr.message);
+            return res.status(500).json({ error: lookupErr.message });
+          }
+          if (!pedido) {
+            console.log('❌ PEDIDO NO ENCONTRADO con codigo:', codigo);
+            return res.status(404).json({ ok: false, error: 'Pedido no encontrado o ya no está pendiente.', codigo, nro_operacion: nroOperacion, tipo, origen });
+          }
+          console.log('⚠️ Pedido existe pero estado no es editable:', pedido.estado);
           return responder(pedido, 'Pedido coincidente encontrado, pero el estado no permite pagarlo desde webhook.');
         });
       }
+      console.log('✅ Pedido actualizado exitosamente, obteniendo detalles...');
       return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE codigo = ? LIMIT 1`, [codigo], (lookupErr, pedido) => {
-        if (lookupErr) return res.status(500).json({ error: lookupErr.message });
+        if (lookupErr) {
+          console.log('❌ Error en SELECT final:', lookupErr.message);
+          return res.status(500).json({ error: lookupErr.message });
+        }
         return responder(pedido, 'Pedido no encontrado en la confirmación del webhook.');
       });
     });
   }
+  if (texto) {
+    const textoBusqueda = texto || '';
+    const opMatch = textoBusqueda.match(/(?:operaci[oó]n|op\.?)\s*:?\s*(\d+)/i) || textoBusqueda.match(/\b\d{6,10}\b/);
+    const nroFromText = opMatch ? (opMatch[1] || opMatch[0]) : '';
+    const montoMatch = textoBusqueda.match(/S\/\s*([\d\.]+)/i);
+    const montoFromText = montoMatch ? parseFloat(montoMatch[1]) : null;
 
-  if (nroOperacion) {
-    return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE nro_operacion = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado') LIMIT 1`, [nroOperacion], (err, pedido) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (!pedido) return res.status(404).json({ ok: false, status: 'not_found', message: 'No se encontró pedido con esa operación Yape.' });
-
-      return db.run(`UPDATE pedidos SET estado = 'Pagado', nro_operacion = ? WHERE id = ?`, [nroOperacion, pedido.id], function (updateErr) {
-        if (updateErr) return res.status(500).json({ ok: false, error: updateErr.message });
-        return responder(pedido, 'No se encontró pedido con esa operación Yape.');
+    if (nroFromText) {
+      return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE nro_operacion = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado') LIMIT 1`, [nroFromText], (err, pedido) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!pedido) return res.status(404).json({ ok: false, status: 'not_found', message: 'No se encontró pedido coincidente con la operación extraída del texto.' });
+        return db.run(`UPDATE pedidos SET estado = 'Registrado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE id = ?`, [nroFromText, pedido.id], function (updateErr) {
+          if (updateErr) return res.status(500).json({ ok: false, error: updateErr.message });
+          return responder(pedido, 'Pedido confirmado por texto de operación.');
+        });
       });
-    });
-  }
-
-  const textoBusqueda = texto || '';
-  const opMatch = textoBusqueda.match(/(?:operaci[oó]n|op\.?)\s*:?\s*(\d+)/i) || textoBusqueda.match(/\b\d{6,10}\b/);
-  const nroFromText = opMatch ? (opMatch[1] || opMatch[0]) : '';
-  const montoMatch = textoBusqueda.match(/S\/\s*([\d\.]+)/i);
-  const montoFromText = montoMatch ? parseFloat(montoMatch[1]) : null;
-
-  if (nroFromText) {
-    return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE nro_operacion = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado') LIMIT 1`, [nroFromText], (err, pedido) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (!pedido) return res.status(404).json({ ok: false, status: 'not_found', message: 'No se encontró pedido coincidente con la operación extraída del texto.' });
-      return db.run(`UPDATE pedidos SET estado = 'Pagado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE id = ?`, [nroFromText, pedido.id], function (updateErr) {
-        if (updateErr) return res.status(500).json({ ok: false, error: updateErr.message });
-        return responder(pedido, 'No se encontró pedido coincidente con la operación extraída del texto.');
-      });
-    });
+    }
   }
 
   return res.status(404).json({ ok: false, status: 'not_found', message: 'No se encontró pedido coincidente' });
+});
+
+// Endpoint: Descargar Excel
+app.get('/api/admin/exportar-excel', (req, res) => {
+  const { fecha } = req.query;
+  if (!fecha) return res.status(400).send('Fecha requerida');
+
+  // 47 filas fijas, igual que el papel de la dueña (no depende de lo que se pidió ese día)
+  const listaProductos = PRODUCTOS_COCINA;
+
+  db.all(`SELECT id, cliente_nombre FROM pedidos WHERE fecha_recoge = ? AND estado <> 'Pendiente de verificación de pago' ORDER BY id ASC`, [fecha], async (err, clientes) => {
+      if (err) return res.status(500).send(err.message);
+      const listaClientes = clientes || [];
+
+      db.all(
+        `SELECT p.id as pedido_id, dp.producto_nombre, dp.cantidad, dp.paquetes 
+         FROM detalles_pedido dp 
+         JOIN pedidos p ON dp.pedido_id = p.id 
+         WHERE p.fecha_recoge = ? AND p.estado <> 'Pendiente de verificación de pago'`,
+        [fecha],
+        async (err, detalles) => {
+          if (err) return res.status(500).send(err.message);
+          // nombre canónico (resuelve alias) para que el emparejo con la fila sea exacto
+          const listaDetalles = (detalles || [])
+            .map((det) => ({ ...det, producto_nombre: resolverNombreCocina(det.producto_nombre) }))
+            .filter((det) => det.producto_nombre)
+            .map((det) => ({ ...det, paquetes: det.paquetes ? JSON.parse(det.paquetes) : {} }));
+
+          const workbook = new ExcelJS.Workbook();
+          const worksheet = workbook.addWorksheet('Producción');
+
+          worksheet.getCell('A1').value = `FECHA: ${fecha}`;
+          worksheet.getCell('A1').font = { bold: true };
+
+          listaClientes.forEach((cli, idx) => {
+            const colNum = idx + 2;
+            const cell = worksheet.getCell(1, colNum);
+            cell.value = cli.cliente_nombre.toUpperCase();
+            cell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
+            cell.font = { bold: true, color: { argb: 'FFCC0000' } };
+          });
+
+          const colTotalIdx = Math.max(listaClientes.length + 2, 19);
+          const cellTotalHeader = worksheet.getCell(1, colTotalIdx);
+          cellTotalHeader.value = 'Total';
+          cellTotalHeader.font = { bold: true };
+
+          listaProductos.forEach((prodNombre, pIdx) => {
+            const rowNum = pIdx + 2;
+            worksheet.getCell(rowNum, 1).value = prodNombre;
+            worksheet.getCell(rowNum, 1).font = { bold: true };
+
+            listaClientes.forEach((cli, cIdx) => {
+              const colNum = cIdx + 2;
+              const cantidadTotal = listaDetalles
+                .filter(d => d.pedido_id === cli.id && d.producto_nombre === prodNombre)
+                .reduce((sum, d) => sum + (d.cantidad || 0), 0);
+              if (cantidadTotal > 0) {
+                worksheet.getCell(rowNum, colNum).value = cantidadTotal;
+                worksheet.getCell(rowNum, colNum).font = { color: { argb: 'FFCC0000' }, bold: true };
+              }
+            });
+
+            const colStartLetter = 'B';
+            const colEndLetter = worksheet.getColumn(colTotalIdx - 1).letter;
+            worksheet.getCell(rowNum, colTotalIdx).value = { formula: `SUM(${colStartLetter}${rowNum}:${colEndLetter}${rowNum})` };
+            worksheet.getCell(rowNum, colTotalIdx).font = { bold: true };
+          });
+
+          const rowFinal = listaProductos.length + 2;
+          const colTotalLetter = worksheet.getColumn(colTotalIdx).letter;
+          worksheet.getCell(rowFinal, colTotalIdx).value = { formula: `SUM(${colTotalLetter}2:${colTotalLetter}${rowFinal - 1})` };
+          worksheet.getCell(rowFinal, colTotalIdx).font = { bold: true };
+
+          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          res.setHeader('Content-Disposition', `attachment; filename=Produccion_${fecha}.xlsx`);
+          await workbook.xlsx.write(res);
+          res.end();
+        }
+      );
+  });
 });
 
 // Endpoint: Descargar Excel

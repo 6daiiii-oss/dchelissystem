@@ -7,7 +7,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-  <script src="pricing.js"></script>
   <script src="config.js"></script>
   <style>
     :root {
@@ -827,9 +826,13 @@
 
 <div id="yapeLoadingScreen">
   <div class="yape-loader-card">
-    <span class="loader-spin"></span>
-    <div style="font-weight:800; color:var(--brand-dark);">Procesando pago...</div>
-    <div style="font-size:.84rem; color:var(--text-muted); margin-top:8px;">Esperando verificación de Macrodroid</div>
+    <span id="loaderSpin" class="loader-spin"></span>
+    <span id="loaderCheck" class="loader-check" style="display:none;">✓</span>
+    <span id="loaderBell" class="loader-bell" style="display:none;">🔔</span>
+    <div id="loaderTitle" style="font-weight:800; color:var(--brand-dark);">Procesando pago...</div>
+    <div id="loaderSubtitle" style="font-size:.84rem; color:var(--text-muted); margin-top:8px;">Esperando verificación de Macrodroid</div>
+
+    <div id="loaderSuccessContent" style="display:none;">
       <h3 class="modal-title" style="color:var(--brand-main); margin-bottom:10px;">¡Pedido Registrado con Éxito!</h3>
       <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:18px;">
         Su pago fue registrado y el pedido se envió al área de producción.
@@ -838,8 +841,9 @@
       <button class="btn-action" style="width:100%; margin-top:10px; padding:12px; font-weight:700;" onclick="cerrarTodoYReiniciar()">Realizar Nuevo Pedido</button>
     </div>
   </div>
+</div>
 
-  <div id="boletaPDF">
+<div id="boletaPDF">
     <div class="boleta-header">
       <h2>PASTELERÍA D'CHELIS</h2>
       <p style="font-size:11px; color:#64748b;">Comprobante de Pedido y Confirmación de Pago</p>
@@ -1052,17 +1056,14 @@ async function cargarProductosDesdeApi() {
         categoria: row.categoria
       };
 
-      const precioUnidad = Number(row.precio_unidad ?? 0);
-      if (row.precio_unidad !== undefined && row.precio_unidad !== null && precioUnidad > 0) {
-        producto.precio = precioUnidad;
-      } else if (Number(row.precio_x100 ?? 0) > 0 || Number(row.precio_x50 ?? 0) > 0 || Number(row.precio_x25 ?? 0) > 0) {
+      if (row.precio_unidad !== undefined && row.precio_unidad !== null && Number(row.precio_unidad) > 0) {
+        producto.precio = Number(row.precio_unidad);
+      } else {
         producto.precios = {
           x100: Number(row.precio_x100 ?? row.precio ?? 0),
           x50: Number(row.precio_x50 ?? 0),
           x25: Number(row.precio_x25 ?? 0)
         };
-      } else if (Number(row.precio ?? 0) > 0) {
-        producto.precio = Number(row.precio);
       }
 
       return producto;
@@ -1132,6 +1133,50 @@ function actualizarPaquete(id, tamano, delta) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  localStorage.removeItem(CART_KEY);
+  cantidades = {};
+  paquetesPorProducto = {};
+  datosPedidoActual = {};
+  fotoTortaData = '';
+
+  const submitYape = document.getElementById('yapeSubmit');
+  if (submitYape) {
+    submitYape.addEventListener('click', () => {
+      cerrarModal('modalYape');
+    });
+  }
+
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async function(input, init) {
+    const response = await originalFetch(input, init);
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    if (url.includes('/api/pedidos/estado/')) {
+      try {
+        const data = await response.clone().json();
+        const estado = String(data.estado || '').trim().toLowerCase();
+        if (data && data.ok && (estado === 'registrado' || estado === 'pagado')) {
+          const loader = document.getElementById('yapeLoadingScreen');
+          const spin = document.getElementById('loaderSpin');
+          const check = document.getElementById('loaderCheck');
+          const bell = document.getElementById('loaderBell');
+          const title = document.getElementById('loaderTitle');
+          const subtitle = document.getElementById('loaderSubtitle');
+          const content = document.getElementById('loaderSuccessContent');
+          if (loader) loader.classList.add('visible');
+          if (spin) spin.style.display = 'none';
+          if (check) check.style.display = 'inline-block';
+          if (bell) bell.style.display = 'inline-block';
+          if (title) title.textContent = 'Pago verificado';
+          if (subtitle) subtitle.textContent = 'Pedido registrado y listo para la boleta';
+          if (content) content.style.display = 'block';
+        }
+      } catch (error) {
+        console.warn('No se pudo actualizar la interfaz del loader Yape:', error);
+      }
+    }
+    return response;
+  };
+
   restaurarCarritoDesdeLocalStorage();
   await cargarProductosDesdeApi();
   generarBotonesCategorias();
@@ -1303,12 +1348,22 @@ function normalizarTexto(texto) {
 }
 
 function obtenerTextoPrecio(prod) {
-  if (prod.precio !== undefined) {
-    return `Precio unitario: <strong>S/. ${prod.precio.toFixed(2)}</strong>`;
+  const precios = typeof DchelisPricing !== 'undefined' && typeof DchelisPricing.obtenerPreciosProducto === 'function'
+    ? DchelisPricing.obtenerPreciosProducto(prod)
+    : obtenerPreciosProducto(prod);
+
+  const x25 = Number(precios.x25 || prod?.precios?.x25 || 0);
+  const x50 = Number(precios.x50 || prod?.precios?.x50 || 0);
+  const x100 = Number(precios.x100 || prod?.precios?.x100 || prod?.precio || 0);
+
+  if (x25 > 0 || x50 > 0 || x100 > 0) {
+    return `x25: <strong>S/. ${x25.toFixed(2)}</strong> • x50: <strong>S/. ${x50.toFixed(2)}</strong> • x100: <strong>S/. ${x100.toFixed(2)}</strong>`;
   }
-  if (prod.precios && prod.precios.x100 !== undefined) {
-    return `Ciento (100u): <strong>S/. ${prod.precios.x100.toFixed(2)}</strong>`;
+
+  if (prod?.precio !== undefined && prod?.precio !== null) {
+    return `Precio unitario: <strong>S/. ${Number(prod.precio).toFixed(2)}</strong>`;
   }
+
   return `Precio no disponible`;
 }
 
@@ -1714,7 +1769,7 @@ async function esperarPagoMacrodroid(codigoPedido, maxSeconds = 600) {
       if (respuesta.ok) {
         const data = await respuesta.json().catch(() => ({}));
         estado = String(data.estado || estado);
-        if (estado === 'Pagado') {
+        if (estado === 'Registrado' || estado === 'Pagado') {
           return true;
         }
       }
@@ -1738,8 +1793,22 @@ async function confirmarPagoYape(e) {
 
   yapeOrderInFlight = true;
   if (submitButton) submitButton.disabled = true;
+
   const loader = document.getElementById('yapeLoadingScreen');
+  const loaderSpin = document.getElementById('loaderSpin');
+  const loaderCheck = document.getElementById('loaderCheck');
+  const loaderBell = document.getElementById('loaderBell');
+  const loaderTitle = document.getElementById('loaderTitle');
+  const loaderSubtitle = document.getElementById('loaderSubtitle');
+  const loaderSuccess = document.getElementById('loaderSuccessContent');
+
   if (loader) loader.classList.add('visible');
+  if (loaderSpin) loaderSpin.style.display = 'block';
+  if (loaderCheck) loaderCheck.style.display = 'none';
+  if (loaderBell) loaderBell.style.display = 'none';
+  if (loaderTitle) loaderTitle.textContent = 'Procesando pago...';
+  if (loaderSubtitle) loaderSubtitle.textContent = 'Esperando verificación de Macrodroid';
+  if (loaderSuccess) loaderSuccess.style.display = 'none';
 
   const fechaCodigo = datosPedidoActual.cliente.fecha.replace(/-/g, '');
   const sufijoTemporal = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -1787,6 +1856,8 @@ async function confirmarPagoYape(e) {
     if (data.codigo) datosPedidoActual.idPedido = data.codigo;
     datosPedidoActual.dbId = data.id;
 
+    cerrarModal('modalYape');
+
     await fetch(apiUrl('/api/macrodroid/emit'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1807,16 +1878,20 @@ async function confirmarPagoYape(e) {
     }
 
     guardarEnControlProduccion(datosPedidoActual);
-    cerrarModal('modalYape');
     prepararBoletaHTML();
-    abrirModal('modalFinal');
+
+    if (loaderSpin) loaderSpin.style.display = 'none';
+    if (loaderCheck) loaderCheck.style.display = 'block';
+    if (loaderBell) loaderBell.style.display = 'block';
+    if (loaderTitle) loaderTitle.textContent = 'Pago verificado';
+    if (loaderSubtitle) loaderSubtitle.textContent = 'Pedido registrado y listo para la boleta';
+    if (loaderSuccess) loaderSuccess.style.display = 'block';
   } catch (error) {
     const ayudaApi = !API_BASE && location.hostname.endsWith('github.io')
       ? ' Esta página está en GitHub Pages y necesita configurar la URL del servidor de pedidos en config.js.'
       : '';
     alert((error.message || 'Ocurrió un error al registrar el pedido.') + ayudaApi);
   } finally {
-    if (loader) loader.classList.remove('visible');
     yapeOrderInFlight = false;
     if (submitButton) submitButton.disabled = false;
   }
