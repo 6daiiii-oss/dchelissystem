@@ -1,30 +1,33 @@
 # Instalación para D'chelis
 
-## Opción recomendada para la presentación: instalar en la PC
+## Producción en Render + PostgreSQL
 
-1. Instala **Node.js LTS** en la PC del cliente.
-2. Copia esta carpeta completa, incluyendo `dchelis.db`.
-3. Abre una terminal dentro de la carpeta y ejecuta:
+1. El servidor Node.js se ejecuta como **Web Service** en Render.
+2. La base de datos se guarda en **Render PostgreSQL** mediante la variable de entorno `DATABASE_URL`.
+3. En Render, configura `DATABASE_URL` con la **Internal Database URL** de tu PostgreSQL.
+4. Ejecuta el servicio con:
 
    ```bash
-   npm install
    npm start
    ```
 
-4. Abre `http://localhost:3000` en el navegador. El catálogo, los pedidos, la cocina, el inventario y la página de colaboradores quedarán conectados a la base de datos local de esa PC.
-5. Para que otros dispositivos de la misma red vean los pedidos, abre `http://IP-DE-LA-PC:3000/colaboradores.html`. Permite Node.js en el firewall privado de Windows si este lo solicita.
+5. No copies ni dependas de `dchelis.db`: la persistencia de pedidos, productos, fórmulas e inventario está en PostgreSQL.
 
-## GitHub Pages
+## Desarrollo local
 
-GitHub Pages solo publica archivos estáticos: **no puede ejecutar `server.js` ni guardar pedidos en SQLite**. Por eso un sitio publicado únicamente allí no puede registrar pedidos ni compartirlos con producción.
+1. Instala **Node.js LTS**.
+2. Ejecuta `npm install`.
+3. Define `DATABASE_URL` apuntando a una base PostgreSQL de desarrollo.
+4. Ejecuta `npm start`.
+5. Abre `http://localhost:3000`.
 
-Para conservar la web pública en GitHub Pages, instala este servidor Node en una PC que permanezca encendida o en un hosting que soporte Node.js y SQLite, habilita una URL HTTPS para él y escribe esa URL en `public/config.js`:
+## Frontend público
+
+GitHub Pages solo publica archivos estáticos. Para registrar pedidos, la interfaz debe apuntar al servidor Node mediante `public/config.js`:
 
 ```js
-window.DCHELIS_API_URL = 'https://pedidos.tudominio.com';
+window.DCHELIS_API_URL = 'https://tu-servicio.onrender.com';
 ```
-
-Después vuelve a publicar los archivos de `public/` en GitHub Pages. La URL se usa para registrar pedidos y para la página `colaboradores.html`.
 
 ## Pago por Yape
 
