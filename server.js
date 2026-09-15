@@ -849,6 +849,97 @@ app.put('/api/admin/pedidos/:id/estado', (req, res) => {
   });
 });
 
+app.put('/api/admin/pedidos/:id', (req, res) => {
+  const { id } = req.params;
+  const pedido = req.body || {};
+  const clienteNombre = String(pedido.cliente_nombre || '').trim();
+  const celular = String(pedido.celular || '').trim();
+  const fechaRecoge = String(pedido.fecha_recoge || '').trim();
+  const horaRecoge = String(pedido.hora_recoge || '').trim();
+  const metodoPago = String(pedido.metodo_pago || 'Efectivo').trim();
+  const dedicatoria = String(pedido.dedicatoria || '').trim();
+  const fotoTorta = String(pedido.foto_torta || '').trim();
+  const detalles = Array.isArray(pedido.detalles) ? pedido.detalles : [];
+
+  if (!clienteNombre || !celular || !fechaRecoge || !horaRecoge) {
+    return res.status(400).json({ error: 'Faltan datos obligatorios del pedido.' });
+  }
+
+  if (!detalles.length) {
+    return res.status(400).json({ error: 'El pedido debe tener al menos un item.' });
+  }
+
+  const montoTotal = Number(
+    pedido.monto_total !== undefined && pedido.monto_total !== null
+      ? pedido.monto_total
+      : detalles.reduce((suma, item) => suma + Number(item.subtotal || 0), 0)
+  );
+  const adelanto = Number(pedido.adelanto || 0);
+
+  if (!Number.isFinite(montoTotal) || montoTotal < 0) {
+    return res.status(400).json({ error: 'El monto total no es válido.' });
+  }
+
+  if (adelanto > montoTotal) {
+    return res.status(400).json({ error: 'El monto pagado no puede ser mayor que el total del pedido.' });
+  }
+
+  db.run('BEGIN TRANSACTION');
+
+  db.run(`UPDATE pedidos SET
+    cliente_nombre = ?,
+    celular = ?,
+    monto_total = ?,
+    adelanto = ?,
+    metodo_pago = ?,
+    fecha_recoge = ?,
+    hora_recoge = ?,
+    dedicatoria = ?,
+    foto_torta = ?
+    WHERE id = ?`, [clienteNombre, celular, montoTotal, adelanto, metodoPago, fechaRecoge, horaRecoge, dedicatoria, fotoTorta, id], function (err) {
+    if (err) {
+      db.run('ROLLBACK');
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (this.changes === 0) {
+      db.run('ROLLBACK');
+      return res.status(404).json({ error: 'Pedido no encontrado' });
+    }
+
+    db.run(`DELETE FROM detalles_pedido WHERE pedido_id = ?`, [id], (errDelete) => {
+      if (errDelete) {
+        db.run('ROLLBACK');
+        return res.status(500).json({ error: errDelete.message });
+      }
+
+      const stmt = db.prepare(`INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes) VALUES (?, ?, ?, ?, ?)`);
+      detalles.forEach((item) => {
+        const nombre = String(item.producto_nombre || '').trim();
+        const cantidad = Number(item.cantidad || 0);
+        const subtotal = Number(item.subtotal || 0);
+        if (!nombre || cantidad <= 0) return;
+        const paquetes = item.paquetes && typeof item.paquetes === 'object' ? JSON.stringify(item.paquetes) : '{}';
+        stmt.run(id, nombre, cantidad, subtotal, paquetes);
+      });
+
+      stmt.finalize((finalizeErr) => {
+        if (finalizeErr) {
+          db.run('ROLLBACK');
+          return res.status(500).json({ error: finalizeErr.message });
+        }
+
+        db.run('COMMIT', (commitErr) => {
+          if (commitErr) {
+            return res.status(500).json({ error: commitErr.message });
+          }
+          return res.json({ success: true, id: Number(id), monto_total: montoTotal, adelanto, restante: Math.max(0, montoTotal - adelanto) });
+        });
+      });
+    });
+  });
+});
+
 app.delete('/api/admin/pedidos/:id', (req, res) => {
   const { id } = req.params;
 

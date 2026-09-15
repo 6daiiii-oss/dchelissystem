@@ -1912,8 +1912,8 @@
           <div><span class="label">Teléfono</span><div class="value">${pedido.celular || '-'}</div></div>
           <div><span class="label">Fecha</span><div class="value">${formatearFecha(pedido.fecha_recoge)}</div></div>
           <div><span class="label">Total</span><div class="value">S/. ${Number(pedido.monto_total || 0).toFixed(2)}</div></div>
-          <div><span class="label">Adelanto</span><div class="value">S/. ${Number(pedido.adelanto || 0).toFixed(2)}</div></div>
-          <div><span class="label">Restante</span><div class="value">S/. ${(Number(pedido.monto_total || 0) - Number(pedido.adelanto || 0)).toFixed(2)}</div></div>
+          <div><span class="label">Monto pagado</span><div class="value">S/. ${Number(pedido.adelanto || 0).toFixed(2)}</div></div>
+          <div><span class="label">Saldo restante</span><div class="value">S/. ${(Number(pedido.monto_total || 0) - Number(pedido.adelanto || 0)).toFixed(2)}</div></div>
         </div>
         ${pedido.dedicatoria ? `<div class="pedido-modal-section"><h4>Dedicatoria / indicaciones</h4><div class="value">${pedido.dedicatoria}</div></div>` : ''}
         ${pedido.foto_torta ? `<div class="pedido-modal-section"><h4>Foto de referencia de la torta</h4><img src="${pedido.foto_torta}" alt="Foto de referencia de la torta" style="display:block; max-width:100%; max-height:360px; object-fit:contain; border-radius:8px; border:1px solid #d0d5dd;"></div>` : ''}
@@ -1926,11 +1926,136 @@
           <select class="status-select" data-id="${pedido.id}" onchange="actualizarEstadoPedido(this)">
             ${['Pendiente de verificación de pago', 'Registrado', 'En preparación', 'Listo para despacho', 'Despachado (D\'chelis)'].map(estado => `<option value="${estado}" ${estado === (pedido.estado || 'Registrado') ? 'selected' : ''}>${estado}</option>`).join('')}
           </select>
+          <button type="button" class="btn btn-ghost" style="margin-top:10px; width:100%;" onclick="abrirEditorPedido(${pedido.id})">Editar pedido</button>
           <button type="button" class="btn btn-ghost" style="margin-top:10px; width:100%;" onclick="descargarBoletaAdmin(${pedido.id})">Descargar boleta PDF</button>
           <button type="button" class="delete-order-btn" style="margin-top:10px;" onclick="eliminarPedidoDesdeDetalle(${pedido.id})">Eliminar pedido</button>
         </div>
       `;
       document.getElementById('pedidoDetalleModal').classList.add('active');
+    }
+
+    function crearFilaItemPedido(item = {}, index = 0) {
+      const nombre = item.producto_nombre || '';
+      const cantidad = Number(item.cantidad || 1);
+      const subtotal = Number(item.subtotal || 0);
+      return `
+        <div class="pedido-item-editor" data-item-index="${index}" style="display:grid; grid-template-columns: 1.8fr 0.8fr 1fr auto; gap:8px; align-items:center; margin-bottom:10px;">
+          <input type="text" name="item_nombre_${index}" value="${(nombre || '').replace(/"/g, '&quot;')}" class="form-control" aria-label="Producto ${index + 1}" />
+          <input type="number" min="1" name="item_cantidad_${index}" value="${cantidad}" class="form-control" aria-label="Cantidad ${index + 1}" />
+          <input type="number" min="0" step="0.01" name="item_subtotal_${index}" value="${subtotal.toFixed(2)}" class="form-control" aria-label="Subtotal ${index + 1}" />
+          <button type="button" class="delete-order-btn" data-remove-item="${index}">Quitar</button>
+        </div>
+      `;
+    }
+
+    function abrirEditorPedido(id) {
+      const pedido = pedidosDisponibles.get(Number(id));
+      if (!pedido) return;
+      const contenido = document.getElementById('detallePedidoContenido');
+      if (!contenido) return;
+      const total = Number(pedido.monto_total || 0);
+      const adelanto = Number(pedido.adelanto || 0);
+      const restante = Math.max(0, total - adelanto);
+      contenido.innerHTML = `
+        <form id="pedidoEdicionForm" data-id="${pedido.id}" onsubmit="guardarPedidoEditado(event)">
+          <div class="pedido-modal-info">
+            <div><span class="label">Nombre</span><div class="value"><input type="text" name="cliente_nombre" value="${(pedido.cliente_nombre || '').replace(/"/g, '&quot;')}" class="form-control" /></div></div>
+            <div><span class="label">Teléfono</span><div class="value"><input type="tel" name="celular" value="${(pedido.celular || '').replace(/"/g, '&quot;')}" class="form-control" /></div></div>
+            <div><span class="label">Fecha</span><div class="value"><input type="date" name="fecha_recoge" value="${pedido.fecha_recoge || ''}" class="form-control" /></div></div>
+            <div><span class="label">Hora</span><div class="value"><input type="time" name="hora_recoge" value="${pedido.hora_recoge || '18:00'}" class="form-control" /></div></div>
+            <div><span class="label">Método de pago</span><div class="value"><input type="text" name="metodo_pago" value="${(pedido.metodo_pago || 'Efectivo').replace(/"/g, '&quot;')}" class="form-control" /></div></div>
+            <div><span class="label">Monto total</span><div class="value"><input type="number" step="0.01" name="monto_total" value="${total.toFixed(2)}" class="form-control" /></div></div>
+            <div><span class="label">Monto pagado</span><div class="value"><input type="number" step="0.01" name="adelanto" value="${adelanto.toFixed(2)}" class="form-control" /></div></div>
+            <div><span class="label">Saldo restante</span><div class="value"><input type="number" step="0.01" name="restante" value="${restante.toFixed(2)}" class="form-control" readonly /></div></div>
+          </div>
+          ${pedido.dedicatoria !== undefined ? `<div class="pedido-modal-section"><h4>Dedicatoria / indicaciones</h4><textarea name="dedicatoria" class="form-control" rows="3">${(pedido.dedicatoria || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></div>` : ''}
+          ${pedido.foto_torta ? `<div class="pedido-modal-section"><h4>Foto de referencia</h4><img src="${pedido.foto_torta}" alt="Foto de referencia de la torta" style="display:block; max-width:100%; max-height:360px; object-fit:contain; border-radius:8px; border:1px solid #d0d5dd;"></div>` : ''}
+          <div class="pedido-modal-section">
+            <h4>Productos del pedido</h4>
+            <div id="pedidoEditorItems">
+              ${(pedido.detalles || []).map((item, index) => crearFilaItemPedido(item, index)).join('') || '<p>Sin productos</p>'}
+            </div>
+            <button type="button" class="btn btn-ghost" style="margin-top:10px;" onclick="agregarItemPedidoEditado()">Agregar item</button>
+          </div>
+          <div class="order-actions">
+            <button type="submit" class="btn btn-success" style="width:100%; margin-bottom:10px;">Guardar cambios</button>
+            <button type="button" class="btn btn-ghost" style="width:100%;" onclick="abrirDetallePedido(${pedido.id})">Cancelar</button>
+          </div>
+        </form>
+      `;
+      document.querySelectorAll('[data-remove-item]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const fila = btn.closest('.pedido-item-editor');
+          if (fila) fila.remove();
+        });
+      });
+      document.getElementById('pedidoDetalleModal').classList.add('active');
+    }
+
+    function agregarItemPedidoEditado() {
+      const contenedor = document.getElementById('pedidoEditorItems');
+      if (!contenedor) return;
+      const index = contenedor.querySelectorAll('.pedido-item-editor').length;
+      const fila = document.createElement('div');
+      fila.innerHTML = crearFilaItemPedido({ producto_nombre: '', cantidad: 1, subtotal: 0 }, index);
+      contenedor.appendChild(fila.firstElementChild);
+      contenedor.querySelectorAll('[data-remove-item]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const filaItem = btn.closest('.pedido-item-editor');
+          if (filaItem) filaItem.remove();
+        });
+      });
+    }
+
+    async function guardarPedidoEditado(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const id = Number(form.dataset.id);
+      const detalles = Array.from(form.querySelectorAll('.pedido-item-editor')).map((fila) => {
+        const nombre = fila.querySelector('input[name^="item_nombre_"]')?.value.trim() || '';
+        const cantidad = Number(fila.querySelector('input[name^="item_cantidad_"]')?.value || 0);
+        const subtotal = Number(fila.querySelector('input[name^="item_subtotal_"]')?.value || 0);
+        return { producto_nombre: nombre, cantidad, subtotal, paquetes: {} };
+      }).filter((item) => item.producto_nombre && item.cantidad > 0);
+
+      if (!detalles.length) {
+        alert('Debes dejar al menos un producto en el pedido.');
+        return;
+      }
+
+      const payload = {
+        cliente_nombre: form.elements.cliente_nombre.value.trim(),
+        celular: form.elements.celular.value.trim(),
+        fecha_recoge: form.elements.fecha_recoge.value,
+        hora_recoge: form.elements.hora_recoge.value,
+        metodo_pago: form.elements.metodo_pago.value.trim() || 'Efectivo',
+        dedicatoria: form.elements.dedicatoria ? form.elements.dedicatoria.value.trim() : '',
+        monto_total: Number(form.elements.monto_total.value || 0),
+        adelanto: Number(form.elements.adelanto.value || 0),
+        detalles
+      };
+
+      if (payload.adelanto > payload.monto_total) {
+        alert('El monto pagado no puede ser mayor que el total del pedido.');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/admin/pedidos/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'No se pudo guardar el pedido.');
+        await cargarPedidosGenerales();
+        const pedidoActualizado = pedidosDisponibles.get(id);
+        if (pedidoActualizado) abrirDetallePedido(id);
+        else document.getElementById('pedidoDetalleModal').classList.remove('active');
+        alert('Pedido actualizado correctamente.');
+      } catch (error) {
+        alert(error.message || 'No se pudo guardar el pedido.');
+      }
     }
 
     async function actualizarEstadoPedido(select) {
@@ -1986,14 +2111,19 @@
       pdf.text(`Cliente: ${pedido.cliente_nombre || '-'}`, margen, 39);
       pdf.text(`Teléfono: ${pedido.celular || '-'}`, margen, 45);
       pdf.text(`Recojo: ${pedido.fecha_recoge || '-'} ${pedido.hora_recoge || ''}`, margen, 51);
-      if (pedido.dedicatoria) pdf.text(`Dedicatoria: ${pedido.dedicatoria}`, margen, 57);
+      const montoPagado = Number(pedido.adelanto || 0);
+      const montoTotal = Number(pedido.monto_total || 0);
+      const saldoRestante = Math.max(0, montoTotal - montoPagado);
+      pdf.text(`Monto pagado: S/. ${montoPagado.toFixed(2)}`, margen, 57);
+      pdf.text(`Saldo restante: S/. ${saldoRestante.toFixed(2)}`, margen, 63);
+      if (pedido.dedicatoria) pdf.text(`Dedicatoria: ${pedido.dedicatoria}`, margen, 69);
       const filas = (pedido.detalles || []).map(item => [
         String(item.cantidad || 0),
         item.producto_nombre || '-',
         `S/. ${Number(item.subtotal || 0).toFixed(2)}`
       ]);
       pdf.autoTable({
-        startY: pedido.dedicatoria ? 64 : 58,
+        startY: pedido.dedicatoria ? 76 : 70,
         margin: { left: margen, right: margen },
         head: [['Cant.', 'Descripción', 'Subtotal']],
         body: filas,
@@ -2003,7 +2133,9 @@
       });
       pdf.setFont('helvetica', 'bold');
       pdf.setTextColor(0, 92, 39);
-      pdf.text(`Total: S/. ${Number(pedido.monto_total || 0).toFixed(2)}`, ancho - margen, pdf.lastAutoTable.finalY + 10, { align: 'right' });
+      pdf.text(`Total del pedido: S/. ${montoTotal.toFixed(2)}`, ancho - margen, pdf.lastAutoTable.finalY + 10, { align: 'right' });
+      pdf.text(`Monto pagado: S/. ${montoPagado.toFixed(2)}`, ancho - margen, pdf.lastAutoTable.finalY + 17, { align: 'right' });
+      pdf.text(`Saldo restante: S/. ${saldoRestante.toFixed(2)}`, ancho - margen, pdf.lastAutoTable.finalY + 24, { align: 'right' });
       pdf.save(`Boleta_${pedido.codigo || pedido.id}.pdf`);
     }
 

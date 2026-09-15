@@ -2197,8 +2197,10 @@ function prepararBoletaHTML() {
       <p><strong>Cliente:</strong> ${datosPedidoActual.cliente.nombre} ${datosPedidoActual.cliente.apellido}</p>
       <p><strong>Teléfono:</strong> ${datosPedidoActual.cliente.telefono}</p>
       <p><strong>Fecha/Hora Recojo:</strong> ${datosPedidoActual.cliente.fecha} ${datosPedidoActual.cliente.hora}</p>
-       <p><strong>N° Operación Yape:</strong> ${datosPedidoActual.codigoOperacion}</p>
-       ${datosPedidoActual.cliente.dedicatoria ? `<p><strong>Dedicatoria:</strong> ${datosPedidoActual.cliente.dedicatoria}</p>` : ''}
+      <p><strong>Monto pagado:</strong> S/. ${Number(datosPedidoActual.adelanto || 0).toFixed(2)}</p>
+      <p><strong>Saldo restante:</strong> S/. ${Math.max(0, Number(datosPedidoActual.monto || 0) - Number(datosPedidoActual.adelanto || 0)).toFixed(2)}</p>
+      <p><strong>N° Operación Yape:</strong> ${datosPedidoActual.codigoOperacion}</p>
+      ${datosPedidoActual.cliente.dedicatoria ? `<p><strong>Dedicatoria:</strong> ${datosPedidoActual.cliente.dedicatoria}</p>` : ''}
     `;
   }
 
@@ -2220,7 +2222,14 @@ function prepararBoletaHTML() {
   }
 
   if (totalContainer) {
-    totalContainer.innerHTML = `Total Pagado: S/. ${datosPedidoActual.monto.toFixed(2)}`;
+    const totalPedido = Number(datosPedidoActual.monto || 0);
+    const montoPagado = Number(datosPedidoActual.adelanto || 0);
+    const restante = Math.max(0, totalPedido - montoPagado);
+    totalContainer.innerHTML = `
+      <div>Total del pedido: S/. ${totalPedido.toFixed(2)}</div>
+      <div>Monto pagado: S/. ${montoPagado.toFixed(2)}</div>
+      <div>Saldo restante: S/. ${restante.toFixed(2)}</div>
+    `;
   }
 }
 
