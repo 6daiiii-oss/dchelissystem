@@ -701,8 +701,111 @@
       cursor: pointer;
     }
 
+    #boletasTriplesImpresion { display: none; }
+
+    .boletas-triplicadas-hoja {
+      width: 297mm;
+      height: 210mm;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      margin: 0 auto;
+      background: #fff;
+      page-break-after: always;
+      break-after: page;
+      overflow: hidden;
+    }
+
+    .boletas-triplicadas-hoja.ultima-hoja {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    .boleta-triple-casilla {
+      width: 99mm;
+      height: 210mm;
+      border-right: 1px dashed #94a3b8;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .boleta-triple-casilla:last-child { border-right: 0; }
+
+    .boleta-triple-contenido {
+      position: absolute;
+      width: 94mm;
+      height: 202mm;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      transform-origin: center center;
+      padding: 4mm;
+      border: 1px solid #cbd5e1;
+      color: #0f172a;
+      background: #fff;
+      font-family: Arial, sans-serif;
+      font-size: 7.2px;
+      line-height: 1.25;
+    }
+
+    .boleta-triple-titulo {
+      color: #005c27;
+      font-size: 13px;
+      font-weight: 800;
+      text-align: center;
+      border-bottom: 1px solid #005c27;
+      padding-bottom: 2mm;
+      margin-bottom: 2mm;
+    }
+
+    .boleta-triple-datos {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1mm 4mm;
+      margin-bottom: 2mm;
+    }
+
+    .boleta-triple-items {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      margin-bottom: 2mm;
+    }
+
+    .boleta-triple-items th,
+    .boleta-triple-items td {
+      border: 1px solid #cbd5e1;
+      padding: 1mm;
+      text-align: left;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .boleta-triple-items th:first-child,
+    .boleta-triple-items td:first-child { width: 12%; text-align: center; }
+    .boleta-triple-items th:last-child,
+    .boleta-triple-items td:last-child { width: 19%; text-align: right; }
+
+    .boleta-triple-resumen {
+      display: flex;
+      justify-content: flex-end;
+      gap: 5mm;
+      border-top: 1px dashed #cbd5e1;
+      padding-top: 2mm;
+      font-weight: 800;
+    }
+
+    .boleta-triple-cancelado {
+      position: absolute;
+      right: 4mm;
+      bottom: 3mm;
+      color: #b42318;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
     @media print {
-      @page { size: A4 portrait; margin: 5mm; }
+      @page { size: A4 landscape; margin: 0; }
       body { background: #fff; }
       .no-print,
       .tab-nav,
@@ -713,8 +816,20 @@
       #panel-cocina .header-row {
         display: none !important;
       }
+      #boletasTriplesImpresion,
+      #boletasTriplesImpresion * { visibility: visible !important; }
+      #boletasTriplesImpresion {
+        display: block !important;
+        position: static !important;
+        width: 100%;
+        height: auto;
+        max-height: none;
+        overflow: visible;
+      }
       .admin-shell { padding: 0; }
-      #panel-cocina { display: block !important; }
+      #panel-cocina,
+      #panel-digitacion,
+      #panel-inventario { display: none !important; }
       .panel { border: none; padding: 0; box-shadow: none; }
       .kitchen-page {
         page-break-after: always;
@@ -852,10 +967,13 @@
       <div class="panel">
         <div class="header-row">
           <h3>Pedidos generales</h3>
+          <button class="btn btn-warning no-print" type="button" onclick="imprimirTresBoletas()">Imprimir todos los pedidos</button>
         </div>
         <div id="pedidosGeneral" class="cards-grid"></div>
       </div>
     </section>
+
+    <div id="boletasTriplesImpresion" aria-hidden="true"></div>
 
     <section id="panel-digitacion" class="tab-panel">
       <div class="panel">
@@ -2139,6 +2257,101 @@
       pdf.save(`Boleta_${pedido.codigo || pedido.id}.pdf`);
     }
 
+    function imprimirTresBoletas() {
+      const pedidos = Array.from(pedidosDisponibles.values())
+        .sort((a, b) => String(a.fecha_recoge || '').localeCompare(String(b.fecha_recoge || ''))
+          || String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
+          || Number(a.id) - Number(b.id));
+
+      if (!pedidos.length || !window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
+        alert('No se pudo preparar la impresión.');
+        return;
+      }
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+      const ancho = 297;
+      const alto = 210;
+      const anchoCasilla = ancho / 3;
+
+      const dibujarBoleta = (pedido, indiceCasilla) => {
+        const montoTotal = Number(pedido.monto_total || 0);
+        const montoPagado = Number(pedido.adelanto || 0);
+        const saldoRestante = Math.max(0, montoTotal - montoPagado);
+        const cancelado = String(pedido.estado || '').trim().toLowerCase() === 'cancelado';
+        const izquierda = indiceCasilla * anchoCasilla + 3;
+        const derecha = (indiceCasilla + 1) * anchoCasilla - 3;
+        const centro = (izquierda + derecha) / 2;
+
+        pdf.setDrawColor(148, 163, 184);
+        if (indiceCasilla < 2) pdf.line((indiceCasilla + 1) * anchoCasilla, 0, (indiceCasilla + 1) * anchoCasilla, alto);
+        pdf.setDrawColor(0, 92, 39);
+        pdf.setTextColor(0, 92, 39);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        pdf.text("PASTELERIA D'CHELIS", centro, 9, { align: 'center' });
+        pdf.setDrawColor(0, 92, 39);
+        pdf.line(izquierda, 12, derecha, 12);
+
+        pdf.setTextColor(15, 23, 42);
+        pdf.setFontSize(6.5);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(`Código: ${pedido.codigo || `PED-${pedido.id}`}`, izquierda, 19);
+        pdf.text(`Cliente: ${pedido.cliente_nombre || '-'}`, izquierda, 24);
+        pdf.text(`Teléfono: ${pedido.celular || '-'}`, izquierda, 29);
+        pdf.text(`Recojo: ${pedido.fecha_recoge || '-'} ${pedido.hora_recoge || ''}`, izquierda, 34);
+        if (pedido.dedicatoria) {
+          const dedicatoria = pdf.splitTextToSize(`Dedicatoria: ${pedido.dedicatoria}`, derecha - izquierda);
+          pdf.text(dedicatoria, izquierda, 39);
+        }
+
+        const filas = (pedido.detalles || []).map((item) => [
+          String(item.cantidad || 0),
+          String(item.producto_nombre || '-'),
+          `S/. ${Number(item.subtotal || 0).toFixed(2)}`
+        ]);
+        pdf.autoTable({
+          startY: pedido.dedicatoria ? 47 : 40,
+          margin: { left: izquierda, right: ancho - derecha },
+          tableWidth: derecha - izquierda,
+          head: [['Cant.', 'Descripción', 'Subtotal']],
+          body: filas.length ? filas : [['-', 'Sin productos', '-']],
+          theme: 'grid',
+          styles: { font: 'helvetica', fontSize: 5.8, cellPadding: 1.2, overflow: 'ellipsize' },
+          headStyles: { fillColor: [238, 247, 238], textColor: [0, 92, 39], fontStyle: 'bold' },
+          columnStyles: { 0: { cellWidth: 10, halign: 'center' }, 2: { cellWidth: 21, halign: 'right' } }
+        });
+
+        const pagoY = 196;
+        pdf.setDrawColor(203, 213, 225);
+        pdf.line(izquierda, pagoY - 6, derecha, pagoY - 6);
+        pdf.setTextColor(0, 92, 39);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(6.5);
+        pdf.text(`Total: S/. ${montoTotal.toFixed(2)}`, derecha, pagoY, { align: 'right' });
+        pdf.text(`Pagado: S/. ${montoPagado.toFixed(2)}`, derecha, pagoY + 4.5, { align: 'right' });
+        pdf.text(`Restante: S/. ${saldoRestante.toFixed(2)}`, derecha, pagoY + 9, { align: 'right' });
+        if (cancelado) {
+          pdf.setTextColor(180, 35, 24);
+          pdf.setFontSize(8);
+          pdf.text('CANCELADO', derecha, pagoY + 15, { align: 'right' });
+        }
+      };
+
+      pedidos.forEach((pedido, pedidoIndex) => {
+        if (pedidoIndex > 0) pdf.addPage('a4', 'landscape');
+        dibujarBoleta(pedido, 0);
+        dibujarBoleta(pedido, 1);
+        dibujarBoleta(pedido, 2);
+      });
+
+      pdf.autoPrint();
+      const printWindow = window.open(pdf.output('bloburl'), '_blank');
+      if (!printWindow) {
+        alert('El navegador bloqueó la ventana de impresión. Permite ventanas emergentes para este panel.');
+      }
+    }
+
     async function cargarPedidosGenerales() {
       try {
         const res = await fetch('/api/admin/pedidos');
@@ -2292,14 +2505,15 @@
               alert('No se pudo eliminar el pedido.');
             }
           });
+        });
 
-          document.querySelectorAll('[data-boleta-id]').forEach((button) => {
-            button.addEventListener('click', (event) => {
-              event.stopPropagation();
-              descargarBoletaAdmin(button.dataset.boletaId);
-            });
+        document.querySelectorAll('[data-boleta-id]').forEach((button) => {
+          button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            descargarBoletaAdmin(button.dataset.boletaId);
           });
         });
+
       } catch (error) {
         document.getElementById('pedidosGeneral').innerHTML = '<p style="color:#b42318;">Error al cargar los pedidos.</p>';
       }
