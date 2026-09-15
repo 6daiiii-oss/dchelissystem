@@ -21,42 +21,14 @@
     }
 
     const precios = obtenerPreciosProducto(prod);
-    if (cantidad >= 75 && precios.x100 > 0) {
-      return Number((cantidad * (precios.x100 / 100)).toFixed(2));
+    const precioPaquete = cant >= 75 ? precios.x100 : cant >= 50 ? precios.x50 : precios.x25;
+    if (precioPaquete > 0) {
+      const tamanoPaquete = cant >= 75 ? 100 : cant >= 50 ? 50 : 25;
+      return Number((cant * (precioPaquete / tamanoPaquete)).toFixed(2));
     }
 
-    const x100 = Number(precios.x100 || 0);
-    const x50 = Number(precios.x50 || 0);
-    const x25 = Number(precios.x25 || 0);
-    const unit = Number(precios.precioUnitario || 0);
-
-    let restante = cant;
-    let total = 0;
-
-    if (x100 > 0) {
-      const completos100 = Math.floor(restante / 100);
-      total += completos100 * x100;
-      restante -= completos100 * 100;
-    }
-
-    if (x50 > 0) {
-      const completos50 = Math.floor(restante / 50);
-      total += completos50 * x50;
-      restante -= completos50 * 50;
-    }
-
-    if (x25 > 0) {
-      const completos25 = Math.floor(restante / 25);
-      total += completos25 * x25;
-      restante -= completos25 * 25;
-    }
-
-    if (restante > 0) {
-      const unitPrice = unit > 0 ? unit : Number(prod?.precio || 0);
-      if (unitPrice > 0) total += restante * unitPrice;
-    }
-
-    return Number(total.toFixed(2));
+    const unit = Number(precios.precioUnitario || prod?.precio || 0);
+    return Number((cant * unit).toFixed(2));
   }
 
   const api = { obtenerPreciosProducto, calcularSubtotal };

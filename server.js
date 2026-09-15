@@ -7,6 +7,11 @@ const db = require('./db');
 
 const app = express();
 
+function normalizarEstadoPedido(estado) {
+  if (!estado) return 'Registrado';
+  return String(estado).trim() === 'Pagado' ? 'Registrado' : String(estado).trim();
+}
+
 const PRODUCTOS_COCINA = [
   'EMPANADA CARNE', 'EMPANADA POLLO', 'EMPANADA ACEITUNA', 'EMPANADA DE JAMON', 'EMPANADA AJI GALLINA',
   'EMPANADA MIXTA', 'EMPANADA QUESO', 'ENROLLADO ACELGA', 'SOUFLE ALCACHOFA', 'ENROLLADO HOT DOG', 'PIZZAS',
@@ -61,7 +66,6 @@ const PRODUCTOS_COCINA_MAPA_TIENDA = Object.fromEntries(Object.entries({
   'PROFITEROLS': 'PROFITEROL',
   'ROSQUITA': 'ROSQUITAS',
   'TARTALETA COCO': 'TARTALETA DE COCO',
-  'TARTALETA DE DURAZNO O FRESA': 'TARTALETA DURAZNO',
   'TARTALETA DE SAUCO': 'TARTALETA DE SAUCO',
   'TARTALETA SAUCO': 'TARTALETA DE SAUCO',
   'TORTITA DE CHOCOLATE': 'TORTITA CHOCOLATE',
@@ -132,7 +136,7 @@ const PRODUCTOS_COCINA_ALIASES = {
   'TARTALETA DE COCO': ['TARTALETA DE COCO', 'TARTALETA COCO'],
   'TARTALETA GUANABANA': ['TARTALETA GUANABANA', 'TARTALETA DE GUANABANA'],
   'TARTALETA DE FRESA': ['TARTALETA DE FRESA', 'TARTALETA FRESA'],
-  'TARTALETA DURAZNO': ['TARTALETA DURAZNO', 'TARTALETA DE DURAZNO', 'TARTALETA DE DURAZNO O FRESA'],
+  'TARTALETA DURAZNO': ['TARTALETA DURAZNO', 'TARTALETA DE DURAZNO'],
   'TARTALETA LUCUMA': ['TARTALETA LUCUMA', 'TARTALETA DE LUCUMA'],
   'TARTALETA DE SAUCO': ['TARTALETA DE SAUCO', 'TARTALETA SAUCO'],
   'TORTITA HELADA': ['TORTITA HELADA', 'TORTITA HELADA O SELVA NEGRA', 'TORTITA SELVA NEGRA'],
@@ -455,7 +459,8 @@ app.get('/api/pedidos/estado/:codigo', (req, res) => {
   db.get(`SELECT codigo, estado, metodo_pago, monto_total, adelanto FROM pedidos WHERE codigo = ?`, [codigo], (err, row) => {
     if (err) return res.status(500).json({ ok: false, error: err.message });
     if (!row) return res.status(404).json({ ok: false, error: 'Pedido no encontrado.' });
-    return res.json({ ok: true, codigo: row.codigo, estado: row.estado, metodo_pago: row.metodo_pago, monto_total: row.monto_total, adelanto: row.adelanto });
+    const estado = normalizarEstadoPedido(row.estado);
+    return res.json({ ok: true, codigo: row.codigo, estado, metodo_pago: row.metodo_pago, monto_total: row.monto_total, adelanto: row.adelanto });
   });
 });
 
@@ -533,6 +538,35 @@ app.post('/api/pedidos', (req, res) => {
   });
 });
 
+app.post('/api/pedidos/:codigo/cancelar', (req, res) => {
+  const codigo = String(req.params.codigo || '').trim();
+  if (!codigo) return res.status(400).json({ ok: false, error: 'Código de pedido requerido.' });
+
+  db.run(`UPDATE pedidos SET estado = 'Cancelado' WHERE codigo = ? AND estado = 'Pendiente de verificación de pago'`, [codigo], function (err) {
+    if (err) return res.status(500).json({ ok: false, error: err.message });
+    if (this.changes === 0) return res.status(404).json({ ok: false, error: 'Pedido no encontrado o ya confirmado.' });
+    return res.json({ ok: true, codigo, estado: 'Cancelado' });
+  });
+});
+
+function eliminarPedidosSinPago() {
+  db.serialize(() => {
+    db.run(`DELETE FROM detalles_pedido WHERE pedido_id IN (
+      SELECT id FROM pedidos
+      WHERE estado = 'Pendiente de verificación de pago'
+        AND datetime(fecha_registro) <= datetime('now', '-5 minutes')
+    )`);
+    db.run(`DELETE FROM pedidos
+      WHERE estado = 'Pendiente de verificación de pago'
+        AND datetime(fecha_registro) <= datetime('now', '-5 minutes')`, (err) => {
+      if (err) console.error('No se pudieron limpiar pedidos sin pago:', err.message);
+    });
+  });
+}
+
+eliminarPedidosSinPago();
+setInterval(eliminarPedidosSinPago, 60 * 1000);
+
 // Endpoint: Obtener Pedidos Generales
 app.get('/api/admin/pedidos', (req, res) => {
   db.all(`
@@ -545,6 +579,7 @@ app.get('/api/admin/pedidos', (req, res) => {
 
     const pedidosFinales = pedidos.map((pedido) => ({
       ...pedido,
+      estado: normalizarEstadoPedido(pedido.estado),
       detalles: []
     }));
 

@@ -6,27 +6,112 @@
   <title>D'chelis | Salidas del día</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script src="config.js"></script>
+   <script src="auth-config.js"></script>
+  <script src="digitacion-config.js"></script>
   <style>
     :root { --ink:#173c2b; --accent:#b75e36; --paper:#fffaf5; --line:#eadfd6; --muted:#766b64; }
     * { box-sizing:border-box; } body { margin:0; background:radial-gradient(circle at right top,#ffe5d1,transparent 28rem),var(--paper); color:#29221e; font-family:'Plus Jakarta Sans',sans-serif; }
     header { padding:28px max(20px,calc((100% - 1040px)/2)); color:#fff; background:linear-gradient(110deg,#173c2b,#28533c); } h1 { margin:0; font-size:clamp(1.7rem,4vw,2.5rem); } header p { margin:7px 0 0; color:#f7d7bf; }
     main { max-width:1040px; margin:25px auto; padding:0 20px 50px; } .toolbar { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; align-items:center; margin-bottom:18px; } input,button { font:inherit; border-radius:10px; padding:10px 12px; } input { border:1px solid var(--line); background:#fff; } button { cursor:pointer; color:#fff; background:var(--accent); border:0; font-weight:800; }
-    .notice { color:var(--muted); } .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(245px,1fr)); gap:15px; } article { background:#fff; border:1px solid var(--line); border-top:4px solid var(--accent); border-radius:15px; padding:17px; box-shadow:0 7px 18px rgba(74,48,31,.06); } .top { display:flex; justify-content:space-between; gap:10px; align-items:center; } .code { color:var(--accent); font-weight:800; } .time { font-weight:800; font-size:1.25rem; color:var(--ink); margin:15px 0 4px; } .name { font-weight:700; } .status { display:inline-block; padding:4px 8px; border-radius:999px; background:#fff0e5; color:#984728; font-size:.72rem; font-weight:800; } ul { margin:14px 0 0; padding:12px 0 0; list-style:none; border-top:1px solid var(--line); } li { display:flex; justify-content:space-between; gap:10px; padding:4px 0; font-size:.9rem; } footer { text-align:center; padding:20px; color:var(--muted); font-size:.8rem; }
+    .notice { color:var(--muted); } .hidden { display:none !important; } .auth-shell { min-height:100vh; display:grid; place-items:center; padding:24px; } .auth-card { width:min(420px,100%); padding:28px; background:#fff; border:1px solid var(--line); border-radius:18px; box-shadow:0 14px 32px rgba(74,48,31,.1); } .auth-card h2 { margin:0 0 8px; color:var(--ink); } .auth-card p { color:var(--muted); margin:0 0 18px; } .auth-card label { display:block; margin:12px 0 6px; font-weight:700; } .auth-card input { width:100%; } .auth-card button { width:100%; margin-top:16px; } .view-tabs { display:flex; gap:8px; margin-bottom:18px; padding:7px; width:max-content; border:1px solid var(--line); border-radius:14px; background:#fff; } .view-tabs button { border:0; border-radius:9px; color:var(--muted); } .view-tabs button.active { background:var(--ink); color:#fff; } .view-panel { display:none; } .view-panel.active { display:block; } .digitacion-grid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:18px; } .digitacion-box { background:#fff; border:1px solid var(--line); border-radius:18px; padding:22px; box-shadow:0 10px 24px rgba(74,48,31,.06); } .digitacion-box h2 { color:var(--ink); margin-top:0; } .digitacion-box input, .digitacion-box textarea, .digitacion-box select { width:100%; } .digitacion-box textarea { min-height:130px; resize:vertical; } .digitacion-summary { margin:0; padding:0; list-style:none; } .digitacion-summary li { border-bottom:1px solid var(--line); padding:9px 0; } @media(max-width:700px){.digitacion-grid{grid-template-columns:1fr;}}
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(245px,1fr)); gap:15px; } article { background:#fff; border:1px solid var(--line); border-top:4px solid var(--accent); border-radius:15px; padding:17px; box-shadow:0 7px 18px rgba(74,48,31,.06); } .top { display:flex; justify-content:space-between; gap:10px; align-items:center; } .code { color:var(--accent); font-weight:800; } .time { font-weight:800; font-size:1.25rem; color:var(--ink); margin:15px 0 4px; } .name { font-weight:700; } .status { display:inline-block; padding:4px 8px; border-radius:999px; background:#fff0e5; color:#984728; font-size:.72rem; font-weight:800; } ul { margin:14px 0 0; padding:12px 0 0; list-style:none; border-top:1px solid var(--line); } li { display:flex; justify-content:space-between; gap:10px; padding:4px 0; font-size:.9rem; } footer { text-align:center; padding:20px; color:var(--muted); font-size:.8rem; }
+    body, input, textarea, select, button { font-family:'Plus Jakarta Sans',sans-serif; }
+    .digitacion-box { background:#fff; border-color:#eadfd6; border-radius:18px; padding:19px; box-shadow:0 7px 20px rgba(74,48,31,.06); }
+    .digitacion-box label { color:#29221e; font-size:.82rem; font-weight:800; }
+    .digitacion-box input, .digitacion-box textarea, .digitacion-box select { border:1px solid #eadfd6; border-radius:11px; min-height:44px; padding:11px 14px; font-size:.92rem; font-weight:600; color:#29221e; background:#fff; }
+    .digitacion-box textarea { min-height:160px; }
+    .digitacion-box input:focus, .digitacion-box textarea:focus, .digitacion-box select:focus { outline:none; border-color:#b75e36; box-shadow:0 0 0 3px rgba(183,94,54,.12); }
+    .digitacion-box button { background:#173c2b; color:#fff; border:0; border-radius:10px; font-weight:800; padding:11px 16px; }
+    .digitacion-box button:hover { background:#b75e36; }
+    .digitacion-summary li { background:#fff; border:1px solid #eadfd6; border-radius:9px; padding:10px 12px; font-weight:600; }
   </style>
 </head>
 <body>
+  <div id="loginScreen" class="auth-shell">
+    <div class="auth-card">
+      <h2>Acceso de colaboradores</h2>
+      <p>Ingresa con una cuenta autorizada para consultar las salidas.</p>
+      <form id="loginForm">
+        <label for="loginUser">Usuario</label><input id="loginUser" required autocomplete="username">
+        <label for="loginPass">Contraseña</label><input id="loginPass" type="password" required autocomplete="current-password">
+        <button type="submit">Ingresar</button>
+      </form>
+    </div>
+  </div>
+  <div id="collaboratorApp" class="hidden">
   <header><h1>Salidas del día</h1><p>D'chelis · Vista de producción y despacho</p></header>
   <main>
+    <nav class="view-tabs"><button id="tabGeneral" class="active" type="button">Pedidos generales</button><button id="tabDigitacion" type="button">Digitación</button></nav>
+    <section id="panelGeneral" class="view-panel active">
     <div class="toolbar"><div><label for="fecha"><strong>Fecha:</strong></label> <input id="fecha" type="date"></div><button id="actualizar">Actualizar</button></div>
     <p class="notice" id="resumen">Cargando pedidos…</p><section class="grid" id="pedidos"></section>
+    </section>
+    <section id="panelDigitacion" class="view-panel">
+      <div class="digitacion-grid">
+        <div class="digitacion-box">
+          <h2>Digitación</h2>
+          <label for="colNombre">Nombre</label><input id="colNombre">
+          <label for="colApellido">Apellido</label><input id="colApellido">
+          <label for="colCelular">Celular</label><input id="colCelular" type="tel">
+          <label for="colFecha">Fecha de recojo</label><input id="colFecha" type="date">
+          <label for="colHora">Hora de recojo</label><input id="colHora" type="time" value="18:00">
+          <label for="colAdelanto">Adelanto</label><input id="colAdelanto" type="number" min="0" step="0.01" value="0">
+          <label for="colDetalle">Productos, uno por línea</label><textarea id="colDetalle" placeholder="25 petipan de pollo&#10;30 brownies"></textarea>
+          <div id="colTortaOptions" class="hidden">
+            <label><input id="colExtraChocolate" type="checkbox" style="width:auto"> Extra Chocolate (S/.10)</label>
+            <label><input id="colExtraSelva" type="checkbox" style="width:auto"> Extra Selva Negra (S/.10)</label>
+            <label for="colFoto">Foto de torta</label><input id="colFoto" type="file" accept="image/*">
+          </div>
+          <button id="registrarColaborador" type="button">Registrar pedido</button>
+        </div>
+        <div class="digitacion-box"><h2>Vista previa</h2><ul id="colPreview" class="digitacion-summary"></ul></div>
+      </div>
+    </section>
   </main><footer>Esta vista es solo de consulta. Los pedidos se administran desde el panel administrativo.</footer>
+  </div>
   <script>
+    const ACCOUNTS = window.DCHELIS_ACCOUNTS || [];
+    const SESSION_KEY = 'dchelis_collaborator_session_v1';
+    const SESSION_MS = 60 * 60 * 1000;
+    const sesionValida = () => { try { return Number(JSON.parse(localStorage.getItem(SESSION_KEY) || '{}').expira) > Date.now(); } catch { return false; } };
+    const abrirApp = () => { document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('collaboratorApp').classList.remove('hidden'); cargar(); };
+    document.getElementById('loginForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const usuario = document.getElementById('loginUser').value.trim();
+      const password = document.getElementById('loginPass').value;
+      if (!ACCOUNTS.some((cuenta) => cuenta.usuario === usuario && cuenta.password === password)) return alert('Usuario o contraseña incorrectos.');
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ expira: Date.now() + SESSION_MS }));
+      abrirApp();
+    });
     const base = String(window.DCHELIS_API_URL || localStorage.getItem('dchelis_api_url') || '').replace(/\/$/, '');
     const api = (path) => base ? `${base}${path}` : path;
+    let catalogoColaborador = [];
+    const normalizar = (texto) => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const resolverProducto = (texto) => {
+      const valor = normalizar(texto);
+      const exacto = catalogoColaborador.find((item) => normalizar(item.nombre) === valor);
+      if (exacto) return exacto;
+      const aliases = window.DCHELIS_DIGITACION_ALIASES || {};
+      const clave = Object.keys(aliases).find((nombre) => aliases[nombre].some((alias) => normalizar(alias) === valor));
+      if (clave) return catalogoColaborador.find((item) => normalizar(item.nombre) === normalizar(clave));
+      return catalogoColaborador.find((item) => normalizar(item.nombre).includes(valor) || valor.includes(normalizar(item.nombre)));
+    };
+    const subtotalProducto = (item, cantidad) => { if (!item) return 0; const x25=Number(item.precio_x25||0), x50=Number(item.precio_x50||0), x100=Number(item.precio_x100||0); if (x25 || x50 || x100) { const precio=cantidad>=75?x100:cantidad>=50?x50:x25; const tamano=cantidad>=75?100:cantidad>=50?50:25; return Number((cantidad*(precio/tamano)).toFixed(2)); } return Number((cantidad*Number(item.precio_unidad ?? item.precio ?? 0)).toFixed(2)); };
+    async function cargarCatalogoColaborador() { const r=await fetch(api('/api/productos')); const data=await r.json(); if(!r.ok) throw new Error(data.error || 'No se pudo cargar el catálogo.'); catalogoColaborador=data.filter((item)=>item.categoria !== 'Extras para tortas' && item.categoria !== 'Pruebas' && item.categoria !== 'Producto de prueba'); }
+    function obtenerLineasColaborador() { return String(document.getElementById('colDetalle').value || '').split(/\n|,/).map((linea)=>linea.trim()).filter(Boolean); }
+    function hayTortaColaborador() { return prepararDetallesColaborador().some((detalle) => detalle.item?.categoria === 'Torta Chantilly'); }
+    function actualizarOpcionesTortaColaborador() { const visible=hayTortaColaborador(); document.getElementById('colTortaOptions').classList.toggle('hidden', !visible); if (!visible) { document.getElementById('colExtraChocolate').checked=false; document.getElementById('colExtraSelva').checked=false; document.getElementById('colFoto').value=''; } }
+    function renderPreviewColaborador() { const detalles=prepararDetallesColaborador(); actualizarOpcionesTortaColaborador(); const extras=(document.getElementById('colExtraChocolate').checked?10:0)+(document.getElementById('colExtraSelva').checked?10:0); const total=detalles.reduce((s,d)=>s+d.subtotal,0)+extras; document.getElementById('colPreview').innerHTML=detalles.map((d)=>`<li><span>${d.cantidad||'?'} • ${d.item?.nombre || d.linea}</span><strong>S/. ${d.subtotal.toFixed(2)}</strong></li>`).join('')+`<li><span>Total</span><strong>S/. ${total.toFixed(2)}</strong></li>`; }
+    function leerFotoColaborador() { const archivo=document.getElementById('colFoto').files?.[0]; if(!archivo) return Promise.resolve(''); return new Promise((resolve,reject)=>{ const lector=new FileReader(); lector.onerror=reject; lector.onload=()=>resolve(String(lector.result||'')); lector.readAsDataURL(archivo); }); }
+    async function registrarPedidoColaborador() { const nombre=document.getElementById('colNombre').value.trim(), apellido=document.getElementById('colApellido').value.trim(), celular=document.getElementById('colCelular').value.trim(); const detallesBase=prepararDetallesColaborador(); if(!nombre||!apellido||!celular||!detallesBase.length||detallesBase.some((d)=>!d.item||d.cantidad<=0)) return alert('Completa los datos y usa productos válidos.'); const detalles=detallesBase.map((d)=>({producto_nombre:d.item.nombre,cantidad:d.cantidad,subtotal:d.subtotal,paquetes:{}})); if(document.getElementById('colExtraChocolate').checked) detalles.push({producto_nombre:'Extra de Chocolate',cantidad:1,subtotal:10,paquetes:{}}); if(document.getElementById('colExtraSelva').checked) detalles.push({producto_nombre:'Extra de Selva Negra',cantidad:1,subtotal:10,paquetes:{}}); const total=detalles.reduce((s,d)=>s+d.subtotal,0), adelanto=Number(document.getElementById('colAdelanto').value||0); if(adelanto>total) return alert('El adelanto no puede superar el total.'); const foto=await leerFotoColaborador(); const respuesta=await fetch(api('/api/pedidos'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tipo_cliente:'Cliente',cliente_nombre:`${nombre} ${apellido}`,celular,monto_total:Number(total.toFixed(2)),adelanto:Number(adelanto.toFixed(2)),metodo_pago:'Efectivo',fecha_recoge:document.getElementById('colFecha').value||new Date().toISOString().slice(0,10),hora_recoge:document.getElementById('colHora').value||'18:00',dedicatoria:'',foto_torta:foto,detalles})}); const resultado=await respuesta.json(); if(!respuesta.ok) return alert(resultado.error||'No se pudo registrar el pedido.'); alert(`Pedido ${resultado.codigo||''} registrado.`); document.getElementById('colDetalle').value=''; renderPreviewColaborador(); cargar(); }
+    document.getElementById('tabGeneral').addEventListener('click',()=>{document.getElementById('tabGeneral').classList.add('active');document.getElementById('tabDigitacion').classList.remove('active');document.getElementById('panelGeneral').classList.add('active');document.getElementById('panelDigitacion').classList.remove('active');});
+    document.getElementById('tabDigitacion').addEventListener('click',async()=>{document.getElementById('tabDigitacion').classList.add('active');document.getElementById('tabGeneral').classList.remove('active');document.getElementById('panelDigitacion').classList.add('active');document.getElementById('panelGeneral').classList.remove('active'); if(!catalogoColaborador.length) await cargarCatalogoColaborador(); renderPreviewColaborador();});
+    ['colDetalle','colAdelanto','colExtraChocolate','colExtraSelva'].forEach((id)=>document.getElementById(id).addEventListener('input',renderPreviewColaborador));
+    document.getElementById('registrarColaborador').addEventListener('click',registrarPedidoColaborador);
     const fecha = document.getElementById('fecha'); fecha.value = new Date().toISOString().slice(0,10);
     const safe = (text) => String(text || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     async function cargar() { const out=document.getElementById('pedidos'), resumen=document.getElementById('resumen'); resumen.textContent='Cargando pedidos…'; out.innerHTML=''; try { const r=await fetch(api(`/api/colaboradores/salidas?fecha=${encodeURIComponent(fecha.value)}`)); const data=await r.json(); if(!r.ok) throw new Error(data.error || 'No se pudieron cargar los pedidos.'); const pedidos=data.pedidos || []; resumen.textContent=pedidos.length ? `${pedidos.length} pedido(s) programado(s) para hoy.` : 'No hay pedidos programados para esta fecha.'; out.innerHTML=pedidos.map(p=>`<article><div class="top"><span class="code">${safe(p.codigo)}</span><span class="status">${safe(p.estado)}</span></div><div class="time">${safe(p.hora_recoge || '--:--')}</div><div class="name">${safe(p.cliente_nombre)}</div><ul>${p.detalles.map(d=>`<li><span>${safe(d.producto_nombre)}</span><strong>${Number(d.cantidad)||0}</strong></li>`).join('')}</ul></article>`).join(''); } catch(e) { resumen.textContent=`${e.message}${!base && location.hostname.endsWith('github.io') ? ' Configura la URL del servidor en config.js.' : ''}`; } }
-    document.getElementById('actualizar').addEventListener('click', cargar); fecha.addEventListener('change',cargar); cargar(); setInterval(cargar,30000);
+    document.getElementById('actualizar').addEventListener('click', cargar); fecha.addEventListener('change',cargar); if (sesionValida()) abrirApp(); setInterval(() => { if (!document.getElementById('collaboratorApp').classList.contains('hidden')) cargar(); },30000);
   </script>
 </body>
 </html>

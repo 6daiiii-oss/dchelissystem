@@ -5,6 +5,8 @@
   <title>D'chelis | Panel Administrativo</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+   <script src="auth-config.js"></script>
+  <script src="digitacion-config.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -216,8 +218,9 @@
       justify-content: space-between;
     }
 
+    .order-card.estado-pendiente-de-verificacion-de-pago { border-color: #fed7aa; border-top-color: #ea580c; }
     .order-card.estado-registrado { border-color: #93c5fd; border-top-color: #2563eb; }
-    .order-card.estado-en-preparacion { border-color: #fcd34d; border-top-color: #d97706; }
+    .order-card.estado-en-preparacion { border-color: #86efac; border-top-color: #16a34a; }
     .order-card.estado-listo-para-despacho { border-color: #67e8f9; border-top-color: #0891b2; }
     .order-card.estado-despachado-d-chelis { border-color: #86efac; border-top-color: #16a34a; }
 
@@ -390,8 +393,9 @@
       color: #92400e;
     }
 
+    .estado-pendiente-de-verificacion-de-pago .badge.status { background: #ffedd5; color: #c2410c; }
     .estado-registrado .badge.status { background: #dbeafe; color: #1d4ed8; }
-    .estado-en-preparacion .badge.status { background: #fef3c7; color: #b45309; }
+    .estado-en-preparacion .badge.status { background: #dcfce7; color: #15803d; }
     .estado-listo-para-despacho .badge.status { background: #cffafe; color: #0e7490; }
     .estado-despachado-d-chelis .badge.status { background: #dcfce7; color: #15803d; }
 
@@ -796,6 +800,15 @@
     .pedido-modal-card { border-radius: 20px; border: 1px solid #eadfd6; box-shadow: 0 22px 50px rgba(41,34,30,.2); }
     .notice { border-radius: 12px; background: #fff4ea; border-color: #f0c9ad; }
     .table-container { border: 1px solid #eadfd6; border-radius: 14px; overflow: hidden; }
+    body, input, textarea, select, button { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .digitacion-box { background:#fff; border-color:#eadfd6; border-radius:18px; padding:19px; box-shadow:0 7px 20px rgba(74,48,31,.06); }
+    .digitacion-box .field label, .digitacion-box > label { color:#29221e; font-size:.82rem; font-weight:800; }
+    .digitacion-box input, .digitacion-box textarea, .digitacion-box select { border:1px solid #eadfd6; border-radius:11px; min-height:44px; padding:11px 14px; font-size:.92rem; font-weight:600; color:#29221e; background:#fff; }
+    .digitacion-box textarea { min-height:160px; }
+    .digitacion-box input:focus, .digitacion-box textarea:focus, .digitacion-box select:focus { outline:none; border-color:#b75e36; box-shadow:0 0 0 3px rgba(183,94,54,.12); }
+    .digitacion-box button[type="submit"], .digitacion-box button.btn-success { background:#173c2b; color:#fff; border:0; border-radius:10px; font-weight:800; padding:11px 16px; }
+    .digitacion-box button[type="submit"]:hover, .digitacion-box button.btn-success:hover { background:#b75e36; }
+    .digitacion-summary li { background:#fff; border:1px solid #eadfd6; border-radius:9px; padding:10px 12px; font-weight:600; }
     @media (max-width: 640px) { .admin-shell { padding: 14px 12px 32px; } .topbar { border-radius: 15px; min-height: 100px; padding: 20px; } .tab-nav { width: 100%; } .panel { border-radius: 15px; } }
 
   </style>
@@ -815,7 +828,6 @@
           <input id="loginPass" type="password" required autocomplete="current-password" />
         </div>
         <button class="btn btn-primary" type="submit">Entrar</button>
-        <button class="btn btn-ghost" id="resetCredentialsBtn" type="button" style="width:100%; margin-top:10px;">Restablecer acceso en esta PC</button>
       </form>
     </div>
   </div>
@@ -834,7 +846,6 @@
       <button class="tab-btn" data-tab="digitacion">Digitación</button>
       <button class="tab-btn" data-tab="cocina">Cocina</button>
       <button class="tab-btn" data-tab="inventario">Inventario</button>
-      <button class="tab-btn" data-tab="config">Configuración</button>
     </nav>
 
     <section id="panel-general" class="tab-panel active">
@@ -882,6 +893,12 @@
                <label for="quickRestante">Restante (S/.)</label>
                <input id="quickRestante" type="text" value="S/. 0.00" readonly />
              </div>
+              <div id="quickTortaOptions" class="field hidden" style="grid-column:1 / -1; display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+                <label style="margin:0;"><input id="quickExtraChocolate" type="checkbox"> Extra Chocolate (S/.10)</label>
+                <label style="margin:0;"><input id="quickExtraSelva" type="checkbox"> Extra Selva Negra (S/.10)</label>
+                <label for="quickFotoTorta" style="margin:0;">Foto de torta</label>
+                <input id="quickFotoTorta" type="file" accept="image/*" style="max-width:220px;">
+              </div>
             </div>
             <form id="quickEntryForm">
               <div class="field">
@@ -953,27 +970,6 @@
       </div>
     </section>
 
-    <section id="panel-config" class="tab-panel">
-      <div class="panel">
-        <div class="header-row">
-          <h3>Configuración de acceso</h3>
-        </div>
-        <div class="settings-grid">
-          <div class="field">
-            <label for="cfgUsuario">Usuario</label>
-            <input id="cfgUsuario" type="text" />
-          </div>
-          <div class="field">
-            <label for="cfgPassword">Contraseña</label>
-            <input id="cfgPassword" type="text" />
-          </div>
-        </div>
-        <div class="controls" style="margin-top:18px;">
-          <button class="btn btn-success" id="guardarCredenciales" type="button">Guardar credenciales</button>
-        </div>
-        <div class="notice">Escribe y guarda aquí las credenciales que utilizará el personal administrativo.</div>
-      </div>
-    </section>
   </div>
 
   <div id="pedidoDetalleModal" class="pedido-modal" onclick="cerrarDetallePedido(event)">
@@ -990,7 +986,11 @@
   </div>
 
   <script>
-    const AUTH_KEY = 'dchelis_admin_credentials';
+    const ADMIN_ACCOUNTS = window.DCHELIS_ACCOUNTS || [];
+    const AUTH_SESSION_KEY = 'dchelis_admin_session_v1';
+    const ADMIN_SESSION_MS = 60 * 60 * 1000;
+    const ADMIN_TAB_KEY = 'dchelis_admin_tab_v1';
+    const ADMIN_FORM_KEY = 'dchelis_admin_digitacion_v1';
     const PRODUCTOS_COCINA_ORDEN = [
       'EMPANADA CARNE', 'EMPANADA POLLO', 'EMPANADA ACEITUNA', 'EMPANADA DE JAMON', 'EMPANADA AJI GALLINA',
       'EMPANADA MIXTA', 'EMPANADA QUESO', 'ENROLLADO ACELGA', 'SOUFLE ALCACHOFA', 'ENROLLADO HOT DOG', 'PIZZAS',
@@ -1250,7 +1250,6 @@
       'PROFITEROLS': 'PROFITEROL',
       'ROSQUITA': 'ROSQUITAS',
       'TARTALETA COCO': 'TARTALETA DE COCO',
-      'TARTALETA DE DURAZNO O FRESA': 'TARTALETA DURAZNO',
       'TARTALETA DE SAUCO': 'TARTALETA DE SAUCO',
       'TARTALETA SAUCO': 'TARTALETA DE SAUCO',
       'TORTITA DE CHOCOLATE': 'TORTITA CHOCOLATE',
@@ -1320,7 +1319,7 @@
       'TARTALETA DE COCO': ['TARTALETA DE COCO', 'TARTALETA COCO'],
       'TARTALETA GUANABANA': ['TARTALETA GUANABANA', 'TARTALETA DE GUANABANA'],
       'TARTALETA DE FRESA': ['TARTALETA DE FRESA', 'TARTALETA FRESA'],
-      'TARTALETA DURAZNO': ['TARTALETA DURAZNO', 'TARTALETA DE DURAZNO', 'TARTALETA DE DURAZNO O FRESA'],
+'TARTALETA DURAZNO': ['TARTALETA DURAZNO', 'TARTALETA DE DURAZNO'],
       'TARTALETA LUCUMA': ['TARTALETA LUCUMA', 'TARTALETA DE LUCUMA'],
       'TARTALETA DE SAUCO': ['TARTALETA DE SAUCO', 'TARTALETA SAUCO'],
       'TORTITA HELADA': ['TORTITA HELADA', 'TORTITA HELADA O SELVA NEGRA', 'TORTITA SELVA NEGRA'],
@@ -1417,32 +1416,38 @@
       return !!resuelto && resuelto === cocinaNombre;
     }
 
-    function getStoredCredentials() {
-      const raw = localStorage.getItem(AUTH_KEY);
-      if (!raw) return null;
+    function guardarSesionAdmin() {
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ expira: Date.now() + ADMIN_SESSION_MS }));
+    }
 
+    function sesionAdminValida() {
       try {
-        const parsed = JSON.parse(raw);
-        return {
-          usuario: parsed.usuario || '',
-          password: parsed.password || ''
-        };
+        const sesion = JSON.parse(localStorage.getItem(AUTH_SESSION_KEY) || 'null');
+        return !!sesion && Number(sesion.expira) > Date.now();
       } catch (error) {
-        return null;
+        return false;
       }
     }
 
-    function setStoredCredentials(usuario, password) {
-      localStorage.setItem(AUTH_KEY, JSON.stringify({ usuario, password }));
+    function cargarEstadoDigitacion() {
+      try {
+        const estado = JSON.parse(localStorage.getItem(ADMIN_FORM_KEY) || '{}');
+        ['quickCustomerName', 'quickCustomerSurname', 'quickCustomerPhone', 'quickPickupDate', 'quickPickupTime', 'quickAdelanto', 'quickEntryInput'].forEach((id) => {
+          const campo = document.getElementById(id);
+          if (campo && estado[id] !== undefined) campo.value = estado[id];
+        });
+      } catch (error) {
+        localStorage.removeItem(ADMIN_FORM_KEY);
+      }
     }
 
-    function loadCredentialFields() {
-      const raw = localStorage.getItem(AUTH_KEY);
-      if (!raw) return;
-      const creds = getStoredCredentials();
-      document.getElementById('loginUser').value = creds.usuario;
-      document.getElementById('cfgUsuario').value = creds.usuario;
-      document.getElementById('cfgPassword').value = creds.password;
+    function guardarEstadoDigitacion() {
+      const estado = {};
+      ['quickCustomerName', 'quickCustomerSurname', 'quickCustomerPhone', 'quickPickupDate', 'quickPickupTime', 'quickAdelanto', 'quickEntryInput'].forEach((id) => {
+        const campo = document.getElementById(id);
+        if (campo) estado[id] = campo.value;
+      });
+      localStorage.setItem(ADMIN_FORM_KEY, JSON.stringify(estado));
     }
 
     function getQuickEntryLines() {
@@ -1457,6 +1462,14 @@
     function resolverProductoDigitado(texto) {
       const valor = normalizarNombreProducto(texto || '');
       if (!valor) return null;
+
+      const catalogoExacto = Array.isArray(window.__quickCatalog) ? window.__quickCatalog.find((item) => normalizarNombreProducto(item.nombre || '') === valor) : null;
+      if (catalogoExacto) return catalogoExacto.nombre;
+
+      const aliasesCompartidos = window.DCHELIS_DIGITACION_ALIASES || {};
+      for (const [producto, aliases] of Object.entries(aliasesCompartidos)) {
+        if (aliases.some((alias) => normalizarNombreProducto(alias) === valor)) return producto;
+      }
 
       const candidatos = [];
       const evaluar = (producto, score) => {
@@ -1510,6 +1523,7 @@
 
     function renderQuickEntryPreview() {
       const lista = getQuickEntryLines();
+      actualizarOpcionesTortaDigitacion(lista);
       const contenedor = document.getElementById('digitacionResumen');
       if (!contenedor) return;
 
@@ -1529,7 +1543,7 @@
         return `<li><span>${cantidad ? `${cantidad} • ${nombre}${priceText}` : linea}</span><strong>${cantidad || 1}</strong></li>`;
       });
 
-      const total = lineas.length ? lista.reduce((sum, linea) => {
+      let total = lineas.length ? lista.reduce((sum, linea) => {
         const match = linea.match(/^\s*(\d+)\s*(?:x|X)?\s*(.+?)\s*$/i);
         if (!match) return sum;
         const cantidad = Number(match[1]) || 0;
@@ -1544,11 +1558,28 @@
         return sum + subtotal;
       }, 0) : 0;
 
+      const extras = (document.getElementById('quickExtraChocolate')?.checked ? 10 : 0) + (document.getElementById('quickExtraSelva')?.checked ? 10 : 0);
+      total += extras;
       const restante = Math.max(0, total - Number(document.getElementById('quickAdelanto')?.value || 0));
       const campoRestante = document.getElementById('quickRestante');
       if (campoRestante) campoRestante.value = `S/. ${restante.toFixed(2)}`;
 
       contenedor.innerHTML = [...lineas, `<li><span>Total estimado</span><strong>S/. ${total.toFixed(2)}</strong></li>`, `<li><span>Restante</span><strong>S/. ${restante.toFixed(2)}</strong></li>`].join('');
+    }
+
+    function actualizarOpcionesTortaDigitacion(lineas = getQuickEntryLines()) {
+      const contieneTorta = lineas.some((linea) => {
+        const match = linea.match(/^\s*(\d+)\s*(?:x|X)?\s*(.+?)\s*$/i);
+        const producto = resolverProductoDigitado(match ? match[2] : linea);
+        const item = (window.__quickCatalog || []).find((entry) => normalizarNombreProducto(entry.nombre) === normalizarNombreProducto(producto || ''));
+        return item?.categoria === 'Torta Chantilly';
+      });
+      document.getElementById('quickTortaOptions')?.classList.toggle('hidden', !contieneTorta);
+      if (!contieneTorta) {
+        document.getElementById('quickExtraChocolate').checked = false;
+        document.getElementById('quickExtraSelva').checked = false;
+        document.getElementById('quickFotoTorta').value = '';
+      }
     }
 
     function obtenerPreciosCatalogo(item) {
@@ -1576,39 +1607,28 @@
         return Number((cant * Number(item.precio)).toFixed(2));
       }
 
-      if (cant >= 75 && precios.x100 > 0) {
-        return Number((cant * (precios.x100 / 100)).toFixed(2));
+      const precioPaquete = cant >= 75 ? precios.x100 : cant >= 50 ? precios.x50 : precios.x25;
+      if (precioPaquete > 0) {
+        const tamanoPaquete = cant >= 75 ? 100 : cant >= 50 ? 50 : 25;
+        return Number((cant * (precioPaquete / tamanoPaquete)).toFixed(2));
       }
 
-      let total = 0;
-      let restante = cant;
-      const paquetes = [
-        { tamano: 100, precio: precios.x100 },
-        { tamano: 50, precio: precios.x50 },
-        { tamano: 25, precio: precios.x25 }
-      ];
-
-      paquetes.forEach(({ tamano, precio }) => {
-        if (!(precio > 0)) return;
-        const paquetesCompletos = Math.floor(restante / tamano);
-        if (paquetesCompletos > 0) {
-          total += paquetesCompletos * precio;
-          restante -= paquetesCompletos * tamano;
-        }
-      });
-
-      if (restante > 0) {
-        if (precios.precioUnitario > 0) {
-          total += restante * precios.precioUnitario;
-        } else if (Number(item.precio || 0) > 0) {
-          total += restante * Number(item.precio);
-        }
-      }
-
-      return Number(total.toFixed(2));
+      const unit = Number(precios.precioUnitario || item.precio || 0);
+      return Number((cant * unit).toFixed(2));
     }
 
     let quickOrderInFlight = false;
+
+    function leerFotoDigitacion() {
+      const archivo = document.getElementById('quickFotoTorta')?.files?.[0];
+      if (!archivo) return Promise.resolve('');
+      return new Promise((resolve, reject) => {
+        const lector = new FileReader();
+        lector.onerror = reject;
+        lector.onload = () => resolve(String(lector.result || ''));
+        lector.readAsDataURL(archivo);
+      });
+    }
 
     async function registrarPedidoRapido(event) {
       event.preventDefault();
@@ -1659,8 +1679,12 @@
       }
 
       const montoTotal = detalles.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
+      if (document.getElementById('quickExtraChocolate')?.checked) detalles.push({ producto_nombre: 'Extra de Chocolate', cantidad: 1, subtotal: 10, paquetes: {} });
+      if (document.getElementById('quickExtraSelva')?.checked) detalles.push({ producto_nombre: 'Extra de Selva Negra', cantidad: 1, subtotal: 10, paquetes: {} });
+      const fotoTorta = await leerFotoDigitacion();
+      const montoConExtras = detalles.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
       const adelanto = Number.isFinite(adelantoInput) ? Math.max(0, adelantoInput) : 0;
-      if (adelanto > montoTotal) {
+      if (adelanto > montoConExtras) {
         mostrarError('El adelanto no puede ser mayor que el total del pedido.', 'quickAdelanto');
         return;
       }
@@ -1676,12 +1700,13 @@
             tipo_cliente: 'Cliente',
             cliente_nombre: `${nombreCliente} ${apellidoCliente}`.trim(),
             celular,
-            monto_total: Number(montoTotal.toFixed(2)),
+            monto_total: Number(montoConExtras.toFixed(2)),
             adelanto: Number(adelanto.toFixed(2)),
             metodo_pago: 'Efectivo',
             fecha_recoge: fechaRecoge,
             hora_recoge: horaRecoge,
             dedicatoria: '',
+            foto_torta: fotoTorta,
             detalles
           })
         });
@@ -1694,6 +1719,9 @@
         document.getElementById('quickCustomerSurname').value = '';
         document.getElementById('quickCustomerPhone').value = '';
         document.getElementById('quickAdelanto').value = '0';
+        document.getElementById('quickExtraChocolate').checked = false;
+        document.getElementById('quickExtraSelva').checked = false;
+        document.getElementById('quickFotoTorta').value = '';
         document.getElementById('quickRestante').value = 'S/. 0.00';
         renderQuickEntryPreview();
         await cargarPedidosGenerales();
@@ -1711,6 +1739,9 @@
     function openDashboard() {
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('adminApp').classList.remove('hidden');
+      const tab = localStorage.getItem(ADMIN_TAB_KEY) || 'general';
+      const tabButton = document.querySelector(`.tab-btn[data-tab="${tab}"]`) || document.querySelector('.tab-btn');
+      if (tabButton) tabButton.click();
       if (!adminStarted) {
         adminStarted = true;
         iniciarAdmin();
@@ -1721,23 +1752,16 @@
       document.getElementById('adminApp').classList.add('hidden');
       document.getElementById('loginScreen').classList.remove('hidden');
       document.getElementById('loginPass').value = '';
+      localStorage.removeItem(AUTH_SESSION_KEY);
     }
 
     document.getElementById('loginForm').addEventListener('submit', (event) => {
       event.preventDefault();
       const usuario = document.getElementById('loginUser').value.trim();
       const password = document.getElementById('loginPass').value.trim();
-      const cred = getStoredCredentials();
-
-      if (!cred) {
-        setStoredCredentials(usuario, password);
-        document.getElementById('cfgUsuario').value = usuario;
-        document.getElementById('cfgPassword').value = password;
-        openDashboard();
-        return;
-      }
-
-      if (usuario === cred.usuario && password === cred.password) {
+      const cuentaValida = ADMIN_ACCOUNTS.some((cuenta) => cuenta.usuario === usuario && cuenta.password === password);
+      if (cuentaValida) {
+        guardarSesionAdmin();
         openDashboard();
         return;
       }
@@ -1749,32 +1773,11 @@
       closeDashboard();
     });
 
-    document.getElementById('resetCredentialsBtn').addEventListener('click', () => {
-      localStorage.removeItem(AUTH_KEY);
-      document.getElementById('loginUser').value = '';
-      document.getElementById('loginPass').value = '';
-      alert('Acceso restablecido. Escribe el nuevo usuario y contraseña para crearlos en esta PC.');
-    });
-
-    document.getElementById('guardarCredenciales').addEventListener('click', () => {
-      const usuario = document.getElementById('cfgUsuario').value.trim();
-      const password = document.getElementById('cfgPassword').value.trim();
-
-      if (!usuario || !password) {
-        alert('Completa usuario y contraseña.');
-        return;
-      }
-
-      setStoredCredentials(usuario, password);
-      document.getElementById('loginUser').value = usuario;
-      document.getElementById('loginPass').value = password;
-      alert('Credenciales actualizadas correctamente.');
-    });
-
     document.querySelectorAll('.tab-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
         document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${btn.dataset.tab}`));
+        localStorage.setItem(ADMIN_TAB_KEY, btn.dataset.tab);
       });
     });
 
@@ -1798,6 +1801,12 @@
     poblarHorasSelector('quickPickupTime', '18:00');
     document.getElementById('quickAdelanto').addEventListener('input', renderQuickEntryPreview);
     document.getElementById('quickEntryInput').addEventListener('input', renderQuickEntryPreview);
+    document.getElementById('quickExtraChocolate').addEventListener('change', renderQuickEntryPreview);
+    document.getElementById('quickExtraSelva').addEventListener('change', renderQuickEntryPreview);
+    ['quickCustomerName', 'quickCustomerSurname', 'quickCustomerPhone', 'quickPickupDate', 'quickPickupTime', 'quickAdelanto', 'quickEntryInput'].forEach((id) => {
+      document.getElementById(id)?.addEventListener('input', guardarEstadoDigitacion);
+      document.getElementById(id)?.addEventListener('change', guardarEstadoDigitacion);
+    });
     document.getElementById('quickEntryForm').addEventListener('submit', registrarPedidoRapido);
 
     async function cargarCatalogoRapido() {
@@ -2216,6 +2225,15 @@
       return PRODUCTOS_COCINA_ORDEN_CANONICOS.slice();
     }
 
+    function filtrarProductosConPedidos(lista, detalles) {
+      if (!detalles.length) return lista;
+      return lista.filter((producto) => detalles.some((detalle) => {
+        const detalleNombre = normalizarNombreProducto(detalle.producto_nombre);
+        const productoNombre = normalizarNombreProducto(producto);
+        return detalleNombre === productoNombre || detalleNombre.includes(productoNombre) || productoNombre.includes(detalleNombre);
+      }));
+    }
+
   function obtenerProductoResolucion(nombre) {
     const directo = resolverNombreCocina(nombre);
     if (directo) return directo;
@@ -2363,13 +2381,13 @@
         {
           contenedorId: 'hojaProduccion',
           titulo: 'BOCADITOS',
-          productosLista: resolverProductoNombres(),
+          productosLista: filtrarProductosConPedidos(resolverProductoNombres(), data.detalles || []),
           extraClass: ''
         },
         {
           contenedorId: 'hojaProduccionExtra',
           titulo: 'SANGUCHES / TRIPLES / PANES',
-          productosLista: obtenerProductosExtraParaProduccion(),
+          productosLista: filtrarProductosConPedidos(obtenerProductosExtraParaProduccion(), data.detalles || []),
           extraClass: ' kitchen-page-updated'
         }
       ]);
@@ -2387,7 +2405,7 @@
   }
 
     async function iniciarAdmin() {
-      loadCredentialFields();
+      cargarEstadoDigitacion();
       renderQuickEntryPreview();
       await cargarCatalogoRapido();
       await cargarInventarioAdmin();
@@ -2408,7 +2426,8 @@
       }, 5000);
     }
 
-    loadCredentialFields();
+    cargarEstadoDigitacion();
+    if (sesionAdminValida()) openDashboard();
   </script>
 </body>
 </html>
