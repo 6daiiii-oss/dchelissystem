@@ -58,6 +58,8 @@ db.serialize(() => {
     hora_recoge TEXT NOT NULL,
     dedicatoria TEXT DEFAULT '',
     foto_torta TEXT DEFAULT '',
+    tipo_comprobante TEXT DEFAULT '',
+    numero_documento TEXT DEFAULT '',
     estado TEXT DEFAULT 'Registrado',
     fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -75,6 +77,12 @@ db.serialize(() => {
       }
       if (!columns.some((col) => col.name === 'nro_operacion')) {
          db.run(`ALTER TABLE pedidos ADD COLUMN nro_operacion TEXT DEFAULT ''`);
+      }
+      if (!columns.some((col) => col.name === 'tipo_comprobante')) {
+        db.run(`ALTER TABLE pedidos ADD COLUMN tipo_comprobante TEXT DEFAULT ''`);
+      }
+      if (!columns.some((col) => col.name === 'numero_documento')) {
+        db.run(`ALTER TABLE pedidos ADD COLUMN numero_documento TEXT DEFAULT ''`);
       }
     }
   });

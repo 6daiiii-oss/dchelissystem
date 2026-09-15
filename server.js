@@ -12,6 +12,15 @@ function normalizarEstadoPedido(estado) {
   return String(estado).trim() === 'Pagado' ? 'Registrado' : String(estado).trim();
 }
 
+function validarComprobante(tipo, numero) {
+  const comprobante = String(tipo || '').trim().toLowerCase();
+  const documento = String(numero || '').trim();
+  if (!comprobante && !documento) return true;
+  if (comprobante === 'boleta') return /^\d{8}$/.test(documento);
+  if (comprobante === 'factura') return /^\d{11}$/.test(documento);
+  return false;
+}
+
 const PRODUCTOS_COCINA = [
   'EMPANADA CARNE', 'EMPANADA POLLO', 'EMPANADA ACEITUNA', 'EMPANADA DE JAMON', 'EMPANADA AJI GALLINA',
   'EMPANADA MIXTA', 'EMPANADA QUESO', 'ENROLLADO ACELGA', 'SOUFLE ALCACHOFA', 'ENROLLADO HOT DOG', 'PIZZAS',
@@ -466,7 +475,11 @@ app.get('/api/pedidos/estado/:codigo', (req, res) => {
 
 // Endpoint para registrar un nuevo pedido y asegurar su visualización en producción
 app.post('/api/pedidos', (req, res) => {
-  const { tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, detalles } = req.body;
+  const { tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, detalles } = req.body;
+
+  if (!validarComprobante(tipo_comprobante, numero_documento)) {
+    return res.status(400).json({ error: 'La boleta requiere DNI de 8 dígitos y la factura requiere RUC de 11 dígitos.' });
+  }
 
   if (!Array.isArray(detalles) || detalles.length === 0) {
     return res.status(400).json({ error: 'El pedido debe incluir al menos un detalle.' });
@@ -477,12 +490,12 @@ app.post('/api/pedidos', (req, res) => {
 
     const pagoPendiente = String(metodo_pago || '').includes('verificación pendiente');
     const estadoInicial = pagoPendiente ? 'Pendiente de verificación de pago' : 'Registrado';
-    const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, nro_operacion, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, nro_operacion, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     const fechaCodigo = String(fecha_recoge || '').replace(/-/g, '');
     const sufijoUnico = crypto.randomBytes(4).toString('hex').toUpperCase();
     const codigoPedido = `PED-${fechaCodigo}-${sufijoUnico}`;
-    db.run(queryPedido, [codigoPedido, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, String(dedicatoria || '').trim(), String(foto_torta || ''), '', estadoInicial], function (err) {
+    db.run(queryPedido, [codigoPedido, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, String(dedicatoria || '').trim(), String(foto_torta || ''), String(tipo_comprobante || '').trim(), String(numero_documento || '').trim(), '', estadoInicial], function (err) {
       if (err) {
         db.run('ROLLBACK');
         return res.status(500).json({ error: err.message });
@@ -570,8 +583,8 @@ setInterval(eliminarPedidosSinPago, 60 * 1000);
 // Endpoint: Obtener Pedidos Generales
 app.get('/api/admin/pedidos', (req, res) => {
   db.all(`
-    SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-           fecha_recoge, hora_recoge, dedicatoria, foto_torta, estado, fecha_registro
+        SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
+          fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro
     FROM pedidos
     ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
   `, [], (err, pedidos) => {
@@ -857,9 +870,15 @@ app.put('/api/admin/pedidos/:id', (req, res) => {
   const fechaRecoge = String(pedido.fecha_recoge || '').trim();
   const horaRecoge = String(pedido.hora_recoge || '').trim();
   const metodoPago = String(pedido.metodo_pago || 'Efectivo').trim();
+  const tipoComprobante = String(pedido.tipo_comprobante || '').trim();
+  const numeroDocumento = String(pedido.numero_documento || '').trim();
   const dedicatoria = String(pedido.dedicatoria || '').trim();
   const fotoTorta = String(pedido.foto_torta || '').trim();
   const detalles = Array.isArray(pedido.detalles) ? pedido.detalles : [];
+
+  if (!validarComprobante(tipoComprobante, numeroDocumento)) {
+    return res.status(400).json({ error: 'La boleta requiere DNI de 8 dígitos y la factura requiere RUC de 11 dígitos.' });
+  }
 
   if (!clienteNombre || !celular || !fechaRecoge || !horaRecoge) {
     return res.status(400).json({ error: 'Faltan datos obligatorios del pedido.' });
@@ -892,11 +911,13 @@ app.put('/api/admin/pedidos/:id', (req, res) => {
     monto_total = ?,
     adelanto = ?,
     metodo_pago = ?,
+    tipo_comprobante = ?,
+    numero_documento = ?,
     fecha_recoge = ?,
     hora_recoge = ?,
     dedicatoria = ?,
     foto_torta = ?
-    WHERE id = ?`, [clienteNombre, celular, montoTotal, adelanto, metodoPago, fechaRecoge, horaRecoge, dedicatoria, fotoTorta, id], function (err) {
+    WHERE id = ?`, [clienteNombre, celular, montoTotal, adelanto, metodoPago, tipoComprobante, numeroDocumento, fechaRecoge, horaRecoge, dedicatoria, fotoTorta, id], function (err) {
     if (err) {
       db.run('ROLLBACK');
       return res.status(500).json({ error: err.message });

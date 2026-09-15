@@ -824,6 +824,20 @@
         </div>
 
         <div class="form-group">
+          <label for="cliTipoComprobante">Comprobante electrónico</label>
+          <select id="cliTipoComprobante" class="form-control">
+            <option value="">Sin comprobante electrónico</option>
+            <option value="boleta">Boleta electrónica (DNI)</option>
+            <option value="factura">Factura electrónica (RUC)</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="cliDocumentoGroup" style="display:none;">
+          <label for="cliNumeroDocumento" id="cliNumeroDocumentoLabel">Número de documento</label>
+          <input type="text" id="cliNumeroDocumento" class="form-control" inputmode="numeric" maxlength="11">
+        </div>
+
+        <div class="form-group">
           <label for="cliFecha">Fecha de Recojo *</label>
           <input type="date" id="cliFecha" class="form-control" required onclick="this.showPicker?.()" onchange="validarHorarioAtencion()">
         </div>
@@ -1270,6 +1284,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       alert('No se pudo leer la foto seleccionada. Prueba con otra imagen.');
     }
   });
+  document.getElementById('cliTipoComprobante')?.addEventListener('change', (event) => {
+    const tipo = event.target.value;
+    const grupo = document.getElementById('cliDocumentoGroup');
+    const etiqueta = document.getElementById('cliNumeroDocumentoLabel');
+    const campo = document.getElementById('cliNumeroDocumento');
+    const visible = tipo === 'boleta' || tipo === 'factura';
+    if (grupo) grupo.style.display = visible ? 'block' : 'none';
+    if (etiqueta) etiqueta.textContent = tipo === 'factura' ? 'RUC' : 'DNI';
+    if (campo) {
+      campo.maxLength = tipo === 'factura' ? 11 : 8;
+      campo.placeholder = tipo === 'factura' ? '20123456789' : '12345678';
+      if (!visible) campo.value = '';
+    }
+  });
   const hoy = new Date().toISOString().split('T')[0];
   const inputFecha = document.getElementById('cliFecha');
   if (inputFecha) inputFecha.setAttribute('min', hoy);
@@ -1343,7 +1371,7 @@ function restaurarEstadoCliente() {
     datosPedidoActual = estado.datosPedidoActual || {};
     fotoTortaData = estado.fotoTortaData || '';
     const cliente = datosPedidoActual.cliente || {};
-    const campos = { nombre: 'cliNombre', apellido: 'cliApellido', telefono: 'cliTelefono', fecha: 'cliFecha', hora: 'cliHora', dedicatoria: 'cliDedicatoria' };
+    const campos = { nombre: 'cliNombre', apellido: 'cliApellido', telefono: 'cliTelefono', fecha: 'cliFecha', hora: 'cliHora', dedicatoria: 'cliDedicatoria', tipo_comprobante: 'cliTipoComprobante', numero_documento: 'cliNumeroDocumento' };
     Object.entries(campos).forEach(([campo, id]) => {
       const elemento = document.getElementById(id);
       if (elemento && cliente[campo] !== undefined) elemento.value = cliente[campo];
@@ -1942,9 +1970,16 @@ function procesarDatosCliente(e) {
   const nombre = document.getElementById('cliNombre').value.trim();
   const apellido = document.getElementById('cliApellido').value.trim();
   const telefono = document.getElementById('cliTelefono').value.trim();
+  const tipoComprobante = document.getElementById('cliTipoComprobante')?.value || '';
+  const numeroDocumento = document.getElementById('cliNumeroDocumento')?.value.trim() || '';
 
   if (!nombre || !apellido || !telefono) {
     mostrarInlineError('Falta nombre, apellido o teléfono.', 'cliNombre');
+    return;
+  }
+
+  if (tipoComprobante && !numeroDocumento) {
+    mostrarInlineError(`Ingresa el ${tipoComprobante === 'factura' ? 'RUC' : 'DNI'} para emitir el comprobante.`, 'cliNumeroDocumento');
     return;
   }
 
@@ -1963,6 +1998,8 @@ function procesarDatosCliente(e) {
     nombre: document.getElementById('cliNombre').value,
     apellido: document.getElementById('cliApellido').value,
     telefono: document.getElementById('cliTelefono').value,
+    tipo_comprobante: tipoComprobante,
+    numero_documento: numeroDocumento,
     fecha: document.getElementById('cliFecha').value,
     hora: document.getElementById('cliHora').value,
     dedicatoria: document.getElementById('cliDedicatoria')?.value.trim() || '',
@@ -2107,6 +2144,8 @@ async function confirmarPagoYape(e) {
     hora_recoge: datosPedidoActual.cliente.hora,
     dedicatoria: datosPedidoActual.cliente.dedicatoria || '',
     foto_torta: fotoTortaData || '',
+    tipo_comprobante: datosPedidoActual.cliente.tipo_comprobante || '',
+    numero_documento: datosPedidoActual.cliente.numero_documento || '',
     detalles: datosPedidoActual.items.map(({ nombre, cantidad, subtotal, paquetes }) => ({
       producto_nombre: nombre,
       cantidad,
@@ -2199,6 +2238,7 @@ function prepararBoletaHTML() {
       <p><strong>Fecha/Hora Recojo:</strong> ${datosPedidoActual.cliente.fecha} ${datosPedidoActual.cliente.hora}</p>
       <p><strong>Monto pagado:</strong> S/. ${Number(datosPedidoActual.adelanto || 0).toFixed(2)}</p>
       <p><strong>Saldo restante:</strong> S/. ${Math.max(0, Number(datosPedidoActual.monto || 0) - Number(datosPedidoActual.adelanto || 0)).toFixed(2)}</p>
+      ${datosPedidoActual.cliente.tipo_comprobante ? `<p><strong>Comprobante:</strong> ${datosPedidoActual.cliente.tipo_comprobante === 'factura' ? 'Factura electrónica - RUC' : 'Boleta electrónica - DNI'} ${datosPedidoActual.cliente.numero_documento || ''}</p>` : ''}
       <p><strong>N° Operación Yape:</strong> ${datosPedidoActual.codigoOperacion}</p>
       ${datosPedidoActual.cliente.dedicatoria ? `<p><strong>Dedicatoria:</strong> ${datosPedidoActual.cliente.dedicatoria}</p>` : ''}
     `;
