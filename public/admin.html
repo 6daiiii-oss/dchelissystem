@@ -1937,7 +1937,7 @@
       if (document.getElementById('quickExtraChocolate')?.checked) detalles.push({ producto_nombre: 'Extra de Chocolate', cantidad: 1, subtotal: 10, paquetes: {} });
       if (document.getElementById('quickExtraSelva')?.checked) detalles.push({ producto_nombre: 'Extra de Selva Negra', cantidad: 1, subtotal: 10, paquetes: {} });
       const fotoTorta = await leerFotoDigitacion();
-      const montoConExtras = detalles.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
+      const montoConExtras = Math.round(detalles.reduce((sum, item) => sum + Number(item.subtotal || 0), 0));
       const adelanto = Number.isFinite(adelantoInput) ? Math.max(0, adelantoInput) : 0;
       if (adelanto > montoConExtras) {
         mostrarError('El adelanto no puede ser mayor que el total del pedido.', 'quickAdelanto');
