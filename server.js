@@ -22,6 +22,7 @@ function validarComprobante(tipo, numero) {
 }
 
 const PRODUCTOS_COCINA = [
+  'Torta Chantilly - Foto', 'Torta Chantilly (30 Porciones aprox)', 'Torta Chantilly (60 Porciones aprox)', 'Torta Chantilly (90 Porciones aprox)',
   'EMPANADA CARNE', 'EMPANADA POLLO', 'EMPANADA ACEITUNA', 'EMPANADA DE JAMON', 'EMPANADA AJI GALLINA',
   'EMPANADA MIXTA', 'EMPANADA QUESO', 'ENROLLADO ACELGA', 'SOUFLE ALCACHOFA', 'ENROLLADO HOT DOG', 'PIZZAS',
   'ALFAJOR', 'ALFAJOR CHOCOLATE', 'BISCOTELAS', 'BROWNIES', 'CISNES', 'COCADAS', 'CONITOS', 'DONAS',
@@ -429,7 +430,7 @@ app.get('/api/macrodroid/callback', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Falta codigo de pedido en la señal de Macrodroid.' });
   }
 
-  db.run(`UPDATE pedidos SET estado = 'Registrado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
+  db.run(`UPDATE pedidos SET estado = 'Registrado', registrado_en = CURRENT_TIMESTAMP, nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
     if (err) return res.status(500).json({ ok: false, error: err.message });
     if (this.changes === 0) return res.status(404).json({ ok: false, error: 'Pedido no encontrado o ya no está pendiente.' });
     return res.json({ ok: true, codigo, estado: 'Registrado', monto, mode: 'macrodroid-callback' });
@@ -446,7 +447,7 @@ app.post('/api/macrodroid/callback', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Falta codigo de pedido en la señal de Macrodroid.' });
   }
 
-  db.run(`UPDATE pedidos SET estado = 'Registrado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
+  db.run(`UPDATE pedidos SET estado = 'Registrado', registrado_en = CURRENT_TIMESTAMP, nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
     if (err) {
       return res.status(500).json({ ok: false, error: err.message });
     }
@@ -475,7 +476,7 @@ app.get('/api/pedidos/estado/:codigo', (req, res) => {
 
 // Endpoint para registrar un nuevo pedido y asegurar su visualización en producción
 app.post('/api/pedidos', (req, res) => {
-  const { tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, detalles } = req.body;
+  const { tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, origen, detalles } = req.body;
 
   if (!validarComprobante(tipo_comprobante, numero_documento)) {
     return res.status(400).json({ error: 'La boleta requiere DNI de 8 dígitos y la factura requiere RUC de 11 dígitos.' });
@@ -489,7 +490,10 @@ app.post('/api/pedidos', (req, res) => {
     db.run('BEGIN TRANSACTION');
 
     const pagoPendiente = String(metodo_pago || '').includes('verificación pendiente');
-    const estadoInicial = pagoPendiente ? 'Pendiente de verificación de pago' : 'Registrado';
+    const esDigitacionSinPago = String(origen || '').trim().toLowerCase() === 'digitacion' && Number(adelanto || 0) <= 0;
+    const estadoInicial = pagoPendiente
+      ? 'Pendiente de verificación de pago'
+      : (esDigitacionSinPago ? 'Pendiente de pago' : 'Registrado');
     const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, nro_operacion, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     const fechaCodigo = String(fecha_recoge || '').replace(/-/g, '');
@@ -580,17 +584,79 @@ function eliminarPedidosSinPago() {
 eliminarPedidosSinPago();
 setInterval(eliminarPedidosSinPago, 60 * 1000);
 
+function eliminarPedidosRegistradosAntiguos() {
+  db.serialize(() => {
+    db.run(`DELETE FROM detalles_pedido WHERE pedido_id IN (
+      SELECT id FROM pedidos
+      WHERE COALESCE(estado, 'Registrado') = 'Registrado'
+        AND COALESCE(registrado_en, fecha_registro) < (CURRENT_TIMESTAMP - INTERVAL '1 year')
+    )`);
+    db.run(`DELETE FROM pedidos
+      WHERE COALESCE(estado, 'Registrado') = 'Registrado'
+        AND COALESCE(registrado_en, fecha_registro) < (CURRENT_TIMESTAMP - INTERVAL '1 year')`, (err) => {
+      if (err) console.error('No se pudieron limpiar pedidos antiguos del historial:', err.message);
+    });
+  });
+}
+
+eliminarPedidosRegistradosAntiguos();
+setInterval(eliminarPedidosRegistradosAntiguos, 60 * 60 * 1000);
+
 // Endpoint: Obtener Pedidos Generales
 app.get('/api/admin/pedidos', (req, res) => {
   db.all(`
         SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-          fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro
+          fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en
     FROM pedidos
+    WHERE COALESCE(estado, 'Registrado') <> 'Registrado'
     ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
   `, [], (err, pedidos) => {
     if (err) return res.status(500).json({ error: err.message });
 
     const pedidosFinales = pedidos.map((pedido) => ({
+      ...pedido,
+      estado: normalizarEstadoPedido(pedido.estado),
+      detalles: []
+    }));
+
+    let index = 0;
+    const cargarDetalles = () => {
+      if (index >= pedidosFinales.length) return res.json({ pedidos: pedidosFinales });
+
+      const pedido = pedidosFinales[index];
+      db.all(`
+        SELECT producto_nombre, cantidad, subtotal, paquetes
+        FROM detalles_pedido
+        WHERE pedido_id = ?
+        ORDER BY id ASC
+      `, [pedido.id], (errDetalle, detalles) => {
+        if (errDetalle) return res.status(500).json({ error: errDetalle.message });
+        pedido.detalles = (detalles || []).map((item) => ({
+          ...item,
+          paquetes: item.paquetes ? JSON.parse(item.paquetes) : {}
+        }));
+        index += 1;
+        cargarDetalles();
+      });
+    };
+
+    cargarDetalles();
+  });
+});
+
+// Endpoint: Obtener Historial de Pedidos
+app.get('/api/admin/historial-pedidos', (req, res) => {
+  db.all(`
+    SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
+      fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en
+    FROM pedidos
+    WHERE COALESCE(estado, 'Registrado') = 'Registrado'
+      AND COALESCE(registrado_en, fecha_registro) >= (CURRENT_TIMESTAMP - INTERVAL '1 year')
+    ORDER BY COALESCE(registrado_en, fecha_registro) DESC, id DESC
+  `, [], (err, pedidos) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    const pedidosFinales = (pedidos || []).map((pedido) => ({
       ...pedido,
       estado: normalizarEstadoPedido(pedido.estado),
       detalles: []
@@ -855,7 +921,12 @@ app.put('/api/admin/pedidos/:id/estado', (req, res) => {
 
   if (!estado) return res.status(400).json({ error: 'Estado requerido' });
 
-  db.run(`UPDATE pedidos SET estado = ? WHERE id = ?`, [estado, id], function (err) {
+  const estadoNormalizado = String(estado).trim();
+
+  db.run(`UPDATE pedidos
+    SET estado = ?,
+        registrado_en = CASE WHEN ? = 'Registrado' THEN CURRENT_TIMESTAMP ELSE NULL END
+    WHERE id = ?`, [estadoNormalizado, estadoNormalizado, id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     if (this.changes === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
     res.json({ success: true, id: Number(id), estado });
@@ -1092,7 +1163,7 @@ app.post('/api/yape-webhook', (req, res) => {
         return res.status(404).json({ ok: false, error: 'No hay pedidos pendientes.' });
       }
       console.log('✅ Pedido pendiente encontrado:', pedido.codigo, '- Actualizando con nro_operacion:', nroOperacion);
-      return db.run(`UPDATE pedidos SET estado = 'Registrado', nro_operacion = ? WHERE id = ?`, [nroOperacion, pedido.id], function (updateErr) {
+      return db.run(`UPDATE pedidos SET estado = 'Registrado', registrado_en = CURRENT_TIMESTAMP, nro_operacion = ? WHERE id = ?`, [nroOperacion, pedido.id], function (updateErr) {
         if (updateErr) {
           console.log('❌ Error en UPDATE:', updateErr.message);
           return res.status(500).json({ ok: false, error: updateErr.message });
@@ -1106,7 +1177,7 @@ app.post('/api/yape-webhook', (req, res) => {
   // Si viene código (formato antiguo o manual), usar eso
   if (codigo) {
     console.log('🔍 Buscando pedido por CODIGO:', codigo);
-    return db.run(`UPDATE pedidos SET estado = 'Registrado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
+    return db.run(`UPDATE pedidos SET estado = 'Registrado', registrado_en = CURRENT_TIMESTAMP, nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
       if (err) {
         console.log('❌ Error en UPDATE:', err.message);
         return res.status(500).json({ error: err.message });
@@ -1148,7 +1219,7 @@ app.post('/api/yape-webhook', (req, res) => {
       return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE nro_operacion = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado') LIMIT 1`, [nroFromText], (err, pedido) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!pedido) return res.status(404).json({ ok: false, status: 'not_found', message: 'No se encontró pedido coincidente con la operación extraída del texto.' });
-        return db.run(`UPDATE pedidos SET estado = 'Registrado', nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE id = ?`, [nroFromText, pedido.id], function (updateErr) {
+        return db.run(`UPDATE pedidos SET estado = 'Registrado', registrado_en = CURRENT_TIMESTAMP, nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE id = ?`, [nroFromText, pedido.id], function (updateErr) {
           if (updateErr) return res.status(500).json({ ok: false, error: updateErr.message });
           return responder(pedido, 'Pedido confirmado por texto de operación.');
         });
