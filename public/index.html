@@ -1733,7 +1733,7 @@ function calcularTotalGlobal() {
     const extra = EXTRAS_TORTA.find((item) => item.id === id);
     if (extra) total += extra.precio;
   });
-  return { total, bocaditos };
+  return { total: Math.round(total), bocaditos };
 }
 
 function actualizarBarraCarrito() {
