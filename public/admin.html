@@ -2123,23 +2123,40 @@
     }
 
     function obtenerResumenPaquetesDesdeCantidades(cantidades) {
-      const total = (Array.isArray(cantidades) ? cantidades : [Number(cantidades) || 0])
-        .reduce((sum, valor) => sum + (Number(valor) || 0), 0);
+      const lista = Array.isArray(cantidades) ? cantidades : [cantidades];
+      const porPedido = {};
 
-      if (total <= 0) return '';
-
-      const resumen = [];
-      let restante = total;
-
-      const orden = [100, 50, 25];
-      orden.forEach((tamano) => {
-        const cuenta = Math.floor(restante / tamano);
-        if (cuenta > 0) resumen.push(`${cuenta}x(${tamano})`);
-        restante = restante % tamano;
+      lista.forEach((detalle, indice) => {
+        if (detalle && typeof detalle === 'object') {
+          const pedidoId = detalle.pedido_id ?? detalle.id ?? `linea-${indice}`;
+          const cantidad = Math.max(0, Math.round(Number(detalle.cantidad || 0)));
+          if (cantidad > 0) porPedido[pedidoId] = (porPedido[pedidoId] || 0) + cantidad;
+          return;
+        }
+        const cantidad = Math.max(0, Math.round(Number(detalle || 0)));
+        if (cantidad > 0) porPedido[`linea-${indice}`] = cantidad;
       });
 
-      if (restante > 0) resumen.push(`${restante}u`);
-      return resumen.join(' + ');
+      let total25 = 0;
+      let total50 = 0;
+      let sobrantes = 0;
+
+      Object.values(porPedido).forEach((unidadesOriginales) => {
+        let unidades = unidadesOriginales;
+        const cajas50 = Math.floor(unidades / 50);
+        total50 += cajas50;
+        unidades %= 50;
+        const cajas25 = Math.floor(unidades / 25);
+        total25 += cajas25;
+        unidades %= 25;
+        sobrantes += unidades;
+      });
+
+      const resumen = [];
+      if (total25) resumen.push(`${total25}x25`);
+      if (total50) resumen.push(`${total50}x50`);
+      if (sobrantes) resumen.push(`${sobrantes}u`);
+      return resumen.join(' ');
     }
 
     function obtenerTextoItem(item) {
@@ -2238,8 +2255,8 @@
       return `
         <div class="pedido-item-editor" data-item-index="${index}" style="display:grid; grid-template-columns: 1.8fr 0.8fr 1fr auto; gap:8px; align-items:center; margin-bottom:10px;">
           <input type="text" name="item_nombre_${index}" value="${(nombre || '').replace(/"/g, '&quot;')}" class="form-control" aria-label="Producto ${index + 1}" />
-          <input type="number" min="1" name="item_cantidad_${index}" value="${cantidad}" class="form-control" aria-label="Cantidad ${index + 1}" />
-          <input type="number" min="0" step="0.01" name="item_subtotal_${index}" value="${subtotal.toFixed(2)}" class="form-control" aria-label="Subtotal ${index + 1}" />
+          <input type="number" min="1" name="item_cantidad_${index}" value="${cantidad}" class="form-control" aria-label="Cantidad ${index + 1}" onfocus="this.select()" />
+          <input type="number" min="0" step="0.01" name="item_subtotal_${index}" value="${subtotal.toFixed(2)}" class="form-control" aria-label="Subtotal ${index + 1}" onfocus="this.select()" />
           <button type="button" class="delete-order-btn" data-remove-item="${index}">Quitar</button>
         </div>
       `;
@@ -2254,7 +2271,7 @@
       const adelanto = Number(pedido.adelanto || 0);
       const restante = Math.max(0, total - adelanto);
       contenido.innerHTML = `
-        <form id="pedidoEdicionForm" data-id="${pedido.id}" onsubmit="guardarPedidoEditado(event)">
+        <form id="pedidoEdicionForm" class="pedido-editor-form" data-id="${pedido.id}" onsubmit="guardarPedidoEditado(event)">
           <div class="pedido-modal-info">
             <div><span class="label">Nombre</span><div class="value"><input type="text" name="cliente_nombre" value="${(pedido.cliente_nombre || '').replace(/"/g, '&quot;')}" class="form-control" /></div></div>
             <div><span class="label">Teléfono</span><div class="value"><input type="tel" name="celular" value="${(pedido.celular || '').replace(/"/g, '&quot;')}" class="form-control" /></div></div>
@@ -2262,8 +2279,8 @@
             <div><span class="label">Hora</span><div class="value"><input type="time" name="hora_recoge" value="${pedido.hora_recoge || '18:00'}" class="form-control" /></div></div>
             <div><span class="label">Método de pago</span><div class="value"><input type="text" name="metodo_pago" value="${(pedido.metodo_pago || 'Efectivo').replace(/"/g, '&quot;')}" class="form-control" /></div></div>
             <div><span class="label">Comprobante</span><div class="value"><select name="tipo_comprobante" class="form-control"><option value="" ${!pedido.tipo_comprobante ? 'selected' : ''}>Sin comprobante</option><option value="boleta" ${pedido.tipo_comprobante === 'boleta' ? 'selected' : ''}>Boleta electrónica (DNI)</option><option value="factura" ${pedido.tipo_comprobante === 'factura' ? 'selected' : ''}>Factura electrónica (RUC)</option></select><input type="text" name="numero_documento" value="${(pedido.numero_documento || '').replace(/"/g, '&quot;')}" placeholder="DNI o RUC" class="form-control" style="margin-top:6px;" /></div></div>
-            <div><span class="label">Monto total</span><div class="value"><input type="number" step="0.01" name="monto_total" value="${total.toFixed(2)}" class="form-control" /></div></div>
-            <div><span class="label">Monto pagado</span><div class="value"><input type="number" step="0.01" name="adelanto" value="${adelanto.toFixed(2)}" class="form-control" /></div></div>
+            <div><span class="label">Monto total</span><div class="value"><input type="number" min="0" step="0.01" name="monto_total" value="${total.toFixed(2)}" class="form-control" onfocus="this.select()" data-editor-recalculate /></div></div>
+            <div><span class="label">Monto pagado</span><div class="value"><input type="number" min="0" step="0.01" name="adelanto" value="${adelanto.toFixed(2)}" class="form-control" onfocus="this.select()" data-editor-recalculate /></div></div>
             <div><span class="label">Saldo restante</span><div class="value"><input type="number" step="0.01" name="restante" value="${restante.toFixed(2)}" class="form-control" readonly /></div></div>
           </div>
           ${pedido.dedicatoria !== undefined ? `<div class="pedido-modal-section"><h4>Dedicatoria / indicaciones</h4><textarea name="dedicatoria" class="form-control" rows="3">${(pedido.dedicatoria || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></div>` : ''}
@@ -2287,6 +2304,14 @@
           if (fila) fila.remove();
         });
       });
+      const formulario = document.getElementById('pedidoEdicionForm');
+      if (formulario) {
+        formulario.querySelectorAll('[data-editor-recalculate]').forEach((campo) => {
+          campo.addEventListener('input', () => actualizarRestanteEditor(formulario));
+          campo.addEventListener('focus', () => campo.select());
+        });
+        actualizarRestanteEditor(formulario);
+      }
       document.getElementById('pedidoDetalleModal').classList.add('active');
     }
 
@@ -2305,6 +2330,12 @@
       });
     }
 
+    function actualizarRestanteEditor(form) {
+      if (!form) return;
+      const total = Math.max(0, Number(form.elements.monto_total?.value || 0));
+      const adelanto = Math.max(0, Number(form.elements.adelanto?.value || 0));
+      if (form.elements.restante) form.elements.restante.value = Math.max(0, total - adelanto).toFixed(2);
+    }
     async function guardarPedidoEditado(event) {
       event.preventDefault();
       const form = event.currentTarget;
@@ -2992,16 +3023,15 @@
             filaHtml += cantidadCliente > 0 ? `<td class="qty-cell">${cantidadCliente}</td>` : '<td></td>';
           });
 
-          const cantidadesProducto = (detalles || [])
+          const detallesProducto = (detalles || [])
             .filter((detalle) => {
               const match = obtenerProductoResolucion(detalle.producto_nombre);
               const nombreDetalle = match || detalle.producto_nombre;
               return normalizarNombreProducto(nombreDetalle) === normalizarNombreProducto(prod);
             })
-            .map((detalle) => Number(detalle.cantidad || 0))
-            .filter((cantidad) => cantidad > 0);
+            .filter((detalle) => Number(detalle.cantidad || 0) > 0);
 
-          const resumen = obtenerResumenPaquetesDesdeCantidades(cantidadesProducto);
+          const resumen = obtenerResumenPaquetesDesdeCantidades(detallesProducto);
 
           if (mostrarTotal) {
             filaHtml += `<td class="pack-cell">${resumen ? `<div class="pack-badge">${resumen}</div>` : ''}</td>`;
