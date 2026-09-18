@@ -178,6 +178,53 @@
       flex-wrap: wrap;
     }
 
+    .search-input {
+      min-width: 280px;
+      width: min(360px, 100%);
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    .search-input:focus {
+      border-color: #b75e36;
+      box-shadow: 0 0 0 3px rgba(183,94,54,.12);
+    }
+
+    .history-order-card {
+      opacity: 0.58;
+      filter: grayscale(0.3);
+      background: #f7f7f7;
+      border-top-color: #98a2b3 !important;
+      border-color: #d0d5dd !important;
+    }
+
+    .history-order-card:hover {
+      transform: none;
+      box-shadow: 0 3px 12px rgba(16, 24, 40, 0.05);
+    }
+
+    .history-order-card .badge.status {
+      background: #eaecf0;
+      color: #667085;
+    }
+
+    .history-locked-note {
+      margin-top: 12px;
+      padding: 9px 10px;
+      border: 1px dashed #cbd5e1;
+      border-radius: 9px;
+      background: #f8fafc;
+      color: #667085;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-align: center;
+    }
+
     input[type="date"] {
       padding: 10px 12px;
       border-radius: 10px;
@@ -830,8 +877,10 @@
       .admin-shell { padding: 0; }
       body.printing-cocina #boletasTriplesImpresion,
       body.printing-cocina #panel-general,
+      body.printing-cocina #panel-historial,
       #panel-digitacion,
-      #panel-inventario { display: none !important; }
+      #panel-inventario,
+      #panel-historial { display: none !important; }
       body.printing-cocina #panel-cocina { display: block !important; }
       .panel { border: none; padding: 0; box-shadow: none; }
       .kitchen-page {
@@ -964,13 +1013,17 @@
       <button class="tab-btn" data-tab="digitacion">Digitación</button>
       <button class="tab-btn" data-tab="cocina">Cocina</button>
       <button class="tab-btn" data-tab="inventario">Inventario</button>
+      <button class="tab-btn" data-tab="historial">Historial</button>
     </nav>
 
     <section id="panel-general" class="tab-panel active">
       <div class="panel">
         <div class="header-row">
           <h3>Pedidos generales</h3>
-          <button class="btn btn-warning no-print" type="button" onclick="imprimirTresBoletas()">Imprimir todos los pedidos</button>
+          <div class="controls no-print">
+            <input id="buscarPedidosGenerales" class="search-input" type="search" placeholder="Buscar por nombre del cliente" autocomplete="off" />
+            <button class="btn btn-warning" type="button" onclick="imprimirTresBoletas()">Imprimir todos los pedidos</button>
+          </div>
         </div>
         <div id="pedidosGeneral" class="cards-grid"></div>
       </div>
@@ -1103,6 +1156,19 @@
       </div>
     </section>
 
+    <section id="panel-historial" class="tab-panel">
+      <div class="panel">
+        <div class="header-row">
+          <div>
+            <h3>Historial de pedidos</h3>
+            <div style="margin-top:5px; color:var(--muted); font-size:.82rem;">Pedidos marcados como registrados. Se conservan hasta un máximo de 1 año.</div>
+          </div>
+          <input id="buscarHistorialPedidos" class="search-input no-print" type="search" placeholder="Buscar por nombre del cliente" autocomplete="off" />
+        </div>
+        <div id="pedidosHistorial" class="cards-grid"></div>
+      </div>
+    </section>
+
   </div>
 
   <div id="pedidoDetalleModal" class="pedido-modal" onclick="cerrarDetallePedido(event)">
@@ -1125,6 +1191,7 @@
     const ADMIN_TAB_KEY = 'dchelis_admin_tab_v1';
     const ADMIN_FORM_KEY = 'dchelis_admin_digitacion_v1';
     const PRODUCTOS_COCINA_ORDEN = [
+      'Torta Chantilly - Foto', 'Torta Chantilly (30 Porciones aprox)', 'Torta Chantilly (60 Porciones aprox)', 'Torta Chantilly (90 Porciones aprox)',
       'EMPANADA CARNE', 'EMPANADA POLLO', 'EMPANADA ACEITUNA', 'EMPANADA DE JAMON', 'EMPANADA AJI GALLINA',
       'EMPANADA MIXTA', 'EMPANADA QUESO', 'ENROLLADO ACELGA', 'SOUFLE ALCACHOFA', 'ENROLLADO HOT DOG', 'PIZZAS',
       'ALFAJOR', 'ALFAJOR CHOCOLATE', 'BISCOTELAS', 'BROWNIES', 'CISNES', 'COCADAS', 'CONITOS', 'DONAS',
@@ -1152,6 +1219,11 @@
     let actualizacionEnCurso = false;
     let audioContext = null;
     let pedidosDisponibles = new Map();
+    let pedidosHistorialDisponibles = new Map();
+    let filtroPedidosGenerales = '';
+    let filtroHistorialPedidos = '';
+    let buscarPedidosTimer = null;
+    let buscarHistorialTimer = null;
     window.__quickCatalog = [];
 
     const PRODUCTOS_COCINA_EXTRA = [
@@ -1846,6 +1918,7 @@
             numero_documento: numeroDocumento,
             dedicatoria: '',
             foto_torta: fotoTorta,
+            origen: 'digitacion',
             detalles
           })
         });
@@ -1921,6 +1994,18 @@
         document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${btn.dataset.tab}`));
         localStorage.setItem(ADMIN_TAB_KEY, btn.dataset.tab);
       });
+    });
+
+    document.getElementById('buscarPedidosGenerales')?.addEventListener('input', (event) => {
+      filtroPedidosGenerales = event.target.value || '';
+      clearTimeout(buscarPedidosTimer);
+      buscarPedidosTimer = setTimeout(() => cargarPedidosGenerales(), 250);
+    });
+
+    document.getElementById('buscarHistorialPedidos')?.addEventListener('input', (event) => {
+      filtroHistorialPedidos = event.target.value || '';
+      clearTimeout(buscarHistorialTimer);
+      buscarHistorialTimer = setTimeout(() => cargarHistorialPedidos(), 250);
     });
 
     function poblarHorasSelector(selectorId, valorPorDefecto = '18:00') {
@@ -2029,13 +2114,14 @@
 
     function formatearFecha(fecha) {
       if (!fecha) return 'Fecha pendiente';
-      const partes = fecha.split('-').map(Number);
+      const partes = String(fecha).split('-').map(Number);
       if (partes.length !== 3 || partes.some(Number.isNaN)) return fecha;
-      return new Intl.DateTimeFormat('es-PE', {
-        day: '2-digit', month: 'long', year: 'numeric'
-      }).format(new Date(partes[0], partes[1] - 1, partes[2])).toUpperCase();
+      let texto = new Intl.DateTimeFormat('es-PE', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      }).format(new Date(partes[0], partes[1] - 1, partes[2]));
+      texto = texto.replace(/\bseptiembre\b/i, 'setiembre');
+      return texto.charAt(0).toUpperCase() + texto.slice(1);
     }
-
     function alternarPedido(tarjeta, event) {
       const pedido = pedidosDisponibles.get(Number(tarjeta.dataset.pedidoId));
       if (pedido) abrirDetallePedido(pedido.id);
@@ -2054,7 +2140,10 @@
     }
 
     function abrirDetallePedido(id) {
-      const pedido = pedidosDisponibles.get(Number(id));
+      const pedidoActivo = pedidosDisponibles.get(Number(id));
+      const pedidoArchivado = pedidosHistorialDisponibles.get(Number(id));
+      const pedido = pedidoActivo || pedidoArchivado;
+      const esHistorial = !pedidoActivo && !!pedidoArchivado;
       if (!pedido) return;
       const contenido = document.getElementById('detallePedidoContenido');
       const codigo = document.getElementById('detallePedidoCodigo');
@@ -2078,16 +2167,20 @@
           <h4>Productos del pedido</h4>
           <ul class="items-list">${(pedido.detalles || []).map(item => `<li><span class="item-name">${item.producto_nombre}</span><span class="item-qty">${obtenerTextoItem(item)}</span></li>`).join('') || '<li>Sin productos</li>'}</ul>
         </div>
-        <div class="order-actions">
-          <label>Estado del pedido</label>
-          <select class="status-select" data-id="${pedido.id}" onchange="actualizarEstadoPedido(this)">
-            ${['Pendiente de verificación de pago', 'Registrado', 'En preparación', 'Listo para despacho', 'Despachado (D\'chelis)'].map(estado => `<option value="${estado}" ${estado === (pedido.estado || 'Registrado') ? 'selected' : ''}>${estado}</option>`).join('')}
-          </select>
-          <button type="button" class="btn btn-ghost" style="margin-top:10px; width:100%;" onclick="abrirEditorPedido(${pedido.id})">Editar pedido</button>
-          <button type="button" class="btn btn-ghost" style="margin-top:10px; width:100%;" onclick="descargarBoletaAdmin(${pedido.id})">Descargar orden de pedido</button>
-          <button type="button" class="btn btn-warning" style="margin-top:10px; width:100%;" onclick="imprimirOrdenPedido(${pedido.id})">Imprimir orden de pedido</button>
-          <button type="button" class="delete-order-btn" style="margin-top:10px;" onclick="eliminarPedidoDesdeDetalle(${pedido.id})">Eliminar pedido</button>
-        </div>
+        ${esHistorial ? `
+          <div class="history-locked-note">Pedido archivado · solo lectura</div>
+        ` : `
+          <div class="order-actions">
+            <label>Estado del pedido</label>
+            <select class="status-select" data-id="${pedido.id}" onchange="actualizarEstadoPedido(this)">
+              ${['Pendiente de verificación de pago', 'Registrado', 'En preparación', 'Listo para despacho', 'Despachado (D\'chelis)'].map(estado => `<option value="${estado}" ${estado === (pedido.estado || 'Registrado') ? 'selected' : ''}>${estado}</option>`).join('')}
+            </select>
+            <button type="button" class="btn btn-ghost" style="margin-top:10px; width:100%;" onclick="abrirEditorPedido(${pedido.id})">Editar pedido</button>
+            <button type="button" class="btn btn-ghost" style="margin-top:10px; width:100%;" onclick="descargarBoletaAdmin(${pedido.id})">Descargar orden de pedido</button>
+            <button type="button" class="btn btn-warning" style="margin-top:10px; width:100%;" onclick="imprimirOrdenPedido(${pedido.id})">Imprimir orden de pedido</button>
+            <button type="button" class="delete-order-btn" style="margin-top:10px;" onclick="eliminarPedidoDesdeDetalle(${pedido.id})">Eliminar pedido</button>
+          </div>
+        `}
       `;
       document.getElementById('pedidoDetalleModal').classList.add('active');
     }
@@ -2236,7 +2329,7 @@
       const tarjeta = document.querySelector(`[data-pedido-id="${id}"]`);
       if (tarjeta) tarjeta.className = `order-card estado-${normalizarEstadoClase(estado)}`;
       document.getElementById('pedidoDetalleModal').classList.remove('active');
-      await cargarPedidosGenerales();
+      await Promise.all([cargarPedidosGenerales(), cargarHistorialPedidos()]);
     }
 
     async function eliminarPedidoDesdeDetalle(id) {
@@ -2247,7 +2340,7 @@
         return;
       }
       document.getElementById('pedidoDetalleModal').classList.remove('active');
-      await cargarPedidosGenerales();
+      await Promise.all([cargarPedidosGenerales(), cargarHistorialPedidos()]);
       await cargarMatriz();
     }
 
@@ -2412,6 +2505,10 @@
         const fechaActual = document.getElementById('fecha_filtro').value;
         pedidosDisponibles = new Map((data.pedidos || []).map(pedido => [pedido.id, pedido]));
         const idsActuales = new Set((data.pedidos || []).map(pedido => pedido.id));
+        const terminoBusqueda = normalizarNombreProducto(filtroPedidosGenerales);
+        const pedidosFiltrados = terminoBusqueda
+          ? (data.pedidos || []).filter((pedido) => normalizarNombreProducto(pedido.cliente_nombre || '').includes(terminoBusqueda))
+          : (data.pedidos || []);
         const detectarNuevos = pedidosConocidos !== null && fechaPedidosConocida === fechaActual;
         const pedidosNuevos = detectarNuevos
           ? new Set([...idsActuales].filter(id => !pedidosConocidos.has(id)))
@@ -2422,7 +2519,14 @@
           return;
         }
 
-        const grupos = data.pedidos.reduce((acc, pedido) => {
+        if (!pedidosFiltrados.length) {
+          contenedor.innerHTML = '<p style="color:#667085;">No hay pedidos que coincidan con la búsqueda.</p>';
+          pedidosConocidos = idsActuales;
+          fechaPedidosConocida = fechaActual;
+          return;
+        }
+
+        const grupos = pedidosFiltrados.reduce((acc, pedido) => {
           const fecha = pedido.fecha_recoge || 'Sin fecha';
           if (!acc[fecha]) acc[fecha] = [];
           acc[fecha].push(pedido);
@@ -2538,8 +2642,7 @@
               });
 
               if (!response.ok) throw new Error('No se pudo actualizar el estado');
-              const badge = event.target.closest('.order-card')?.querySelector('.badge.status');
-              if (badge) badge.textContent = estado;
+              await Promise.all([cargarPedidosGenerales(), cargarHistorialPedidos()]);
             } catch (error) {
               alert('No se pudo actualizar el estado del pedido.');
               event.target.value = event.target.dataset.previous || 'Registrado';
@@ -2580,6 +2683,73 @@
 
       } catch (error) {
         document.getElementById('pedidosGeneral').innerHTML = '<p style="color:#b42318;">Error al cargar los pedidos.</p>';
+      }
+    }
+
+    async function cargarHistorialPedidos() {
+      try {
+        const res = await fetch('/api/admin/historial-pedidos');
+        const data = await res.json();
+        const contenedor = document.getElementById('pedidosHistorial');
+        if (!contenedor) return;
+
+        const pedidos = data.pedidos || [];
+        pedidosHistorialDisponibles = new Map(pedidos.map((pedido) => [pedido.id, pedido]));
+        const terminoBusqueda = normalizarNombreProducto(filtroHistorialPedidos);
+        const pedidosFiltrados = terminoBusqueda
+          ? pedidos.filter((pedido) => normalizarNombreProducto(pedido.cliente_nombre || '').includes(terminoBusqueda))
+          : pedidos;
+
+        if (!pedidosFiltrados.length) {
+          contenedor.innerHTML = pedidos.length
+            ? '<p style="color:#667085;">No hay pedidos que coincidan con la búsqueda.</p>'
+            : '<p style="color:#667085;">No hay pedidos registrados en el historial durante el último año.</p>';
+          return;
+        }
+
+        const grupos = pedidosFiltrados.reduce((acc, pedido) => {
+          const fecha = pedido.fecha_recoge || 'Sin fecha';
+          if (!acc[fecha]) acc[fecha] = [];
+          acc[fecha].push(pedido);
+          return acc;
+        }, {});
+
+        const fechas = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
+        contenedor.innerHTML = fechas.map((fecha) => {
+          const grupo = grupos[fecha].sort((a, b) =>
+            String(b.registrado_en || b.fecha_registro || '').localeCompare(String(a.registrado_en || a.fecha_registro || ''))
+            || Number(b.id) - Number(a.id)
+          );
+
+          return `
+            <section class="date-group">
+              <h4 class="date-group-title">${fecha === 'Sin fecha' ? fecha : formatearFecha(fecha)}</h4>
+              <div class="cards-grid">
+                ${grupo.map((pedido) => {
+                  const items = (pedido.detalles || []).map(item => `
+                    <li><span class="item-name">${item.producto_nombre}</span><span class="item-qty">${obtenerTextoItem(item)}</span></li>
+                  `).join('');
+                  return `
+                    <article data-pedido-id="${pedido.id}" class="order-card history-order-card" onclick="abrirDetallePedido(${pedido.id})" tabindex="0">
+                      <div class="order-head"><span class="badge status">Archivado</span></div>
+                      <span class="order-code">${pedido.codigo || 'PED-' + pedido.id}</span>
+                      <ul class="order-request">${items || '<li><span class="item-name">Sin productos</span></li>'}</ul>
+                      <div class="order-schedule">
+                        <span class="order-summary-line">
+                          <span>${pedido.cliente_nombre || 'Sin nombre'}<small class="card-date">${pedido.fecha_recoge ? formatearFecha(pedido.fecha_recoge) : 'Fecha pendiente'}</small></span>
+                        </span>
+                        <strong class="schedule-time">${pedido.hora_recoge || '--:--'}</strong>
+                      </div>
+                    </article>
+                  `;
+                }).join('')}
+              </div>
+            </section>
+          `;
+        }).join('');
+      } catch (error) {
+        document.getElementById('pedidosHistorial')?.replaceChildren();
+        console.error('No se pudo cargar el historial:', error);
       }
     }
 
@@ -2824,6 +2994,7 @@
       await cargarCatalogoRapido();
       await cargarInventarioAdmin();
       await cargarPedidosGenerales();
+      await cargarHistorialPedidos();
       await cargarMatriz();
       const fechaInventario = document.getElementById('inventarioFecha');
       if (fechaInventario && !fechaInventario.value) fechaInventario.value = new Date().toISOString().slice(0, 10);
@@ -2833,7 +3004,7 @@
         if (document.hidden || actualizacionEnCurso) return;
         actualizacionEnCurso = true;
         try {
-          await Promise.all([cargarPedidosGenerales(), cargarMatriz()]);
+          await Promise.all([cargarPedidosGenerales(), cargarHistorialPedidos(), cargarMatriz()]);
         } finally {
           actualizacionEnCurso = false;
         }
