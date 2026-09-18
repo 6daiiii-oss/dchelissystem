@@ -190,6 +190,17 @@
       outline: none;
     }
 
+    .general-order-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: nowrap;
+    }
+
+    .general-order-actions .search-input {
+      flex: 1 1 320px;
+    }
+
     .search-input:focus {
       border-color: #b75e36;
       box-shadow: 0 0 0 3px rgba(183,94,54,.12);
@@ -1020,7 +1031,7 @@
       <div class="panel">
         <div class="header-row">
           <h3>Pedidos generales</h3>
-          <div class="controls no-print">
+          <div class="general-order-actions no-print">
             <input id="buscarPedidosGenerales" class="search-input" type="search" placeholder="Buscar por nombre del cliente" autocomplete="off" />
             <button class="btn btn-warning" type="button" onclick="imprimirTresBoletas()">Imprimir todos los pedidos</button>
           </div>
@@ -1191,7 +1202,7 @@
     const ADMIN_TAB_KEY = 'dchelis_admin_tab_v1';
     const ADMIN_FORM_KEY = 'dchelis_admin_digitacion_v1';
     const PRODUCTOS_COCINA_ORDEN = [
-      'Torta Chantilly - Foto', 'Torta Chantilly (30 Porciones aprox)', 'Torta Chantilly (60 Porciones aprox)', 'Torta Chantilly (90 Porciones aprox)',
+      'Torta Chantilly - Foto', 'Torta Chantilly (30 Porciones aprox)', 'Torta Chantilly (60 Porciones aprox)', 'Torta Chantilly (90 Porciones aprox)', 'Torta Tres Leches',
       'EMPANADA CARNE', 'EMPANADA POLLO', 'EMPANADA ACEITUNA', 'EMPANADA DE JAMON', 'EMPANADA AJI GALLINA',
       'EMPANADA MIXTA', 'EMPANADA QUESO', 'ENROLLADO ACELGA', 'SOUFLE ALCACHOFA', 'ENROLLADO HOT DOG', 'PIZZAS',
       'ALFAJOR', 'ALFAJOR CHOCOLATE', 'BISCOTELAS', 'BROWNIES', 'CISNES', 'COCADAS', 'CONITOS', 'DONAS',
@@ -2808,25 +2819,34 @@
     function filtrarProductosConPedidos(lista, detalles) {
       if (!detalles.length) return lista;
       return lista.filter((producto) => detalles.some((detalle) => {
-        const detalleNombre = normalizarNombreProducto(detalle.producto_nombre);
-        const productoNombre = normalizarNombreProducto(producto);
-        return detalleNombre === productoNombre || detalleNombre.includes(productoNombre) || productoNombre.includes(detalleNombre);
+        const resuelto = obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre;
+        return normalizarNombreProducto(resuelto) === normalizarNombreProducto(producto);
       }));
     }
 
   function obtenerProductoResolucion(nombre) {
+    const clave = normalizarNombreProducto(nombre);
+    const extras = obtenerProductosExtraParaProduccion();
+
+    const extraExacto = extras.find((producto) => normalizarNombreProducto(producto) === clave);
+    if (extraExacto) return extraExacto;
+
+    const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
+    const catalogoExacto = catalogo.find((item) => normalizarNombreProducto(item.nombre || '') === clave);
+    if (catalogoExacto && ['Sandwichitos', 'Mini Triples', 'Piqueos', 'Pan Gourmet', 'Pan Especial'].includes(String(catalogoExacto.categoria || ''))) {
+      return catalogoExacto.nombre;
+    }
+
     const directo = resolverNombreCocina(nombre);
     if (directo) return directo;
 
-    const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
-    const clave = normalizarNombreProducto(nombre);
     const matchCatalogo = catalogo.find((item) => {
       const nombreCatalogo = normalizarNombreProducto(item.nombre || '');
       return nombreCatalogo === clave || clave.includes(nombreCatalogo) || nombreCatalogo.includes(clave);
     });
     if (matchCatalogo) return matchCatalogo.nombre;
 
-    return obtenerProductosExtraParaProduccion().find((producto) => {
+    return extras.find((producto) => {
       const normalizado = normalizarNombreProducto(producto);
       return normalizado === clave || clave.includes(normalizado) || normalizado.includes(clave);
     }) || null;
