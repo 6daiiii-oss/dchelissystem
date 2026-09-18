@@ -252,7 +252,8 @@
       align-items: start;
     }
 
-    #pedidosGeneral.cards-grid { display: block; }
+    #pedidosGeneral.cards-grid,
+    #pedidosHistorial.cards-grid { display: block; }
     #pedidosGeneral .date-group .cards-grid,
     #pedidosHistorial .date-group .cards-grid {
       grid-template-columns: repeat(3, minmax(320px, 1fr));
@@ -2492,7 +2493,131 @@
     }
 
     function imprimirOrdenPedido(id) {
-      imprimirTresBoletas(Number(id));
+      const pedido = pedidosDisponibles.get(Number(id));
+      if (!pedido || !window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
+        alert('No se pudo preparar la impresión.');
+        return;
+      }
+
+      const { jsPDF } = window.jspdf;
+      const medida = 80;
+      const margen = 5;
+      const anchoContenido = medida - (margen * 2);
+      const medidor = new jsPDF({ unit: 'mm', format: [medida, 200], orientation: 'portrait' });
+
+      const montoTotal = Number(pedido.monto_total || 0);
+      const montoPagado = Math.min(montoTotal, Math.max(0, Number(pedido.adelanto || 0)));
+      const saldoRestante = Math.max(0, montoTotal - montoPagado);
+      const filas = (pedido.detalles || []).map((item) => [
+        String(item.cantidad || 0),
+        String(item.producto_nombre || '-'),
+        `S/. ${Number(item.subtotal || 0).toFixed(2)}`
+      ]);
+
+      let yContenido = 39;
+      if (pedido.tipo_comprobante) yContenido += 5;
+      if (pedido.dedicatoria) {
+        const lineasDedicatoria = medidor.splitTextToSize(`Dedicatoria: ${pedido.dedicatoria}`, anchoContenido);
+        yContenido += Math.max(4, lineasDedicatoria.length * 3.4) + 4;
+      }
+
+      let alturaTabla = 8;
+      filas.forEach((fila) => {
+        const lineas = medidor.splitTextToSize(fila[1], 38).length;
+        alturaTabla += Math.max(6, lineas * 3.2 + 2.4);
+      });
+      if (!filas.length) alturaTabla += 7;
+
+      const altura = Math.max(110, Math.ceil(yContenido + alturaTabla + 36));
+      const pdf = new jsPDF({ unit: 'mm', format: [medida, altura], orientation: 'portrait' });
+
+      pdf.setTextColor(23, 60, 43);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.text("PASTELERIA D'CHELIS", medida / 2, 9, { align: 'center' });
+      pdf.setFontSize(8.8);
+      pdf.text('ORDEN DE PEDIDO', medida / 2, 13.5, { align: 'center' });
+      pdf.setDrawColor(23, 60, 43);
+      pdf.line(margen, 16, medida - margen, 16);
+
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(7.8);
+      pdf.text(`Código: ${pedido.codigo || `PED-${pedido.id}`}`, margen, 22);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`Cliente: ${pedido.cliente_nombre || '-'}`, margen, 27);
+      pdf.text(`Teléfono: ${pedido.celular || '-'}`, margen, 32);
+      pdf.text(`Recojo: ${pedido.fecha_recoge || '-'} ${pedido.hora_recoge || ''}`, margen, 37);
+
+      let siguienteY = 37;
+      if (pedido.tipo_comprobante) {
+        siguienteY += 5;
+        pdf.text(`${pedido.tipo_comprobante === 'factura' ? 'Factura - RUC' : 'Boleta - DNI'}: ${pedido.numero_documento || '-'}`, margen, siguienteY);
+      }
+
+      if (pedido.dedicatoria) {
+        siguienteY += 5;
+        const dedicatoria = pdf.splitTextToSize(`Dedicatoria: ${pedido.dedicatoria}`, anchoContenido);
+        pdf.text(dedicatoria, margen, siguienteY);
+        siguienteY += Math.max(3.5, dedicatoria.length * 3.4) + 1;
+      }
+
+      const tableStartY = siguienteY + 4;
+      pdf.autoTable({
+        startY: tableStartY,
+        margin: { left: margen, right: margen },
+        tableWidth: anchoContenido,
+        head: [['Cant.', 'Descripción', 'Subtotal']],
+        body: filas.length ? filas : [['-', 'Sin productos', '-']],
+        theme: 'grid',
+        styles: {
+          font: 'helvetica',
+          fontSize: 7,
+          cellPadding: 1.4,
+          textColor: [15, 23, 42],
+          overflow: 'linebreak',
+          lineColor: [203, 213, 225],
+          lineWidth: 0.2
+        },
+        headStyles: {
+          fillColor: [240, 240, 240],
+          textColor: [23, 60, 43],
+          fontStyle: 'bold'
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 42 },
+          2: { cellWidth: 18, halign: 'right' }
+        }
+      });
+
+      let pagoY = pdf.lastAutoTable.finalY + 6;
+      pdf.setDrawColor(203, 213, 225);
+      pdf.line(margen, pagoY - 3, medida - margen, pagoY - 3);
+      pdf.setTextColor(23, 60, 43);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.text(`Total: S/. ${montoTotal.toFixed(2)}`, medida - margen, pagoY + 2, { align: 'right' });
+      pdf.text(`Pagado: S/. ${montoPagado.toFixed(2)}`, medida - margen, pagoY + 7, { align: 'right' });
+      pdf.text(`Saldo: S/. ${saldoRestante.toFixed(2)}`, medida - margen, pagoY + 12, { align: 'right' });
+
+      if (saldoRestante <= 0.001 && montoTotal > 0) {
+        pdf.setTextColor(21, 128, 61);
+        pdf.setFontSize(8.5);
+        pdf.text('CANCELADO', medida / 2, pagoY + 19, { align: 'center' });
+        pagoY += 7;
+      }
+
+      pdf.setTextColor(102, 112, 133);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(6.3);
+      pdf.text('Documento interno de producción', medida / 2, pagoY + 24, { align: 'center' });
+
+      pdf.autoPrint();
+      const printWindow = window.open(pdf.output('bloburl'), '_blank');
+      if (!printWindow) {
+        alert('El navegador bloqueó la ventana de impresión. Permite ventanas emergentes para este panel.');
+      }
     }
 
     function imprimirTresBoletas(pedidoId = null) {
