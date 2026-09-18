@@ -254,7 +254,7 @@
 
     #pedidosGeneral.cards-grid { display: block; }
     .date-group .cards-grid {
-      grid-template-columns: repeat(auto-fill, minmax(280px, 320px));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .order-card {
@@ -367,6 +367,31 @@
 
     .order-card.is-open .order-summary-line::after { content: 'Ocultar detalle'; }
     .order-details { display: none; }
+
+    .order-customer-name { display: block; color: var(--text); font-size: 1rem; font-weight: 800; line-height: 1.15; }
+    .payment-summary { margin: 0 0 12px; padding: 10px 12px; border: 1px solid #eadfd6; border-radius: 11px; background: #fffaf5; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .payment-summary > div:not(.payment-cancelled) { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .78rem; }
+    .payment-summary span { color: var(--muted); font-weight: 700; }
+    .payment-summary strong { color: var(--text); font-size: .85rem; font-weight: 800; }
+    .payment-summary.payment-complete { grid-template-columns: 1fr; border-color: #86efac; background: #ecfdf3; }
+    .payment-cancelled { text-align: center; color: #15803d; font-size: .95rem; font-weight: 900; letter-spacing: .04em; }
+    .pedido-editor-form { display: grid; gap: 16px; }
+    .pedido-editor-section { padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+    .pedido-editor-section h4 { margin-bottom: 12px; color: var(--brand); }
+    .pedido-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .pedido-editor-field { display: flex; flex-direction: column; gap: 6px; }
+    .pedido-editor-field.full { grid-column: 1 / -1; }
+    .pedido-editor-field label { font-size: .75rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .pedido-editor-form input, .pedido-editor-form select, .pedido-editor-form textarea { width: 100%; border: 1px solid #eadfd6; border-radius: 11px; padding: 11px 13px; min-height: 44px; background: #fff; color: var(--text); font: inherit; font-size: .92rem; font-weight: 600; outline: none; }
+    .pedido-editor-form textarea { resize: vertical; min-height: 90px; }
+    .pedido-editor-form input:focus, .pedido-editor-form select:focus, .pedido-editor-form textarea:focus { border-color: #b75e36; box-shadow: 0 0 0 3px rgba(183,94,54,.12); }
+    .pedido-editor-items { display: grid; gap: 10px; }
+    .pedido-item-editor { display: grid; grid-template-columns: minmax(0, 1.8fr) 110px 140px auto; gap: 8px; align-items: end; padding: 10px; border: 1px solid #eadfd6; border-radius: 11px; background: #fffaf5; }
+    .pedido-item-editor .editor-item-field { display: flex; flex-direction: column; gap: 5px; }
+    .pedido-item-editor .editor-item-field span { color: var(--muted); font-size: .68rem; font-weight: 800; text-transform: uppercase; }
+    .pedido-editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 1050px) { .date-group .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pedido-item-editor { grid-template-columns: minmax(0, 1fr) 100px 120px auto; } }
+    @media (max-width: 640px) { .date-group .cards-grid { grid-template-columns: 1fr; } .pedido-editor-grid { grid-template-columns: 1fr; } .pedido-item-editor { grid-template-columns: 1fr; } .pedido-editor-actions { grid-template-columns: 1fr; } }
 
     .pedido-modal {
       position: fixed;
@@ -630,9 +655,19 @@
       font-size: 12px;
     }
 
+    .total-header {
+      min-width: 220px !important;
+      width: 220px !important;
+      max-width: 220px !important;
+      height: 140px;
+      vertical-align: bottom;
+      padding-bottom: 8px;
+    }
+
     .pack-cell {
-      min-width: 170px;
-      width: 170px;
+      min-width: 220px !important;
+      width: 220px !important;
+      max-width: 220px !important;
       background: #fff5f5;
       max-height: 32px;
       overflow: hidden;
@@ -1172,7 +1207,7 @@
         <div class="header-row">
           <div>
             <h3>Historial de pedidos</h3>
-            <div style="margin-top:5px; color:var(--muted); font-size:.82rem;">Pedidos marcados como registrados. Se conservan hasta un máximo de 1 año.</div>
+            <div style="margin-top:5px; color:var(--muted); font-size:.82rem;">Pedidos con pago pendiente o despachados. Se conservan hasta un máximo de 1 año.</div>
           </div>
           <input id="buscarHistorialPedidos" class="search-input no-print" type="search" placeholder="Buscar por nombre del cliente" autocomplete="off" />
         </div>
@@ -2508,6 +2543,19 @@
       }
     }
 
+    function renderizarResumenPago(pedido) {
+      const total = Math.max(0, Number(pedido?.monto_total || 0));
+      const pagado = Math.min(total, Math.max(0, Number(pedido?.adelanto || 0)));
+      const saldo = Math.max(0, total - pagado);
+      if (total > 0 && saldo <= 0.001) return '<div class="payment-summary payment-complete"><div class="payment-cancelled">CANCELADO</div></div>';
+      return `
+        <div class="payment-summary">
+          <div><span>Pagado</span><strong>S/. ${pagado.toFixed(2)}</strong></div>
+          <div><span>Saldo</span><strong>S/. ${saldo.toFixed(2)}</strong></div>
+        </div>
+      `;
+    }
+
     async function cargarPedidosGenerales() {
       try {
         const res = await fetch('/api/admin/pedidos');
@@ -2575,10 +2623,11 @@
                       <ul class="order-request">${items || '<li><span class="item-name">Sin productos</span></li>'}</ul>
                       <div class="order-schedule">
                         <span class="order-summary-line">
-                          <span>${pedido.cliente_nombre || 'Sin nombre'}<small class="card-date">${formatearFecha(pedido.fecha_recoge)}</small></span>
+                          <span><strong class="order-customer-name">${pedido.cliente_nombre || 'Sin nombre'}</strong><small class="card-date">${formatearFecha(pedido.fecha_recoge)}</small></span>
                         </span>
                         <strong class="schedule-time">${pedido.hora_recoge || '--:--'}</strong>
                       </div>
+                      ${renderizarResumenPago(pedido)}
                       <div class="order-details">
                       <div class="order-info">
                         <div>
@@ -2747,7 +2796,7 @@
                       <ul class="order-request">${items || '<li><span class="item-name">Sin productos</span></li>'}</ul>
                       <div class="order-schedule">
                         <span class="order-summary-line">
-                          <span>${pedido.cliente_nombre || 'Sin nombre'}<small class="card-date">${pedido.fecha_recoge ? formatearFecha(pedido.fecha_recoge) : 'Fecha pendiente'}</small></span>
+                          <span><strong class="order-customer-name">${pedido.cliente_nombre || 'Sin nombre'}</strong><small class="card-date">${pedido.fecha_recoge ? formatearFecha(pedido.fecha_recoge) : 'Fecha pendiente'}</small></span>
                         </span>
                         <strong class="schedule-time">${pedido.hora_recoge || '--:--'}</strong>
                       </div>
@@ -2926,7 +2975,7 @@
           html += `<th class="client-header"><div class="vertical-text">${(c.cliente_nombre || 'Cliente').toUpperCase()}</div></th>`;
         });
 
-        if (mostrarTotal) html += '<th class="client-header"><div class="vertical-text">TOTAL</div></th>';
+        if (mostrarTotal) html += '<th class="total-header"><div class="vertical-text">TOTAL</div></th>';
         html += '</tr></thead><tbody>';
 
         productosLista.forEach((prod) => {
