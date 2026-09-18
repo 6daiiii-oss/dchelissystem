@@ -386,12 +386,12 @@
     .pedido-editor-form textarea { resize: vertical; min-height: 90px; }
     .pedido-editor-form input:focus, .pedido-editor-form select:focus, .pedido-editor-form textarea:focus { border-color: #b75e36; box-shadow: 0 0 0 3px rgba(183,94,54,.12); }
     .pedido-editor-items { display: grid; gap: 10px; }
-    .pedido-item-editor { display: grid; grid-template-columns: minmax(0, 1.8fr) 110px 140px auto; gap: 8px; align-items: end; padding: 10px; border: 1px solid #eadfd6; border-radius: 11px; background: #fffaf5; }
+    .pedido-item-editor { display: grid !important; grid-template-columns: minmax(0, 1fr) 110px 140px auto !important; gap: 8px !important; align-items: end !important; padding: 10px; border: 1px solid #eadfd6; border-radius: 11px; background: #fffaf5; margin-bottom: 0 !important; }
     .pedido-item-editor .editor-item-field { display: flex; flex-direction: column; gap: 5px; }
     .pedido-item-editor .editor-item-field span { color: var(--muted); font-size: .68rem; font-weight: 800; text-transform: uppercase; }
     .pedido-editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    @media (max-width: 1050px) { .date-group .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pedido-item-editor { grid-template-columns: minmax(0, 1fr) 100px 120px auto; } }
-    @media (max-width: 640px) { .date-group .cards-grid { grid-template-columns: 1fr; } .pedido-editor-grid { grid-template-columns: 1fr; } .pedido-item-editor { grid-template-columns: 1fr; } .pedido-editor-actions { grid-template-columns: 1fr; } }
+    @media (max-width: 1050px) { .date-group .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pedido-item-editor { grid-template-columns: minmax(0, 1fr) 100px 120px auto !important; } }
+    @media (max-width: 640px) { .date-group .cards-grid { grid-template-columns: 1fr; } .pedido-editor-grid { grid-template-columns: 1fr; } .pedido-item-editor { grid-template-columns: 1fr !important; } .pedido-editor-actions { grid-template-columns: 1fr; } }
 
     .pedido-modal {
       position: fixed;
@@ -965,6 +965,7 @@
         text-overflow: ellipsis;
       }
       .vertical-text { font-size: 6.1px; max-height: 76px; }
+      .total-header { width: 120px !important; min-width: 120px !important; max-width: 120px !important; height: 42px; padding-bottom: 2px; }
       .pack-cell {
         width: 120px;
         min-width: 120px;
@@ -2831,6 +2832,7 @@
                         </span>
                         <strong class="schedule-time">${pedido.hora_recoge || '--:--'}</strong>
                       </div>
+                      ${renderizarResumenPago(pedido)}
                     </article>
                   `;
                 }).join('')}
