@@ -21,6 +21,14 @@ function validarComprobante(tipo, numero) {
   return false;
 }
 
+const PRODUCTOS_TORTAS = [
+  'Torta Chantilly - Foto',
+  'Torta Chantilly (30 Porciones aprox)',
+  'Torta Chantilly (60 Porciones aprox)',
+  'Torta Chantilly (90 Porciones aprox)',
+  'Torta Tres Leches'
+];
+
 const PRODUCTOS_COCINA = [
   'Torta Chantilly - Foto', 'Torta Chantilly (30 Porciones aprox)', 'Torta Chantilly (60 Porciones aprox)', 'Torta Chantilly (90 Porciones aprox)',
   'EMPANADA CARNE', 'EMPANADA POLLO', 'EMPANADA ACEITUNA', 'EMPANADA DE JAMON', 'EMPANADA AJI GALLINA',
@@ -250,6 +258,11 @@ function productoEsCocina(nombre) {
 function resolverNombreCocina(nombre) {
   const valor = normalizarProducto(nombre);
   if (!valor) return null;
+
+  const tortaExacta = PRODUCTOS_TORTAS.find((producto) => normalizarProducto(producto) === valor);
+  if (tortaExacta) return tortaExacta;
+
+  if (valor === 'TORTA TRES LECHES' || valor === 'TORTA DE TRES LECHES') return 'Torta Tres Leches';
 
   const exacto = PRODUCTOS_COCINA.find((producto) => normalizarProducto(producto) === valor);
   if (exacto) return exacto;
@@ -588,11 +601,11 @@ function eliminarPedidosRegistradosAntiguos() {
   db.serialize(() => {
     db.run(`DELETE FROM detalles_pedido WHERE pedido_id IN (
       SELECT id FROM pedidos
-      WHERE COALESCE(estado, 'Registrado') = 'Registrado'
+      WHERE COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
         AND COALESCE(registrado_en, fecha_registro) < (CURRENT_TIMESTAMP - INTERVAL '1 year')
     )`);
     db.run(`DELETE FROM pedidos
-      WHERE COALESCE(estado, 'Registrado') = 'Registrado'
+      WHERE COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
         AND COALESCE(registrado_en, fecha_registro) < (CURRENT_TIMESTAMP - INTERVAL '1 year')`, (err) => {
       if (err) console.error('No se pudieron limpiar pedidos antiguos del historial:', err.message);
     });
@@ -608,7 +621,7 @@ app.get('/api/admin/pedidos', (req, res) => {
         SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
           fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en
     FROM pedidos
-    WHERE COALESCE(estado, 'Registrado') <> 'Registrado'
+    WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')
     ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
   `, [], (err, pedidos) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -650,9 +663,9 @@ app.get('/api/admin/historial-pedidos', (req, res) => {
     SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
       fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en
     FROM pedidos
-    WHERE COALESCE(estado, 'Registrado') = 'Registrado'
+    WHERE COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
       AND COALESCE(registrado_en, fecha_registro) >= (CURRENT_TIMESTAMP - INTERVAL '1 year')
-    ORDER BY COALESCE(registrado_en, fecha_registro) DESC, id DESC
+    ORDER BY fecha_recoge DESC, hora_recoge DESC, id DESC
   `, [], (err, pedidos) => {
     if (err) return res.status(500).json({ error: err.message });
 
@@ -696,7 +709,8 @@ app.get('/api/colaboradores/salidas', (req, res) => {
            d.producto_nombre, d.cantidad, d.paquetes
     FROM pedidos p
     LEFT JOIN detalles_pedido d ON d.pedido_id = p.id
-    WHERE p.fecha_recoge = ? AND p.estado <> 'Pendiente de verificación de pago'
+    WHERE p.fecha_recoge = ?
+      AND COALESCE(p.estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Pendiente de pago', 'Despachado (D''chelis)')
     ORDER BY p.hora_recoge ASC, p.id ASC, d.id ASC
   `, [fecha], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -925,7 +939,7 @@ app.put('/api/admin/pedidos/:id/estado', (req, res) => {
 
   db.run(`UPDATE pedidos
     SET estado = ?,
-        registrado_en = CASE WHEN ? = 'Registrado' THEN CURRENT_TIMESTAMP ELSE NULL END
+        registrado_en = CASE WHEN ? IN ('Pendiente de pago', 'Despachado (D''chelis)') THEN CURRENT_TIMESTAMP ELSE NULL END
     WHERE id = ?`, [estadoNormalizado, estadoNormalizado, id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     if (this.changes === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
