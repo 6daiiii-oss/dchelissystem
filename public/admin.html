@@ -2173,7 +2173,7 @@
           <div class="order-actions">
             <label>Estado del pedido</label>
             <select class="status-select" data-id="${pedido.id}" onchange="actualizarEstadoPedido(this)">
-              ${['Pendiente de verificación de pago', 'Registrado', 'En preparación', 'Listo para despacho', 'Despachado (D\'chelis)'].map(estado => `<option value="${estado}" ${estado === (pedido.estado || 'Registrado') ? 'selected' : ''}>${estado}</option>`).join('')}
+              ${['Pendiente de verificación de pago', 'Pendiente de pago', 'Registrado', 'En preparación', 'Listo para despacho', 'Despachado (D\'chelis)'].map(estado => `<option value="${estado}" ${estado === (pedido.estado || 'Registrado') ? 'selected' : ''}>${estado}</option>`).join('')}
             </select>
             <button type="button" class="btn btn-ghost" style="margin-top:10px; width:100%;" onclick="abrirEditorPedido(${pedido.id})">Editar pedido</button>
             <button type="button" class="btn btn-ghost" style="margin-top:10px; width:100%;" onclick="descargarBoletaAdmin(${pedido.id})">Descargar orden de pedido</button>
@@ -2606,7 +2606,7 @@
                       <div class="order-actions">
                         <label>Estado del pedido</label>
                         <select class="status-select" data-id="${pedido.id}">
-                          ${['Pendiente de verificación de pago', 'Registrado', 'En preparación', 'Listo para despacho', 'Despachado (D\'chelis)'].map((estado) => `
+                          ${['Pendiente de verificación de pago', 'Pendiente de pago', 'Registrado', 'En preparación', 'Listo para despacho', 'Despachado (D\'chelis)'].map((estado) => `
                             <option value="${estado}" ${((pedido.estado || 'Registrado') === estado) ? 'selected' : ''}>${estado}</option>
                           `).join('')}
                         </select>
