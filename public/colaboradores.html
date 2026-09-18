@@ -24,6 +24,15 @@
     .digitacion-box button { background:#173c2b; color:#fff; border:0; border-radius:10px; font-weight:800; padding:11px 16px; }
     .digitacion-box button:hover { background:#b75e36; }
     .digitacion-summary li { background:#fff; border:1px solid #eadfd6; border-radius:9px; padding:10px 12px; font-weight:600; }
+    .dispatch-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
+    .dispatch-check { display:flex; flex-direction:column; align-items:center; gap:6px; font-size:.72rem; font-weight:800; color:var(--muted); }
+    .dispatch-check input { appearance:none; width:38px; height:38px; margin:0; padding:0; border-radius:9px; border:2px solid var(--line); background:#fff; cursor:pointer; position:relative; }
+    .dispatch-check input::after { content:'X'; position:absolute; inset:0; display:grid; place-items:center; font-size:1.05rem; font-weight:900; color:transparent; }
+    .dispatch-check.armado input:checked { border-color:#2563eb; background:#dbeafe; }
+    .dispatch-check.armado input:checked::after { color:#2563eb; }
+    .dispatch-check.despachado input:checked { border-color:#16a34a; background:#dcfce7; }
+    .dispatch-check.despachado input:checked::after { color:#16a34a; }
+    .dispatch-check input:disabled { cursor:not-allowed; opacity:.7; }
   </style>
 </head>
 <body>
@@ -113,7 +122,20 @@
     document.getElementById('registrarColaborador').addEventListener('click',registrarPedidoColaborador);
     const fecha = document.getElementById('fecha'); fecha.value = new Date().toISOString().slice(0,10);
     const safe = (text) => String(text || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    async function cargar() { const out=document.getElementById('pedidos'), resumen=document.getElementById('resumen'); resumen.textContent='Cargando pedidos…'; out.innerHTML=''; try { const r=await fetch(api(`/api/colaboradores/salidas?fecha=${encodeURIComponent(fecha.value)}`)); const data=await r.json(); if(!r.ok) throw new Error(data.error || 'No se pudieron cargar los pedidos.'); const pedidos=data.pedidos || []; resumen.textContent=pedidos.length ? `${pedidos.length} pedido(s) programado(s) para hoy.` : 'No hay pedidos programados para esta fecha.'; out.innerHTML=pedidos.map(p=>`<article><div class="top"><span class="code">${safe(p.codigo)}</span><span class="status">${safe(p.estado)}</span></div><div class="time">${safe(p.hora_recoge || '--:--')}</div><div class="name">${safe(p.cliente_nombre)}</div><ul>${p.detalles.map(d=>`<li><span>${safe(d.producto_nombre)}</span><strong>${Number(d.cantidad)||0}</strong></li>`).join('')}</ul></article>`).join(''); } catch(e) { resumen.textContent=`${e.message}${!base && location.hostname.endsWith('github.io') ? ' Configura la URL del servidor en config.js.' : ''}`; } }
+    async function actualizarEstadoPedidoColaborador(id, estado) {
+      try {
+        const r = await fetch(api(`/api/admin/pedidos/${id}/estado`), { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado}) });
+        const data = await r.json().catch(()=>({}));
+        if (!r.ok) throw new Error(data.error || 'No se pudo actualizar el pedido.');
+        await cargar();
+      } catch (e) {
+        alert(e.message || 'No se pudo actualizar el pedido.');
+        await cargar();
+      }
+    }
+    function cambiarArmado(id, marcado) { if (marcado) actualizarEstadoPedidoColaborador(id, 'Listo para despacho'); }
+    function cambiarDespacho(id, marcado) { if (marcado) actualizarEstadoPedidoColaborador(id, "Despachado (D'chelis)"); }
+    async function cargar() { const out=document.getElementById('pedidos'), resumen=document.getElementById('resumen'); resumen.textContent='Cargando pedidos…'; out.innerHTML=''; try { const r=await fetch(api(`/api/colaboradores/salidas?fecha=${encodeURIComponent(fecha.value)}`)); const data=await r.json(); if(!r.ok) throw new Error(data.error || 'No se pudieron cargar los pedidos.'); const pedidos=data.pedidos || []; resumen.textContent=pedidos.length ? `${pedidos.length} pedido(s) programado(s) para hoy.` : 'No hay pedidos programados para esta fecha.'; out.innerHTML=pedidos.map(p=>{ const armado=['Listo para despacho',"Despachado (D'chelis)"].includes(String(p.estado || '')); return `<article><div class="top"><span class="code">${safe(p.codigo)}</span><span class="status">${safe(p.estado)}</span></div><div class="time">${safe(p.hora_recoge || '--:--')}</div><div class="name">${safe(p.cliente_nombre)}</div><ul>${p.detalles.map(d=>`<li><span>${safe(d.producto_nombre)}</span><strong>${Number(d.cantidad)||0}</strong></li>`).join('')}</ul><div class="dispatch-actions"><label class="dispatch-check armado"><input type="checkbox" ${armado ? 'checked' : ''} onchange="cambiarArmado(${Number(p.id)}, this.checked)" aria-label="Marcar pedido como armado"><span>Armado</span></label><label class="dispatch-check despachado"><input type="checkbox" onchange="cambiarDespacho(${Number(p.id)}, this.checked)" aria-label="Marcar pedido como despachado"><span>Despachado</span></label></div></article>`;}).join(''); } catch(e) { resumen.textContent=`${e.message}${!base && location.hostname.endsWith('github.io') ? ' Configura la URL del servidor en config.js.' : ''}`; } }
     document.getElementById('actualizar').addEventListener('click', cargar); fecha.addEventListener('change',cargar); if (sesionValida()) abrirApp(); setInterval(() => { if (!document.getElementById('collaboratorApp').classList.contains('hidden')) cargar(); },30000);
   </script>
 </body>
