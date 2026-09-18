@@ -253,8 +253,9 @@
     }
 
     #pedidosGeneral.cards-grid { display: block; }
-    .date-group .cards-grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+    #pedidosGeneral .date-group .cards-grid,
+    #pedidosHistorial .date-group .cards-grid {
+      grid-template-columns: repeat(3, minmax(320px, 1fr));
     }
 
     .order-card {
@@ -390,8 +391,18 @@
     .pedido-item-editor .editor-item-field { display: flex; flex-direction: column; gap: 5px; }
     .pedido-item-editor .editor-item-field span { color: var(--muted); font-size: .68rem; font-weight: 800; text-transform: uppercase; }
     .pedido-editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    @media (max-width: 1050px) { .date-group .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pedido-item-editor { grid-template-columns: minmax(0, 1fr) 100px 120px auto !important; } }
-    @media (max-width: 640px) { .date-group .cards-grid { grid-template-columns: 1fr; } .pedido-editor-grid { grid-template-columns: 1fr; } .pedido-item-editor { grid-template-columns: 1fr !important; } .pedido-editor-actions { grid-template-columns: 1fr; } }
+    @media (max-width: 1050px) {
+      #pedidosGeneral .date-group .cards-grid,
+      #pedidosHistorial .date-group .cards-grid { grid-template-columns: repeat(2, minmax(280px, 1fr)); }
+      .pedido-item-editor { grid-template-columns: minmax(0, 1fr) 100px 120px auto !important; }
+    }
+    @media (max-width: 640px) {
+      #pedidosGeneral .date-group .cards-grid,
+      #pedidosHistorial .date-group .cards-grid { grid-template-columns: 1fr; }
+      .pedido-editor-grid { grid-template-columns: 1fr; }
+      .pedido-item-editor { grid-template-columns: 1fr !important; }
+      .pedido-editor-actions { grid-template-columns: 1fr; }
+    }
 
     .pedido-modal {
       position: fixed;
@@ -2157,7 +2168,7 @@
       if (total25) resumen.push(`${total25}x25`);
       if (total50) resumen.push(`${total50}x50`);
       if (sobrantes) resumen.push(`${sobrantes}u`);
-      return resumen.join(' ');
+      return resumen.join(' / ');
     }
 
     function obtenerTextoItem(item) {
@@ -2583,6 +2594,15 @@
       }
     }
 
+    function obtenerCodigoVisible(codigo, id) {
+      const valor = String(codigo || '').trim();
+      if (valor) {
+        const partes = valor.split('-').filter(Boolean);
+        return partes[partes.length - 1] || valor;
+      }
+      return String(id || '');
+    }
+
     function renderizarResumenPago(pedido) {
       const total = Math.max(0, Number(pedido?.monto_total || 0));
       const pagado = Math.min(total, Math.max(0, Number(pedido?.adelanto || 0)));
@@ -2659,7 +2679,7 @@
                       <div class="order-head">
                         <span class="badge status">${pedido.estado || 'Registrado'}</span>
                       </div>
-                      <span class="order-code">${pedido.codigo || 'PED-' + pedido.id}</span>
+                      <span class="order-code">${obtenerCodigoVisible(pedido.codigo, pedido.id)}</span>
                       <ul class="order-request">${items || '<li><span class="item-name">Sin productos</span></li>'}</ul>
                       <div class="order-schedule">
                         <span class="order-summary-line">
@@ -2832,7 +2852,7 @@
                   return `
                     <article data-pedido-id="${pedido.id}" class="order-card history-order-card" onclick="abrirDetallePedido(${pedido.id})" tabindex="0">
                       <div class="order-head"><span class="badge status">Archivado</span></div>
-                      <span class="order-code">${pedido.codigo || 'PED-' + pedido.id}</span>
+                      <span class="order-code">${obtenerCodigoVisible(pedido.codigo, pedido.id)}</span>
                       <ul class="order-request">${items || '<li><span class="item-name">Sin productos</span></li>'}</ul>
                       <div class="order-schedule">
                         <span class="order-summary-line">
