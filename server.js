@@ -264,6 +264,9 @@ function resolverNombreCocina(nombre) {
 
   if (valor === 'TORTA TRES LECHES' || valor === 'TORTA DE TRES LECHES') return 'Torta Tres Leches';
 
+  const extraExacto = PRODUCTOS_COCINA_EXTRA.find((producto) => normalizarProducto(producto) === valor);
+  if (extraExacto) return extraExacto;
+
   const exacto = PRODUCTOS_COCINA.find((producto) => normalizarProducto(producto) === valor);
   if (exacto) return exacto;
 
