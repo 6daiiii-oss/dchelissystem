@@ -948,6 +948,7 @@
         width: 100%;
         max-width: 100%;
       }
+      .last-kitchen-page { page-break-after: auto !important; break-after: auto !important; }
       .table-container { overflow: visible; border: none; }
       table {
         font-size: 7px;
@@ -3190,57 +3191,67 @@
   function renderizarMatrizProducto(secciones) {
     const clientes = window.__datosProduccionClientes || [];
     const detalles = window.__datosProduccionDetalles || [];
+
     secciones.forEach(({ contenedorId, titulo, productosLista, extraClass = '' }) => {
       const contenedor = document.getElementById(contenedorId);
       if (!contenedor) return;
-      if (!clientes.length) {
-        contenedor.innerHTML = '<p style="padding:24px; color:#667085; text-align:center;">No hay pedidos registrados para la fecha seleccionada.</p>';
+
+      const productosNormalizados = new Set((productosLista || []).map((producto) => normalizarNombreProducto(producto)));
+      const idsConContenido = new Set(
+        (detalles || [])
+          .filter((detalle) => {
+            if (Number(detalle.cantidad || 0) <= 0) return false;
+            const producto = obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre;
+            return productosNormalizados.has(normalizarNombreProducto(producto));
+          })
+          .map((detalle) => Number(detalle.pedido_id))
+      );
+
+      const clientesSeccion = (clientes || []).filter((cliente) => idsConContenido.has(Number(cliente.id)));
+      if (!clientesSeccion.length || !productosNormalizados.size) {
+        contenedor.innerHTML = '<p class="no-print" style="padding:24px; color:#667085; text-align:center;">No hay productos de esta hoja para la fecha seleccionada.</p>';
         return;
       }
 
       const maxClientesPorPagina = 18;
       const paginas = [];
-      for (let i = 0; i < clientes.length; i += maxClientesPorPagina) {
-        paginas.push(clientes.slice(i, i + maxClientesPorPagina));
+      for (let i = 0; i < clientesSeccion.length; i += maxClientesPorPagina) {
+        paginas.push(clientesSeccion.slice(i, i + maxClientesPorPagina));
       }
 
-      const htmlPaginas = paginas.map((grupoClientes, paginaIndex) => {
+      contenedor.innerHTML = paginas.map((grupoClientes, paginaIndex) => {
         const mostrarTotal = paginaIndex === 0;
         let html = `<div class="kitchen-page${extraClass}"><table><thead><tr>`;
         html += `<th class="prod-col">${titulo}</th>`;
 
-        grupoClientes.forEach((c) => {
-          html += `<th class="client-header"><div class="vertical-text">${(c.cliente_nombre || 'Cliente').toUpperCase()}</div></th>`;
+        grupoClientes.forEach((cliente) => {
+          html += `<th class="client-header"><div class="vertical-text">${(cliente.cliente_nombre || 'Cliente').toUpperCase()}</div></th>`;
         });
 
         if (mostrarTotal) html += '<th class="total-header"><div class="vertical-text">TOTAL</div></th>';
         html += '</tr></thead><tbody>';
 
-        productosLista.forEach((prod) => {
+        (productosLista || []).forEach((prod) => {
           let filaHtml = `<tr><td class="prod-col">${prod}</td>`;
 
-          grupoClientes.forEach((c) => {
+          grupoClientes.forEach((cliente) => {
             const cantidadCliente = (detalles || [])
-              .filter((d) =>
-                Number(d.pedido_id) === Number(c.id) &&
-                normalizarNombreProducto(obtenerProductoResolucion(d.producto_nombre) || d.producto_nombre) ===
-                normalizarNombreProducto(prod)
+              .filter((detalle) =>
+                Number(detalle.pedido_id) === Number(cliente.id) &&
+                normalizarNombreProducto(obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre) === normalizarNombreProducto(prod)
               )
-              .reduce((suma, d) => suma + Number(d.cantidad || 0), 0);
+              .reduce((suma, detalle) => suma + Number(detalle.cantidad || 0), 0);
             filaHtml += cantidadCliente > 0 ? `<td class="qty-cell">${cantidadCliente}</td>` : '<td></td>';
           });
 
-          const detallesProducto = (detalles || [])
-            .filter((detalle) => {
-              const match = obtenerProductoResolucion(detalle.producto_nombre);
-              const nombreDetalle = match || detalle.producto_nombre;
-              return normalizarNombreProducto(nombreDetalle) === normalizarNombreProducto(prod);
-            })
-            .filter((detalle) => Number(detalle.cantidad || 0) > 0);
-
-          const resumen = obtenerResumenPaquetesDesdeCantidades(detallesProducto);
-
           if (mostrarTotal) {
+            const detallesProducto = (detalles || [])
+              .filter((detalle) => {
+                const match = obtenerProductoResolucion(detalle.producto_nombre);
+                return normalizarNombreProducto(match || detalle.producto_nombre) === normalizarNombreProducto(prod)
+                  && Number(detalle.cantidad || 0) > 0;
+              });
+            const resumen = obtenerResumenPaquetesDesdeCantidades(detallesProducto);
             filaHtml += `<td class="pack-cell">${resumen ? `<div class="pack-badge">${resumen}</div>` : ''}</td>`;
           }
 
@@ -3251,8 +3262,6 @@
         html += '</tbody></table></div>';
         return html;
       }).join('');
-
-      contenedor.innerHTML = htmlPaginas;
     });
   }
 
@@ -3281,6 +3290,10 @@
           extraClass: ' kitchen-page-updated'
         }
       ]);
+
+      const paginasCocina = [...document.querySelectorAll('#panel-cocina .kitchen-page')];
+      paginasCocina.forEach((pagina) => pagina.classList.remove('last-kitchen-page'));
+      paginasCocina.at(-1)?.classList.add('last-kitchen-page');
 
       firmaProduccion = JSON.stringify({ clientes: data.clientes, detalles: data.detalles });
     } catch (error) {
