@@ -2128,6 +2128,11 @@
       }
     });
 
+    setInterval(async () => {
+      const appVisible = !document.getElementById('adminApp').classList.contains('hidden');
+      if (appVisible && !(await sesionAdminValida())) closeDashboard();
+    }, 60 * 1000);
+
     document.querySelectorAll('.tab-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
