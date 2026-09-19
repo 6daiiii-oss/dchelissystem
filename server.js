@@ -954,7 +954,7 @@ app.put('/api/admin/pedidos/:id/estado', (req, res) => {
   db.run(`UPDATE pedidos
     SET estado = ?,
         registrado_en = CASE WHEN ? IN ('Pendiente de pago', 'Despachado (D''chelis)') THEN CURRENT_TIMESTAMP ELSE NULL END,
-        despachado_por = CASE WHEN ? = 'Despachado (D''chelis)' THEN ? ELSE despachado_por END
+        despachado_por = CASE WHEN ? = 'Despachado (D''chelis)' THEN ? ELSE '' END
     WHERE id = ?`, [estadoNormalizado, estadoNormalizado, estadoNormalizado, colaborador, id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     if (this.changes === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
