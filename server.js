@@ -26,11 +26,21 @@ const PRODUCTOS_TORTAS = [
   'Torta Chantilly (30 Porciones aprox)',
   'Torta Chantilly (60 Porciones aprox)',
   'Torta Chantilly (90 Porciones aprox)',
-  'Torta Tres Leches'
+  'Torta de Chantilly',
+  'Torta Mousse de Fresa',
+  'Torta Mousse de Maracuyá',
+  'Torta Tres Leches',
+  'Torta Pye de Manzana',
+  'Torta Pye de Limón',
+  'Torta de Chocolate',
+  'Torta Helada',
+  'Torta Selva Negra'
 ];
 
 const PRODUCTOS_COCINA = [
   'Torta Chantilly - Foto', 'Torta Chantilly (30 Porciones aprox)', 'Torta Chantilly (60 Porciones aprox)', 'Torta Chantilly (90 Porciones aprox)',
+  'Torta de Chantilly', 'Torta Mousse de Fresa', 'Torta Mousse de Maracuyá', 'Torta Tres Leches', 'Torta Pye de Manzana',
+  'Torta Pye de Limón', 'Torta de Chocolate', 'Torta Helada', 'Torta Selva Negra',
   'EMPANADA CARNE', 'EMPANADA POLLO', 'EMPANADA ACEITUNA', 'EMPANADA DE JAMON', 'EMPANADA AJI GALLINA',
   'EMPANADA MIXTA', 'EMPANADA QUESO', 'ENROLLADO ACELGA', 'SOUFLE ALCACHOFA', 'ENROLLADO HOT DOG', 'PIZZAS',
   'ALFAJOR', 'ALFAJOR CHOCOLATE', 'BISCOTELAS', 'BROWNIES', 'CISNES', 'COCADAS', 'CONITOS', 'DONAS',
@@ -522,11 +532,11 @@ app.post('/api/pedidos', (req, res) => {
       }
 
       const pedidoId = this.lastID;
-      const queryDetalle = `INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes) VALUES (?, ?, ?, ?, ?)`;
+      const queryDetalle = `INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta) VALUES (?, ?, ?, ?, ?, ?)`;
       const stmt = db.prepare(queryDetalle);
       detalles.forEach((det) => {
         const paquetes = det.paquetes && typeof det.paquetes === 'object' ? JSON.stringify(det.paquetes) : '{}';
-        stmt.run(pedidoId, det.producto_nombre, det.cantidad, det.subtotal, paquetes);
+        stmt.run(pedidoId, det.producto_nombre, det.cantidad, det.subtotal, paquetes, String(det.foto_torta || ''));
       });
 
       stmt.finalize(async (err) => {
@@ -622,7 +632,7 @@ setInterval(eliminarPedidosRegistradosAntiguos, 60 * 60 * 1000);
 app.get('/api/admin/pedidos', (req, res) => {
   db.all(`
         SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-          fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en
+          fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en, despachado_por
     FROM pedidos
     WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')
     ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
@@ -641,7 +651,7 @@ app.get('/api/admin/pedidos', (req, res) => {
 
       const pedido = pedidosFinales[index];
       db.all(`
-        SELECT producto_nombre, cantidad, subtotal, paquetes
+        SELECT producto_nombre, cantidad, subtotal, paquetes, foto_torta
         FROM detalles_pedido
         WHERE pedido_id = ?
         ORDER BY id ASC
@@ -664,7 +674,7 @@ app.get('/api/admin/pedidos', (req, res) => {
 app.get('/api/admin/historial-pedidos', (req, res) => {
   db.all(`
     SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-      fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en
+      fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en, despachado_por
     FROM pedidos
     WHERE COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
       AND COALESCE(registrado_en, fecha_registro) >= (CURRENT_TIMESTAMP - INTERVAL '1 year')
@@ -684,7 +694,7 @@ app.get('/api/admin/historial-pedidos', (req, res) => {
 
       const pedido = pedidosFinales[index];
       db.all(`
-        SELECT producto_nombre, cantidad, subtotal, paquetes
+        SELECT producto_nombre, cantidad, subtotal, paquetes, foto_torta
         FROM detalles_pedido
         WHERE pedido_id = ?
         ORDER BY id ASC
@@ -934,16 +944,18 @@ app.post('/api/admin/inventario/stock', (req, res) => {
 
 app.put('/api/admin/pedidos/:id/estado', (req, res) => {
   const { id } = req.params;
-  const { estado } = req.body;
+  const { estado, despachado_por } = req.body;
 
   if (!estado) return res.status(400).json({ error: 'Estado requerido' });
 
   const estadoNormalizado = String(estado).trim();
 
+  const colaborador = estadoNormalizado === "Despachado (D'chelis)" ? String(despachado_por || '').trim() : '';
   db.run(`UPDATE pedidos
     SET estado = ?,
-        registrado_en = CASE WHEN ? IN ('Pendiente de pago', 'Despachado (D''chelis)') THEN CURRENT_TIMESTAMP ELSE NULL END
-    WHERE id = ?`, [estadoNormalizado, estadoNormalizado, id], function (err) {
+        registrado_en = CASE WHEN ? IN ('Pendiente de pago', 'Despachado (D''chelis)') THEN CURRENT_TIMESTAMP ELSE NULL END,
+        despachado_por = CASE WHEN ? = 'Despachado (D''chelis)' THEN ? ELSE despachado_por END
+    WHERE id = ?`, [estadoNormalizado, estadoNormalizado, estadoNormalizado, colaborador, id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     if (this.changes === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
     res.json({ success: true, id: Number(id), estado });
@@ -1022,14 +1034,14 @@ app.put('/api/admin/pedidos/:id', (req, res) => {
         return res.status(500).json({ error: errDelete.message });
       }
 
-      const stmt = db.prepare(`INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes) VALUES (?, ?, ?, ?, ?)`);
+      const stmt = db.prepare(`INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta) VALUES (?, ?, ?, ?, ?, ?)`);
       detalles.forEach((item) => {
         const nombre = String(item.producto_nombre || '').trim();
         const cantidad = Number(item.cantidad || 0);
         const subtotal = Number(item.subtotal || 0);
         if (!nombre || cantidad <= 0) return;
         const paquetes = item.paquetes && typeof item.paquetes === 'object' ? JSON.stringify(item.paquetes) : '{}';
-        stmt.run(id, nombre, cantidad, subtotal, paquetes);
+        stmt.run(id, nombre, cantidad, subtotal, paquetes, String(item.foto_torta || ''));
       });
 
       stmt.finalize((finalizeErr) => {
@@ -1095,7 +1107,7 @@ app.get('/api/admin/produccion', (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
 
     db.all(
-      `SELECT p.id as pedido_id, dp.producto_nombre, dp.cantidad, dp.paquetes 
+      `SELECT p.id as pedido_id, dp.producto_nombre, dp.cantidad, dp.paquetes, dp.foto_torta 
        FROM detalles_pedido dp 
        JOIN pedidos p ON dp.pedido_id = p.id 
        WHERE p.fecha_recoge = ? AND p.estado <> 'Pendiente de verificación de pago'`,
@@ -1118,7 +1130,8 @@ app.get('/api/admin/produccion', (req, res) => {
             producto_nombre: det.nombre_canonico,
             producto_nombre_original: det.producto_nombre,
             cantidad: det.cantidad,
-            paquetes: det.paquetes ? JSON.parse(det.paquetes) : {}
+            paquetes: det.paquetes ? JSON.parse(det.paquetes) : {},
+            foto_torta: det.foto_torta || ''
           }));
 
         res.json({
