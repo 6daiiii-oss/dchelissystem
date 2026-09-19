@@ -7,6 +7,121 @@ const db = require('./db');
 
 const app = express();
 
+const bcrypt = require('bcryptjs');
+
+app.set('trust proxy', 1);
+
+const ADMIN_COOKIE = 'dchelis_admin_session';
+const ADMIN_SESSION_MS = 60 * 60 * 1000;
+const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'dchelis').trim();
+const ADMIN_PASSWORD_HASH = String(process.env.ADMIN_PASSWORD_HASH || '').trim();
+const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '');
+const ADMIN_PASSWORD_DIGEST = ADMIN_PASSWORD_HASH || (ADMIN_PASSWORD ? bcrypt.hashSync(ADMIN_PASSWORD, 12) : '');
+const ADMIN_SESSION_SECRET = String(process.env.ADMIN_SESSION_SECRET || crypto.randomBytes(48).toString('hex'));
+const ADMIN_LOGIN_ATTEMPTS = new Map();
+
+if (!ADMIN_PASSWORD_DIGEST) {
+  console.warn('SEGURIDAD ADMIN: configura ADMIN_PASSWORD o ADMIN_PASSWORD_HASH en Render. El acceso administrativo permanecerá bloqueado hasta hacerlo.');
+}
+if (!process.env.ADMIN_SESSION_SECRET) {
+  console.warn('SEGURIDAD ADMIN: ADMIN_SESSION_SECRET no está configurado. Se usará un secreto temporal y las sesiones se cerrarán al reiniciar.');
+}
+
+function encodeBase64Url(value) {
+  return Buffer.from(value).toString('base64url');
+}
+
+function signAdminSession(payload) {
+  const encoded = encodeBase64Url(JSON.stringify(payload));
+  const signature = crypto.createHmac('sha256', ADMIN_SESSION_SECRET).update(encoded).digest('base64url');
+  return `${encoded}.${signature}`;
+}
+
+function readCookie(req, name) {
+  const cookies = String(req.headers.cookie || '').split(';');
+  for (const item of cookies) {
+    const separator = item.indexOf('=');
+    if (separator < 0) continue;
+    const key = item.slice(0, separator).trim();
+    if (key !== name) continue;
+    return decodeURIComponent(item.slice(separator + 1).trim());
+  }
+  return '';
+}
+
+function verifyAdminSession(req) {
+  const token = readCookie(req, ADMIN_COOKIE);
+  if (!token) return null;
+  const [encoded, signature] = token.split('.');
+  if (!encoded || !signature) return null;
+
+  const expected = crypto.createHmac('sha256', ADMIN_SESSION_SECRET).update(encoded).digest('base64url');
+  const receivedBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (receivedBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(receivedBuffer, expectedBuffer)) return null;
+
+  try {
+    const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+    if (payload.role !== 'admin' || payload.sub !== ADMIN_USERNAME || Number(payload.exp || 0) <= Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function sameOriginRequest(req) {
+  const origin = String(req.get('origin') || '').trim();
+  if (!origin) return true;
+  const expectedOrigin = String(process.env.ADMIN_ORIGIN || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  return origin.replace(/\/$/, '') === expectedOrigin;
+}
+
+function requireAdminAuth(req, res, next) {
+  res.setHeader('Cache-Control', 'no-store');
+  const session = verifyAdminSession(req);
+  if (!session) return res.status(401).json({ error: 'Sesión administrativa requerida.' });
+
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !sameOriginRequest(req)) {
+    return res.status(403).json({ error: 'Origen no autorizado.' });
+  }
+
+  req.admin = session;
+  next();
+}
+
+function adminSecurityHeaders(req, res, next) {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+}
+
+function loginRateKey(req) {
+  return String(req.ip || req.socket?.remoteAddress || 'unknown');
+}
+
+function checkAdminLoginRate(req) {
+  const key = loginRateKey(req);
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const maxAttempts = 5;
+  const previous = ADMIN_LOGIN_ATTEMPTS.get(key) || { count: 0, resetAt: now + windowMs };
+  const current = previous.resetAt <= now ? { count: 0, resetAt: now + windowMs } : previous;
+  if (current.count >= maxAttempts) return { allowed: false, retryAfter: Math.ceil((current.resetAt - now) / 1000) };
+  return { allowed: true, key, state: current };
+}
+
+function registerFailedAdminLogin(key, state) {
+  ADMIN_LOGIN_ATTEMPTS.set(key, { count: state.count + 1, resetAt: state.resetAt });
+}
+
+function clearAdminLoginRate(req) {
+  ADMIN_LOGIN_ATTEMPTS.delete(loginRateKey(req));
+}
+
+
 function normalizarEstadoPedido(estado) {
   if (!estado) return 'Registrado';
   return String(estado).trim() === 'Pagado' ? 'Registrado' : String(estado).trim();
@@ -319,6 +434,7 @@ function resolverNombreCocina(nombre) {
 // Middlewares
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+app.use(['/admin', '/admin.html', '/api/admin'], adminSecurityHeaders);
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Inicialización de tablas SQLite para asegurar la persistencia de datos
@@ -362,6 +478,67 @@ db.serialize(() => {
       FOREIGN KEY(pedido_id) REFERENCES pedidos(id)
     )
   `);
+});
+
+// Seguridad exclusiva del panel administrativo
+app.post('/api/admin/auth/login', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+
+  if (!sameOriginRequest(req)) return res.status(403).json({ error: 'Origen no autorizado.' });
+  if (!ADMIN_PASSWORD_DIGEST) return res.status(503).json({ error: 'El acceso administrativo seguro todavía no está configurado en el servidor.' });
+
+  const rate = checkAdminLoginRate(req);
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(rate.retryAfter));
+    return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos antes de volver a intentar.' });
+  }
+
+  const usuario = String(req.body?.usuario || '').trim();
+  const password = String(req.body?.password || '');
+  const passwordOk = usuario === ADMIN_USERNAME && await bcrypt.compare(password, ADMIN_PASSWORD_DIGEST);
+
+  if (!passwordOk) {
+    registerFailedAdminLogin(rate.key, rate.state);
+    return res.status(401).json({ error: 'Credenciales incorrectas.' });
+  }
+
+  clearAdminLoginRate(req);
+  const expiresAt = Date.now() + ADMIN_SESSION_MS;
+  const token = signAdminSession({
+    sub: ADMIN_USERNAME,
+    role: 'admin',
+    exp: expiresAt,
+    nonce: crypto.randomBytes(12).toString('hex')
+  });
+
+  const secure = req.secure || process.env.NODE_ENV === 'production';
+  const attributes = [
+    `${ADMIN_COOKIE}=${encodeURIComponent(token)}`,
+    'HttpOnly',
+    'SameSite=Strict',
+    'Path=/',
+    `Max-Age=${Math.floor(ADMIN_SESSION_MS / 1000)}`
+  ];
+  if (secure) attributes.push('Secure');
+  res.setHeader('Set-Cookie', attributes.join('; '));
+  return res.json({ ok: true, usuario: ADMIN_USERNAME, expira: expiresAt });
+});
+
+app.get('/api/admin/auth/session', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const session = verifyAdminSession(req);
+  if (!session) return res.status(401).json({ authenticated: false });
+  return res.json({ authenticated: true, usuario: session.sub, expira: session.exp });
+});
+
+app.post('/api/admin/auth/logout', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!sameOriginRequest(req)) return res.status(403).json({ error: 'Origen no autorizado.' });
+  const secure = req.secure || process.env.NODE_ENV === 'production';
+  const attributes = [`${ADMIN_COOKIE}=`, 'HttpOnly', 'SameSite=Strict', 'Path=/', 'Max-Age=0'];
+  if (secure) attributes.push('Secure');
+  res.setHeader('Set-Cookie', attributes.join('; '));
+  return res.json({ ok: true });
 });
 
 // Ruta principal para servir la interfaz web
@@ -629,7 +806,7 @@ eliminarPedidosRegistradosAntiguos();
 setInterval(eliminarPedidosRegistradosAntiguos, 60 * 60 * 1000);
 
 // Endpoint: Obtener Pedidos Generales
-app.get('/api/admin/pedidos', (req, res) => {
+app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
   db.all(`
         SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
           fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en, despachado_por
@@ -671,7 +848,7 @@ app.get('/api/admin/pedidos', (req, res) => {
 });
 
 // Endpoint: Obtener Historial de Pedidos
-app.get('/api/admin/historial-pedidos', (req, res) => {
+app.get('/api/admin/historial-pedidos', requireAdminAuth, (req, res) => {
   db.all(`
     SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
       fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en, despachado_por
@@ -744,7 +921,7 @@ app.get('/api/colaboradores/salidas', (req, res) => {
   });
 });
 
-app.get('/api/admin/inventario', (req, res) => {
+app.get('/api/admin/inventario', requireAdminAuth, (req, res) => {
   db.all(`SELECT id, nombre, categoria, unidad, cantidad_base, formula, descripcion FROM formulas_inventario ORDER BY categoria, nombre ASC`, [], (err, formulas) => {
     if (err) return res.status(500).json({ error: err.message });
 
@@ -762,7 +939,7 @@ app.get('/api/admin/inventario', (req, res) => {
   });
 });
 
-app.post('/api/admin/inventario/calcular', (req, res) => {
+app.post('/api/admin/inventario/calcular', requireAdminAuth, (req, res) => {
   const { producto, cantidad } = req.body || {};
   if (!producto || !cantidad || Number(cantidad) <= 0) {
     return res.status(400).json({ error: 'Se requiere producto y cantidad válida.' });
@@ -792,7 +969,7 @@ app.post('/api/admin/inventario/calcular', (req, res) => {
   });
 });
 
-app.get('/api/admin/inventario/compra-dia', (req, res) => {
+app.get('/api/admin/inventario/compra-dia', requireAdminAuth, (req, res) => {
   const fecha = String(req.query.fecha || '').trim();
   if (!fecha) {
     return res.status(400).json({ error: 'Se requiere una fecha para calcular la compra del día.' });
@@ -864,7 +1041,7 @@ app.get('/api/admin/inventario/compra-dia', (req, res) => {
   });
 });
 
-app.get('/api/admin/inventario/compra-dia/excel', (req, res) => {
+app.get('/api/admin/inventario/compra-dia/excel', requireAdminAuth, (req, res) => {
   const fecha = String(req.query.fecha || '').trim();
   if (!fecha) {
     return res.status(400).json({ error: 'Se requiere una fecha para exportar la compra del día.' });
@@ -929,7 +1106,7 @@ app.get('/api/admin/inventario/compra-dia/excel', (req, res) => {
   });
 });
 
-app.post('/api/admin/inventario/stock', (req, res) => {
+app.post('/api/admin/inventario/stock', requireAdminAuth, (req, res) => {
   const { id, nombre, stock, unidad } = req.body || {};
   if (!id || !nombre || stock === undefined) {
     return res.status(400).json({ error: 'Faltan datos para actualizar inventario.' });
@@ -962,7 +1139,7 @@ app.put('/api/admin/pedidos/:id/estado', (req, res) => {
   });
 });
 
-app.put('/api/admin/pedidos/:id', (req, res) => {
+app.put('/api/admin/pedidos/:id', requireAdminAuth, (req, res) => {
   const { id } = req.params;
   const pedido = req.body || {};
   const clienteNombre = String(pedido.cliente_nombre || '').trim();
@@ -1061,7 +1238,7 @@ app.put('/api/admin/pedidos/:id', (req, res) => {
   });
 });
 
-app.delete('/api/admin/pedidos/:id', (req, res) => {
+app.delete('/api/admin/pedidos/:id', requireAdminAuth, (req, res) => {
   const { id } = req.params;
 
   db.run('BEGIN TRANSACTION');
@@ -1095,7 +1272,7 @@ app.delete('/api/admin/pedidos/:id', (req, res) => {
 });
 
 // Endpoint: Obtener Datos de Producción del Día
-app.get('/api/admin/produccion', (req, res) => {
+app.get('/api/admin/produccion', requireAdminAuth, (req, res) => {
   const { fecha } = req.query;
   if (!fecha) return res.status(400).json({ error: 'Fecha requerida' });
 
@@ -1261,7 +1438,7 @@ app.post('/api/yape-webhook', (req, res) => {
 });
 
 // Endpoint: Descargar Excel
-app.get('/api/admin/exportar-excel', (req, res) => {
+app.get('/api/admin/exportar-excel', requireAdminAuth, (req, res) => {
   const { fecha } = req.query;
   if (!fecha) return res.status(400).send('Fecha requerida');
 
@@ -1342,7 +1519,7 @@ app.get('/api/admin/exportar-excel', (req, res) => {
 });
 
 // Endpoint: Descargar Excel
-app.get('/api/admin/exportar-excel', (req, res) => {
+app.get('/api/admin/exportar-excel', requireAdminAuth, (req, res) => {
   const { fecha } = req.query;
   if (!fecha) return res.status(400).send('Fecha requerida');
 
