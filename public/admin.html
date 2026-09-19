@@ -2299,12 +2299,13 @@
           <div><span class="label">Monto pagado</span><div class="value">S/. ${Number(pedido.adelanto || 0).toFixed(2)}</div></div>
           <div><span class="label">Saldo restante</span><div class="value">S/. ${(Number(pedido.monto_total || 0) - Number(pedido.adelanto || 0)).toFixed(2)}</div></div>
           <div><span class="label">Comprobante</span><div class="value">${pedido.tipo_comprobante ? `${pedido.tipo_comprobante === 'factura' ? 'Factura - RUC' : 'Boleta - DNI'} ${pedido.numero_documento || ''}` : 'Sin comprobante'}</div></div>
+          ${pedido.despachado_por ? `<div><span class="label">Despachado por</span><div class="value">${pedido.despachado_por}</div></div>` : ''}
         </div>
         ${pedido.dedicatoria ? `<div class="pedido-modal-section"><h4>Dedicatoria / indicaciones</h4><div class="value">${pedido.dedicatoria}</div></div>` : ''}
-        ${pedido.foto_torta ? `<div class="pedido-modal-section"><h4>Foto de referencia de la torta</h4><img src="${pedido.foto_torta}" alt="Foto de referencia de la torta" style="display:block; max-width:100%; max-height:360px; object-fit:contain; border-radius:8px; border:1px solid #d0d5dd;"></div>` : ''}
+        ${pedido.foto_torta && !(pedido.detalles || []).some((item) => item.foto_torta) ? `<div class="pedido-modal-section"><h4>Foto de referencia de la torta</h4><img src="${pedido.foto_torta}" alt="Foto de referencia de la torta" class="cake-detail-photo"></div>` : ''}
         <div class="pedido-modal-section">
           <h4>Productos del pedido</h4>
-          <ul class="items-list">${(pedido.detalles || []).map(item => `<li><span class="item-name">${item.producto_nombre}</span><span class="item-qty">${obtenerTextoItem(item)}</span></li>`).join('') || '<li>Sin productos</li>'}</ul>
+          <ul class="items-list">${(pedido.detalles || []).map(item => `<li><span class="item-name">${item.producto_nombre}${item.foto_torta ? `<img src="${item.foto_torta}" alt="Foto de ${item.producto_nombre}" class="cake-detail-photo">` : ''}</span><span class="item-qty">${obtenerTextoItem(item)}</span></li>`).join('') || '<li>Sin productos</li>'}</ul>
         </div>
         ${esHistorial ? `
           <div class="history-locked-note">Pedido archivado · solo lectura</div>
@@ -2328,8 +2329,10 @@
       const nombre = item.producto_nombre || '';
       const cantidad = Number(item.cantidad || 1);
       const subtotal = Number(item.subtotal || 0);
+      const fotoTorta = String(item.foto_torta || '');
       return `
         <div class="pedido-item-editor" data-item-index="${index}">
+          <input type="hidden" name="item_foto_${index}" value="${fotoTorta.replace(/"/g, '&quot;')}" />
           <div class="editor-item-field">
             <span>Producto</span>
             <input type="text" name="item_nombre_${index}" value="${(nombre || '').replace(/"/g, '&quot;')}" class="form-control" aria-label="Producto ${index + 1}" />
@@ -2428,7 +2431,8 @@
         const nombre = fila.querySelector('input[name^="item_nombre_"]')?.value.trim() || '';
         const cantidad = Number(fila.querySelector('input[name^="item_cantidad_"]')?.value || 0);
         const subtotal = Number(fila.querySelector('input[name^="item_subtotal_"]')?.value || 0);
-        return { producto_nombre: nombre, cantidad, subtotal, paquetes: {} };
+        const foto_torta = fila.querySelector('input[name^="item_foto_"]')?.value || '';
+        return { producto_nombre: nombre, cantidad, subtotal, paquetes: {}, foto_torta };
       }).filter((item) => item.producto_nombre && item.cantidad > 0);
 
       if (!detalles.length) {
@@ -3049,6 +3053,7 @@
                         <strong class="schedule-time">${pedido.hora_recoge || '--:--'}</strong>
                       </div>
                       ${renderizarResumenPago(pedido)}
+                      ${pedido.despachado_por ? `<div style="margin-top:-4px; padding:0 4px 8px; color:#667085; font-size:.72rem; font-weight:700;">Despachado por: ${pedido.despachado_por}</div>` : ''}
                     </article>
                   `;
                 }).join('')}
