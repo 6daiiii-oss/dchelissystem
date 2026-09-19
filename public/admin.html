@@ -1035,6 +1035,11 @@
     .digitacion-box button[type="submit"], .digitacion-box button.btn-success { background:#173c2b; color:#fff; border:0; border-radius:10px; font-weight:800; padding:11px 16px; }
     .digitacion-box button[type="submit"]:hover, .digitacion-box button.btn-success:hover { background:#b75e36; }
     .digitacion-summary li { background:#fff; border:1px solid #eadfd6; border-radius:9px; padding:10px 12px; font-weight:600; }
+    .cake-photo-control { display:grid; grid-template-columns:minmax(0,1fr) 120px; gap:10px; align-items:center; padding:10px; border:1px solid #eadfd6; border-radius:11px; background:#fffaf5; }
+    .cake-photo-control input[type="file"] { width:100%; }
+    .cake-photo-preview { width:120px; height:84px; object-fit:cover; border:1px solid #d0d5dd; border-radius:9px; background:#fff; }
+    .cake-detail-photo { display:block; width:min(260px,100%); max-height:220px; object-fit:contain; margin-top:8px; border:1px solid #d0d5dd; border-radius:10px; background:#fff; }
+    @media print { body.printing-cocina .kitchen-section-title { display:none !important; } }
     @media (max-width: 640px) { .admin-shell { padding: 14px 12px 32px; } .topbar { border-radius: 15px; min-height: 100px; padding: 20px; } .tab-nav { width: 100%; } .panel { border-radius: 15px; } }
 
   </style>
@@ -1138,11 +1143,12 @@
                <label for="quickRestante">Restante (S/.)</label>
                <input id="quickRestante" type="text" value="S/. 0.00" readonly />
              </div>
-              <div id="quickTortaOptions" class="field hidden" style="grid-column:1 / -1; display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
-                <label style="margin:0;"><input id="quickExtraChocolate" type="checkbox"> Extra Chocolate (S/.10)</label>
-                <label style="margin:0;"><input id="quickExtraSelva" type="checkbox"> Extra Selva Negra (S/.10)</label>
-                <label for="quickFotoTorta" style="margin:0;">Foto de torta</label>
-                <input id="quickFotoTorta" type="file" accept="image/*" style="max-width:220px;">
+              <div id="quickTortaOptions" class="field hidden" style="grid-column:1 / -1;">
+                <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+                  <label style="margin:0;"><input id="quickExtraChocolate" type="checkbox"> Extra Chocolate (S/.10)</label>
+                  <label style="margin:0;"><input id="quickExtraSelva" type="checkbox"> Extra Selva Negra (S/.10)</label>
+                </div>
+                <div id="quickFotosTorta" style="display:grid; gap:10px; width:100%;"></div>
               </div>
             </div>
             <form id="quickEntryForm">
@@ -1176,11 +1182,11 @@
           </div>
         </div>
         <div style="margin-bottom:18px;">
-          <h4>Hoja 1: Bocaditos</h4>
+          <h4 class="kitchen-section-title">Hoja 1: Bocaditos</h4>
           <div id="hojaProduccion" class="table-container"></div>
         </div>
         <div>
-          <h4>Hoja 2: Sanguches, triples y panes</h4>
+          <h4 class="kitchen-section-title">Hoja 2: Sanguches, triples y panes</h4>
           <div id="hojaProduccionExtra" class="table-container"></div>
         </div>
       </div>
@@ -1244,13 +1250,16 @@
   </div>
 
   <script>
-    const ADMIN_ACCOUNTS = window.DCHELIS_ACCOUNTS || [];
+    const ADMIN_ACCOUNTS = (window.DCHELIS_ADMIN_ACCOUNTS || window.DCHELIS_ACCOUNTS || [])
+      .filter((cuenta) => cuenta.rol === 'admin' || cuenta.usuario === 'dchelis');
     const AUTH_SESSION_KEY = 'dchelis_admin_session_v1';
     const ADMIN_SESSION_MS = 60 * 60 * 1000;
     const ADMIN_TAB_KEY = 'dchelis_admin_tab_v1';
     const ADMIN_FORM_KEY = 'dchelis_admin_digitacion_v1';
     const PRODUCTOS_COCINA_ORDEN = [
-      'Torta Chantilly - Foto', 'Torta Chantilly (30 Porciones aprox)', 'Torta Chantilly (60 Porciones aprox)', 'Torta Chantilly (90 Porciones aprox)', 'Torta Tres Leches',
+      'Torta Chantilly - Foto', 'Torta Chantilly (30 Porciones aprox)', 'Torta Chantilly (60 Porciones aprox)', 'Torta Chantilly (90 Porciones aprox)',
+      'Torta de Chantilly', 'Torta Mousse de Fresa', 'Torta Mousse de Maracuyá', 'Torta Tres Leches', 'Torta Pye de Manzana',
+      'Torta Pye de Limón', 'Torta de Chocolate', 'Torta Helada', 'Torta Selva Negra',
       'EMPANADA CARNE', 'EMPANADA POLLO', 'EMPANADA ACEITUNA', 'EMPANADA DE JAMON', 'EMPANADA AJI GALLINA',
       'EMPANADA MIXTA', 'EMPANADA QUESO', 'ENROLLADO ACELGA', 'SOUFLE ALCACHOFA', 'ENROLLADO HOT DOG', 'PIZZAS',
       'ALFAJOR', 'ALFAJOR CHOCOLATE', 'BISCOTELAS', 'BROWNIES', 'CISNES', 'COCADAS', 'CONITOS', 'DONAS',
@@ -1727,13 +1736,16 @@
       const valor = normalizarNombreProducto(texto || '');
       if (!valor) return null;
 
-      const catalogoExacto = Array.isArray(window.__quickCatalog) ? window.__quickCatalog.find((item) => normalizarNombreProducto(item.nombre || '') === valor) : null;
-      if (catalogoExacto) return catalogoExacto.nombre;
-
       const aliasesCompartidos = window.DCHELIS_DIGITACION_ALIASES || {};
       for (const [producto, aliases] of Object.entries(aliasesCompartidos)) {
-        if (aliases.some((alias) => normalizarNombreProducto(alias) === valor)) return producto;
+        if (aliases.some((alias) => normalizarNombreProducto(alias) === valor)) {
+          const existe = (window.__quickCatalog || []).some((item) => normalizarNombreProducto(item.nombre || '') === normalizarNombreProducto(producto));
+          if (existe) return producto;
+        }
       }
+
+      const catalogoExacto = Array.isArray(window.__quickCatalog) ? window.__quickCatalog.find((item) => normalizarNombreProducto(item.nombre || '') === valor) : null;
+      if (catalogoExacto) return catalogoExacto.nombre;
 
       const candidatos = [];
       const evaluar = (producto, score) => {
