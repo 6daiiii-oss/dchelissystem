@@ -11,7 +11,7 @@
   <style>
     :root { --ink:#173c2b; --accent:#b75e36; --paper:#fffaf5; --line:#eadfd6; --muted:#766b64; }
     * { box-sizing:border-box; } body { margin:0; background:radial-gradient(circle at right top,#ffe5d1,transparent 28rem),var(--paper); color:#29221e; font-family:'Plus Jakarta Sans',sans-serif; }
-    header { padding:28px max(20px,calc((100% - 1040px)/2)); color:#fff; background:linear-gradient(110deg,#173c2b,#28533c); } h1 { margin:0; font-size:clamp(1.7rem,4vw,2.5rem); } header p { margin:7px 0 0; color:#f7d7bf; }
+    header { padding:28px max(20px,calc((100% - 1040px)/2)); color:#fff; background:linear-gradient(110deg,#173c2b,#28533c); display:flex; justify-content:space-between; gap:18px; align-items:center; flex-wrap:wrap; } h1 { margin:0; font-size:clamp(1.7rem,4vw,2.5rem); } header p { margin:7px 0 0; color:#f7d7bf; } .session-box { display:flex; align-items:center; gap:10px; font-weight:800; } .session-box button { background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.28); }
     main { max-width:1040px; margin:25px auto; padding:0 20px 50px; } .toolbar { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; align-items:center; margin-bottom:18px; } input,button { font:inherit; border-radius:10px; padding:10px 12px; } input { border:1px solid var(--line); background:#fff; } button { cursor:pointer; color:#fff; background:var(--accent); border:0; font-weight:800; }
     .notice { color:var(--muted); } .hidden { display:none !important; } .auth-shell { min-height:100vh; display:grid; place-items:center; padding:24px; } .auth-card { width:min(420px,100%); padding:28px; background:#fff; border:1px solid var(--line); border-radius:18px; box-shadow:0 14px 32px rgba(74,48,31,.1); } .auth-card h2 { margin:0 0 8px; color:var(--ink); } .auth-card p { color:var(--muted); margin:0 0 18px; } .auth-card label { display:block; margin:12px 0 6px; font-weight:700; } .auth-card input { width:100%; } .auth-card button { width:100%; margin-top:16px; } .view-tabs { display:flex; gap:8px; margin-bottom:18px; padding:7px; width:max-content; border:1px solid var(--line); border-radius:14px; background:#fff; } .view-tabs button { border:0; border-radius:9px; color:var(--muted); } .view-tabs button.active { background:var(--ink); color:#fff; } .view-panel { display:none; } .view-panel.active { display:block; } .digitacion-grid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:18px; } .digitacion-box { background:#fff; border:1px solid var(--line); border-radius:18px; padding:22px; box-shadow:0 10px 24px rgba(74,48,31,.06); } .digitacion-box h2 { color:var(--ink); margin-top:0; } .digitacion-box input, .digitacion-box textarea, .digitacion-box select { width:100%; } .digitacion-box textarea { min-height:130px; resize:vertical; } .digitacion-summary { margin:0; padding:0; list-style:none; } .digitacion-summary li { border-bottom:1px solid var(--line); padding:9px 0; } @media(max-width:700px){.digitacion-grid{grid-template-columns:1fr;}}
     .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(245px,1fr)); gap:15px; } article { background:#fff; border:1px solid var(--line); border-top:4px solid var(--accent); border-radius:15px; padding:17px; box-shadow:0 7px 18px rgba(74,48,31,.06); } .top { display:flex; justify-content:space-between; gap:10px; align-items:center; } .code { color:var(--accent); font-weight:800; } .time { font-weight:800; font-size:1.25rem; color:var(--ink); margin:15px 0 4px; } .name { font-weight:700; } .status { display:inline-block; padding:4px 8px; border-radius:999px; background:#fff0e5; color:#984728; font-size:.72rem; font-weight:800; } ul { margin:14px 0 0; padding:12px 0 0; list-style:none; border-top:1px solid var(--line); } li { display:flex; justify-content:space-between; gap:10px; padding:4px 0; font-size:.9rem; } footer { text-align:center; padding:20px; color:var(--muted); font-size:.8rem; }
@@ -24,6 +24,8 @@
     .digitacion-box button { background:#173c2b; color:#fff; border:0; border-radius:10px; font-weight:800; padding:11px 16px; }
     .digitacion-box button:hover { background:#b75e36; }
     .digitacion-summary li { background:#fff; border:1px solid #eadfd6; border-radius:9px; padding:10px 12px; font-weight:600; }
+    .cake-photo-control { display:grid; grid-template-columns:minmax(0,1fr) 110px; gap:10px; align-items:center; margin-top:8px; padding:9px; border:1px solid #eadfd6; border-radius:10px; background:#fffaf5; }
+    .cake-photo-preview { width:110px; height:78px; object-fit:cover; border:1px solid #d0d5dd; border-radius:8px; background:#fff; }
     .dispatch-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
     .dispatch-check { display:flex; flex-direction:column; align-items:center; gap:6px; font-size:.72rem; font-weight:800; color:var(--muted); }
     .dispatch-check input { appearance:none; width:38px; height:38px; margin:0; padding:0; border-radius:9px; border:2px solid var(--line); background:#fff; cursor:pointer; position:relative; }
@@ -48,7 +50,7 @@
     </div>
   </div>
   <div id="collaboratorApp" class="hidden">
-  <header><h1>Salidas del día</h1><p>D'chelis · Vista de producción y despacho</p></header>
+  <header><div><h1>Salidas del día</h1><p>D'chelis · Vista de producción y despacho</p></div><div class="session-box"><span id="collaboratorName"></span><button id="cerrarSesion" type="button">Salir</button></div></header>
   <main>
     <nav class="view-tabs"><button id="tabGeneral" class="active" type="button">Pedidos generales</button><button id="tabDigitacion" type="button">Digitación</button></nav>
     <section id="panelGeneral" class="view-panel active">
@@ -81,40 +83,127 @@
   </main><footer>Esta vista es solo de consulta. Los pedidos se administran desde el panel administrativo.</footer>
   </div>
   <script>
-    const ACCOUNTS = window.DCHELIS_ACCOUNTS || [];
+    const NOMBRES_COLABORADORES = { dchelis2: 'Colaborador 1', dchelis3: 'Colaborador 2' };
+    const ACCOUNTS = (window.DCHELIS_COLLABORATOR_ACCOUNTS || window.DCHELIS_ACCOUNTS || [])
+      .filter((cuenta) => cuenta.rol === 'colaborador' || cuenta.usuario !== 'dchelis')
+      .map((cuenta) => ({ ...cuenta, nombre: cuenta.nombre || NOMBRES_COLABORADORES[cuenta.usuario] || cuenta.usuario }));
     const SESSION_KEY = 'dchelis_collaborator_session_v1';
     const SESSION_MS = 60 * 60 * 1000;
-    const sesionValida = () => { try { return Number(JSON.parse(localStorage.getItem(SESSION_KEY) || '{}').expira) > Date.now(); } catch { return false; } };
-    const abrirApp = () => { document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('collaboratorApp').classList.remove('hidden'); cargar(); };
+    const leerSesion = () => { try { return JSON.parse(localStorage.getItem(SESSION_KEY) || '{}'); } catch { return {}; } };
+    const sesionValida = () => Number(leerSesion().expira || 0) > Date.now();
+    const abrirApp = () => {
+      const sesion = leerSesion();
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('collaboratorApp').classList.remove('hidden');
+      document.getElementById('collaboratorName').textContent = sesion.nombre || sesion.usuario || 'Colaborador';
+      cargar();
+    };
     document.getElementById('loginForm').addEventListener('submit', (event) => {
       event.preventDefault();
       const usuario = document.getElementById('loginUser').value.trim();
       const password = document.getElementById('loginPass').value;
-      if (!ACCOUNTS.some((cuenta) => cuenta.usuario === usuario && cuenta.password === password)) return alert('Usuario o contraseña incorrectos.');
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ expira: Date.now() + SESSION_MS }));
+      const cuenta = ACCOUNTS.find((item) => item.usuario === usuario && item.password === password);
+      if (!cuenta) return alert('Usuario o contraseña incorrectos.');
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ expira: Date.now() + SESSION_MS, usuario: cuenta.usuario, nombre: cuenta.nombre || cuenta.usuario }));
       abrirApp();
     });
     const base = String(window.DCHELIS_API_URL || localStorage.getItem('dchelis_api_url') || '').replace(/\/$/, '');
     const api = (path) => base ? `${base}${path}` : path;
     let catalogoColaborador = [];
+    const fotosTortaColaborador = new Map();
     const normalizar = (texto) => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     const resolverProducto = (texto) => {
       const valor = normalizar(texto);
-      const exacto = catalogoColaborador.find((item) => normalizar(item.nombre) === valor);
-      if (exacto) return exacto;
       const aliases = window.DCHELIS_DIGITACION_ALIASES || {};
       const clave = Object.keys(aliases).find((nombre) => aliases[nombre].some((alias) => normalizar(alias) === valor));
-      if (clave) return catalogoColaborador.find((item) => normalizar(item.nombre) === normalizar(clave));
+      if (clave) {
+        const porAlias = catalogoColaborador.find((item) => normalizar(item.nombre) === normalizar(clave));
+        if (porAlias) return porAlias;
+      }
+      const exacto = catalogoColaborador.find((item) => normalizar(item.nombre) === valor);
+      if (exacto) return exacto;
       return catalogoColaborador.find((item) => normalizar(item.nombre).includes(valor) || valor.includes(normalizar(item.nombre)));
     };
     const subtotalProducto = (item, cantidad) => { if (!item) return 0; const x25=Number(item.precio_x25||0), x50=Number(item.precio_x50||0), x100=Number(item.precio_x100||0); if (x25 || x50 || x100) { const precio=cantidad>=75?x100:cantidad>=50?x50:x25; const tamano=cantidad>=75?100:cantidad>=50?50:25; return Number((cantidad*(precio/tamano)).toFixed(2)); } return Number((cantidad*Number(item.precio_unidad ?? item.precio ?? 0)).toFixed(2)); };
     async function cargarCatalogoColaborador() { const r=await fetch(api('/api/productos')); const data=await r.json(); if(!r.ok) throw new Error(data.error || 'No se pudo cargar el catálogo.'); catalogoColaborador=data.filter((item)=>item.categoria !== 'Extras para tortas' && item.categoria !== 'Pruebas' && item.categoria !== 'Producto de prueba'); }
-    function obtenerLineasColaborador() { return String(document.getElementById('colDetalle').value || '').split(/\n|,/).map((linea)=>linea.trim()).filter(Boolean); }
-    function hayTortaColaborador() { return prepararDetallesColaborador().some((detalle) => detalle.item?.categoria === 'Torta Chantilly'); }
-    function actualizarOpcionesTortaColaborador() { const visible=hayTortaColaborador(); document.getElementById('colTortaOptions').classList.toggle('hidden', !visible); if (!visible) { document.getElementById('colExtraChocolate').checked=false; document.getElementById('colExtraSelva').checked=false; document.getElementById('colFoto').value=''; } }
-    function renderPreviewColaborador() { const detalles=prepararDetallesColaborador(); actualizarOpcionesTortaColaborador(); const extras=(document.getElementById('colExtraChocolate').checked?10:0)+(document.getElementById('colExtraSelva').checked?10:0); const total=detalles.reduce((s,d)=>s+d.subtotal,0)+extras; document.getElementById('colPreview').innerHTML=detalles.map((d)=>`<li><span>${d.cantidad||'?'} • ${d.item?.nombre || d.linea}</span><strong>S/. ${d.subtotal.toFixed(2)}</strong></li>`).join('')+`<li><span>Total</span><strong>S/. ${total.toFixed(2)}</strong></li>`; }
-    function leerFotoColaborador() { const archivo=document.getElementById('colFoto').files?.[0]; if(!archivo) return Promise.resolve(''); return new Promise((resolve,reject)=>{ const lector=new FileReader(); lector.onerror=reject; lector.onload=()=>resolve(String(lector.result||'')); lector.readAsDataURL(archivo); }); }
-    async function registrarPedidoColaborador() { const nombre=document.getElementById('colNombre').value.trim(), apellido=document.getElementById('colApellido').value.trim(), celular=document.getElementById('colCelular').value.trim(), tipoComprobante=document.getElementById('colTipoComprobante').value, numeroDocumento=document.getElementById('colNumeroDocumento').value.trim(); const detallesBase=prepararDetallesColaborador(); if(!nombre||!apellido||!celular||!detallesBase.length||detallesBase.some((d)=>!d.item||d.cantidad<=0)) return alert('Completa los datos y usa productos válidos.'); if(tipoComprobante && !numeroDocumento) return alert(`Ingresa el ${tipoComprobante==='factura'?'RUC':'DNI'} para emitir el comprobante.`); const detalles=detallesBase.map((d)=>({producto_nombre:d.item.nombre,cantidad:d.cantidad,subtotal:d.subtotal,paquetes:{}})); if(document.getElementById('colExtraChocolate').checked) detalles.push({producto_nombre:'Extra de Chocolate',cantidad:1,subtotal:10,paquetes:{}}); if(document.getElementById('colExtraSelva').checked) detalles.push({producto_nombre:'Extra de Selva Negra',cantidad:1,subtotal:10,paquetes:{}}); const total=detalles.reduce((s,d)=>s+d.subtotal,0), adelanto=Number(document.getElementById('colAdelanto').value||0); if(adelanto>total) return alert('El adelanto no puede superar el total.'); const foto=await leerFotoColaborador(); const respuesta=await fetch(api('/api/pedidos'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tipo_cliente:'Cliente',cliente_nombre:`${nombre} ${apellido}`,celular,monto_total:Number(total.toFixed(2)),adelanto:Number(adelanto.toFixed(2)),metodo_pago:'Efectivo',fecha_recoge:document.getElementById('colFecha').value||new Date().toISOString().slice(0,10),hora_recoge:document.getElementById('colHora').value||'18:00',tipo_comprobante:tipoComprobante,numero_documento:numeroDocumento,dedicatoria:'',foto_torta:foto,detalles})}); const resultado=await respuesta.json(); if(!respuesta.ok) return alert(resultado.error||'No se pudo registrar el pedido.'); alert(`Pedido ${resultado.codigo||''} registrado.`); document.getElementById('colDetalle').value=''; renderPreviewColaborador(); cargar(); }
+    function obtenerLineasColaborador() {
+      return String(document.getElementById('colDetalle').value || '').split(/\n|,/).map((linea)=>linea.trim()).filter(Boolean);
+    }
+    function prepararDetallesColaborador() {
+      return obtenerLineasColaborador().map((linea, indice) => {
+        const match = linea.match(/^\s*(\d+)\s*(?:x|X)?\s*(.+?)\s*$/i);
+        const cantidad = match ? Number(match[1]) : 0;
+        const item = resolverProducto(match ? match[2] : linea);
+        return { linea, indice, cantidad, item, subtotal: subtotalProducto(item, cantidad) };
+      });
+    }
+    function claveFotoColaborador(detalle) {
+      return `linea-${detalle.indice}-${normalizar(detalle.item?.nombre || 'torta')}`;
+    }
+    function cargarFotoColaborador(event) {
+      const input = event.currentTarget;
+      const key = input.dataset.fotoKey;
+      const archivo = input.files?.[0];
+      if (!key || !archivo) return;
+      const lector = new FileReader();
+      lector.onload = () => {
+        const data = String(lector.result || '');
+        fotosTortaColaborador.set(key, data);
+        const preview = document.querySelector(`[data-col-foto-preview="${key}"]`);
+        if (preview) { preview.src = data; preview.classList.remove('hidden'); }
+      };
+      lector.readAsDataURL(archivo);
+    }
+    function actualizarOpcionesTortaColaborador(detalles = prepararDetallesColaborador()) {
+      const tortas = detalles.filter((detalle) => detalle.item?.categoria === 'Torta Chantilly');
+      const visible = tortas.length > 0;
+      document.getElementById('colTortaOptions').classList.toggle('hidden', !visible);
+      const contenedor = document.getElementById('colFotosTorta');
+      const claves = new Set(tortas.map(claveFotoColaborador));
+      for (const key of [...fotosTortaColaborador.keys()]) if (!claves.has(key)) fotosTortaColaborador.delete(key);
+      if (!visible) {
+        document.getElementById('colExtraChocolate').checked = false;
+        document.getElementById('colExtraSelva').checked = false;
+        if (contenedor) contenedor.innerHTML = '';
+        return;
+      }
+      if (contenedor) {
+        contenedor.innerHTML = tortas.map((detalle) => {
+          const key = claveFotoColaborador(detalle);
+          const data = fotosTortaColaborador.get(key) || '';
+          return `<div class="cake-photo-control"><div><strong>${detalle.item.nombre}</strong><input type="file" accept="image/*" data-foto-key="${key}"></div><img class="cake-photo-preview${data ? '' : ' hidden'}" data-col-foto-preview="${key}" src="${data}" alt="Vista previa"></div>`;
+        }).join('');
+        contenedor.querySelectorAll('input[data-foto-key]').forEach((input) => input.addEventListener('change', cargarFotoColaborador));
+      }
+    }
+    function renderPreviewColaborador() {
+      const detalles = prepararDetallesColaborador();
+      actualizarOpcionesTortaColaborador(detalles);
+      const extras = (document.getElementById('colExtraChocolate').checked ? 10 : 0) + (document.getElementById('colExtraSelva').checked ? 10 : 0);
+      const total = detalles.reduce((s,d)=>s+d.subtotal,0)+extras;
+      document.getElementById('colPreview').innerHTML = detalles.map((d)=>`<li><span>${d.cantidad||'?'} • ${d.item?.nombre || d.linea}</span><strong>S/. ${d.subtotal.toFixed(2)}</strong></li>`).join('')+`<li><span>Total</span><strong>S/. ${total.toFixed(2)}</strong></li>`;
+    }
+    async function registrarPedidoColaborador() {
+      const nombre=document.getElementById('colNombre').value.trim(), apellido=document.getElementById('colApellido').value.trim(), celular=document.getElementById('colCelular').value.trim(), tipoComprobante=document.getElementById('colTipoComprobante').value, numeroDocumento=document.getElementById('colNumeroDocumento').value.trim();
+      const detallesBase=prepararDetallesColaborador();
+      if(!nombre||!apellido||!celular||!detallesBase.length||detallesBase.some((d)=>!d.item||d.cantidad<=0)) return alert('Completa los datos y usa productos válidos.');
+      if(tipoComprobante && !numeroDocumento) return alert(`Ingresa el ${tipoComprobante==='factura'?'RUC':'DNI'} para emitir el comprobante.`);
+      const detalles=detallesBase.map((d)=>({producto_nombre:d.item.nombre,cantidad:d.cantidad,subtotal:d.subtotal,paquetes:{},foto_torta:d.item.categoria==='Torta Chantilly'?(fotosTortaColaborador.get(claveFotoColaborador(d))||''):''}));
+      if(document.getElementById('colExtraChocolate').checked) detalles.push({producto_nombre:'Extra de Chocolate',cantidad:1,subtotal:10,paquetes:{}});
+      if(document.getElementById('colExtraSelva').checked) detalles.push({producto_nombre:'Extra de Selva Negra',cantidad:1,subtotal:10,paquetes:{}});
+      const total=detalles.reduce((s,d)=>s+d.subtotal,0), adelanto=Number(document.getElementById('colAdelanto').value||0);
+      if(adelanto>total) return alert('El adelanto no puede superar el total.');
+      const foto=detalles.find((detalle)=>detalle.foto_torta)?.foto_torta||'';
+      const respuesta=await fetch(api('/api/pedidos'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tipo_cliente:'Cliente',cliente_nombre:`${nombre} ${apellido}`,celular,monto_total:Number(total.toFixed(2)),adelanto:Number(adelanto.toFixed(2)),metodo_pago:'Efectivo',fecha_recoge:document.getElementById('colFecha').value||new Date().toISOString().slice(0,10),hora_recoge:document.getElementById('colHora').value||'18:00',tipo_comprobante:tipoComprobante,numero_documento:numeroDocumento,dedicatoria:'',foto_torta:foto,origen:'digitacion',detalles})});
+      const resultado=await respuesta.json();
+      if(!respuesta.ok) return alert(resultado.error||'No se pudo registrar el pedido.');
+      alert(`Pedido ${resultado.codigo||''} registrado.`);
+      document.getElementById('colDetalle').value='';
+      fotosTortaColaborador.clear();
+      renderPreviewColaborador();
+      cargar();
+    }
+    document.getElementById('colTipoComprobante').value, numeroDocumento=document.getElementById('colNumeroDocumento').value.trim(); const detallesBase=prepararDetallesColaborador(); if(!nombre||!apellido||!celular||!detallesBase.length||detallesBase.some((d)=>!d.item||d.cantidad<=0)) return alert('Completa los datos y usa productos válidos.'); if(tipoComprobante && !numeroDocumento) return alert(`Ingresa el ${tipoComprobante==='factura'?'RUC':'DNI'} para emitir el comprobante.`); const detalles=detallesBase.map((d)=>({producto_nombre:d.item.nombre,cantidad:d.cantidad,subtotal:d.subtotal,paquetes:{}})); if(document.getElementById('colExtraChocolate').checked) detalles.push({producto_nombre:'Extra de Chocolate',cantidad:1,subtotal:10,paquetes:{}}); if(document.getElementById('colExtraSelva').checked) detalles.push({producto_nombre:'Extra de Selva Negra',cantidad:1,subtotal:10,paquetes:{}}); const total=detalles.reduce((s,d)=>s+d.subtotal,0), adelanto=Number(document.getElementById('colAdelanto').value||0); if(adelanto>total) return alert('El adelanto no puede superar el total.'); const foto=await leerFotoColaborador(); const respuesta=await fetch(api('/api/pedidos'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tipo_cliente:'Cliente',cliente_nombre:`${nombre} ${apellido}`,celular,monto_total:Number(total.toFixed(2)),adelanto:Number(adelanto.toFixed(2)),metodo_pago:'Efectivo',fecha_recoge:document.getElementById('colFecha').value||new Date().toISOString().slice(0,10),hora_recoge:document.getElementById('colHora').value||'18:00',tipo_comprobante:tipoComprobante,numero_documento:numeroDocumento,dedicatoria:'',foto_torta:foto,detalles})}); const resultado=await respuesta.json(); if(!respuesta.ok) return alert(resultado.error||'No se pudo registrar el pedido.'); alert(`Pedido ${resultado.codigo||''} registrado.`); document.getElementById('colDetalle').value=''; renderPreviewColaborador(); cargar(); }
     document.getElementById('colTipoComprobante').addEventListener('change', (event) => { const tipo=event.target.value, visible=tipo==='boleta'||tipo==='factura', label=document.getElementById('colNumeroDocumentoLabel'), input=document.getElementById('colNumeroDocumento'); label.style.display=visible?'block':'none'; input.style.display=visible?'block':'none'; label.textContent=tipo==='factura'?'RUC':'DNI'; input.maxLength=tipo==='factura'?11:8; input.placeholder=tipo==='factura'?'20123456789':'12345678'; if(!visible) input.value=''; });
     document.getElementById('tabGeneral').addEventListener('click',()=>{document.getElementById('tabGeneral').classList.add('active');document.getElementById('tabDigitacion').classList.remove('active');document.getElementById('panelGeneral').classList.add('active');document.getElementById('panelDigitacion').classList.remove('active');});
     document.getElementById('tabDigitacion').addEventListener('click',async()=>{document.getElementById('tabDigitacion').classList.add('active');document.getElementById('tabGeneral').classList.remove('active');document.getElementById('panelDigitacion').classList.add('active');document.getElementById('panelGeneral').classList.remove('active'); if(!catalogoColaborador.length) await cargarCatalogoColaborador(); renderPreviewColaborador();});
@@ -124,7 +213,9 @@
     const safe = (text) => String(text || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     async function actualizarEstadoPedidoColaborador(id, estado) {
       try {
-        const r = await fetch(api(`/api/admin/pedidos/${id}/estado`), { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado}) });
+        const sesion = leerSesion();
+        const despachado_por = estado === "Despachado (D'chelis)" ? (sesion.nombre || sesion.usuario || 'Colaborador') : '';
+        const r = await fetch(api(`/api/admin/pedidos/${id}/estado`), { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado, despachado_por}) });
         const data = await r.json().catch(()=>({}));
         if (!r.ok) throw new Error(data.error || 'No se pudo actualizar el pedido.');
         await cargar();
@@ -136,7 +227,11 @@
     function cambiarArmado(id, marcado) { if (marcado) actualizarEstadoPedidoColaborador(id, 'Listo para despacho'); }
     function cambiarDespacho(id, marcado) { if (marcado) actualizarEstadoPedidoColaborador(id, "Despachado (D'chelis)"); }
     async function cargar() { const out=document.getElementById('pedidos'), resumen=document.getElementById('resumen'); resumen.textContent='Cargando pedidos…'; out.innerHTML=''; try { const r=await fetch(api(`/api/colaboradores/salidas?fecha=${encodeURIComponent(fecha.value)}`)); const data=await r.json(); if(!r.ok) throw new Error(data.error || 'No se pudieron cargar los pedidos.'); const pedidos=data.pedidos || []; resumen.textContent=pedidos.length ? `${pedidos.length} pedido(s) programado(s) para hoy.` : 'No hay pedidos programados para esta fecha.'; out.innerHTML=pedidos.map(p=>{ const armado=['Listo para despacho',"Despachado (D'chelis)"].includes(String(p.estado || '')); return `<article><div class="top"><span class="code">${safe(p.codigo)}</span><span class="status">${safe(p.estado)}</span></div><div class="time">${safe(p.hora_recoge || '--:--')}</div><div class="name">${safe(p.cliente_nombre)}</div><ul>${p.detalles.map(d=>`<li><span>${safe(d.producto_nombre)}</span><strong>${Number(d.cantidad)||0}</strong></li>`).join('')}</ul><div class="dispatch-actions"><label class="dispatch-check armado"><input type="checkbox" ${armado ? 'checked' : ''} onchange="cambiarArmado(${Number(p.id)}, this.checked)" aria-label="Marcar pedido como armado"><span>Armado</span></label><label class="dispatch-check despachado"><input type="checkbox" onchange="cambiarDespacho(${Number(p.id)}, this.checked)" aria-label="Marcar pedido como despachado"><span>Despachado</span></label></div></article>`;}).join(''); } catch(e) { resumen.textContent=`${e.message}${!base && location.hostname.endsWith('github.io') ? ' Configura la URL del servidor en config.js.' : ''}`; } }
-    document.getElementById('actualizar').addEventListener('click', cargar); fecha.addEventListener('change',cargar); if (sesionValida()) abrirApp(); setInterval(() => { if (!document.getElementById('collaboratorApp').classList.contains('hidden')) cargar(); },30000);
+    document.getElementById('actualizar').addEventListener('click', cargar);
+    document.getElementById('cerrarSesion').addEventListener('click', () => { localStorage.removeItem(SESSION_KEY); location.reload(); });
+    fecha.addEventListener('change',cargar);
+    if (sesionValida()) abrirApp();
+    setInterval(() => { if (!document.getElementById('collaboratorApp').classList.contains('hidden')) cargar(); },30000);
   </script>
 </body>
 </html>
