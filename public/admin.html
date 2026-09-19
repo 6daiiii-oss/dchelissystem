@@ -5,8 +5,7 @@
   <title>D'chelis | Panel Administrativo</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-   <script src="auth-config.js"></script>
-  <script src="digitacion-config.js"></script>
+<script src="digitacion-config.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -1251,10 +1250,6 @@
   </div>
 
   <script>
-    const ADMIN_ACCOUNTS = (window.DCHELIS_ADMIN_ACCOUNTS || window.DCHELIS_ACCOUNTS || [])
-      .filter((cuenta) => cuenta.rol === 'admin' || cuenta.usuario === 'dchelis');
-    const AUTH_SESSION_KEY = 'dchelis_admin_session_v1';
-    const ADMIN_SESSION_MS = 60 * 60 * 1000;
     const ADMIN_TAB_KEY = 'dchelis_admin_tab_v1';
     const ADMIN_FORM_KEY = 'dchelis_admin_digitacion_v1';
     const PRODUCTOS_COCINA_ORDEN = [
@@ -1691,14 +1686,14 @@
       return !!resuelto && resuelto === cocinaNombre;
     }
 
-    function guardarSesionAdmin() {
-      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ expira: Date.now() + ADMIN_SESSION_MS }));
-    }
-
-    function sesionAdminValida() {
+    async function sesionAdminValida() {
       try {
-        const sesion = JSON.parse(localStorage.getItem(AUTH_SESSION_KEY) || 'null');
-        return !!sesion && Number(sesion.expira) > Date.now();
+        const response = await fetch('/api/admin/auth/session', {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store'
+        });
+        return response.ok;
       } catch (error) {
         return false;
       }
@@ -2090,25 +2085,47 @@
       document.getElementById('adminApp').classList.add('hidden');
       document.getElementById('loginScreen').classList.remove('hidden');
       document.getElementById('loginPass').value = '';
-      localStorage.removeItem(AUTH_SESSION_KEY);
     }
 
-    document.getElementById('loginForm').addEventListener('submit', (event) => {
+    document.getElementById('loginForm').addEventListener('submit', async (event) => {
       event.preventDefault();
       const usuario = document.getElementById('loginUser').value.trim();
-      const password = document.getElementById('loginPass').value.trim();
-      const cuentaValida = ADMIN_ACCOUNTS.some((cuenta) => cuenta.usuario === usuario && cuenta.password === password);
-      if (cuentaValida) {
-        guardarSesionAdmin();
-        openDashboard();
-        return;
-      }
+      const password = document.getElementById('loginPass').value;
+      const boton = event.currentTarget.querySelector('button[type="submit"]');
 
-      alert('Credenciales incorrectas.');
+      if (boton) boton.disabled = true;
+      try {
+        const response = await fetch('/api/admin/auth/login', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario, password })
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          alert(data.error || 'No se pudo iniciar sesión.');
+          return;
+        }
+
+        document.getElementById('loginPass').value = '';
+        openDashboard();
+      } catch (error) {
+        alert('No se pudo conectar con el servidor de autenticación.');
+      } finally {
+        if (boton) boton.disabled = false;
+      }
     });
 
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-      closeDashboard();
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      try {
+        await fetch('/api/admin/auth/logout', {
+          method: 'POST',
+          credentials: 'same-origin'
+        });
+      } finally {
+        closeDashboard();
+      }
     });
 
     document.querySelectorAll('.tab-btn').forEach((btn) => {
@@ -3331,7 +3348,9 @@
     }
 
     cargarEstadoDigitacion();
-    if (sesionAdminValida()) openDashboard();
+    (async () => {
+      if (await sesionAdminValida()) openDashboard();
+    })();
   </script>
 </body>
 </html>
