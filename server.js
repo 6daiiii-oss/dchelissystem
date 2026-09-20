@@ -99,7 +99,7 @@ async function resolveSessionUser(req, cookieName, allowedRoles) {
 
 async function resolveStaffUser(req) {
   return await resolveSessionUser(req, ADMIN_COOKIE, ['admin'])
-    || await resolveSessionUser(req, COLLAB_COOKIE, ['colaborador']);
+    || await resolveSessionUser(req, COLLAB_COOKIE, ['colaborador', 'admin']);
 }
 
 function sameOriginRequest(req) {
@@ -196,10 +196,11 @@ function buildSessionCookie(req, cookieName, token, maxAgeSeconds) {
   return attributes.join('; ');
 }
 
-async function authenticateUser(req, res, role, cookieName, rateScope) {
+async function authenticateUser(req, res, roles, cookieName, rateScope) {
   res.setHeader('Cache-Control', 'no-store');
   if (!sameOriginRequest(req)) return res.status(403).json({ error: 'Origen no autorizado.' });
 
+  const allowedRoles = Array.isArray(roles) ? roles : [roles];
   const rate = checkLoginRate(req, rateScope);
   if (!rate.allowed) {
     res.setHeader('Retry-After', String(rate.retryAfter));
@@ -210,13 +211,13 @@ async function authenticateUser(req, res, role, cookieName, rateScope) {
   const password = String(req.body?.password || '');
   const user = usuario
     ? await dbGetAsync(
-        `SELECT id, usuario, nombre, password_hash, rol, activo FROM usuarios WHERE LOWER(usuario) = LOWER(?) AND rol = ? LIMIT 1`,
-        [usuario, role]
+        `SELECT id, usuario, nombre, password_hash, rol, activo FROM usuarios WHERE LOWER(usuario) = LOWER(?) LIMIT 1`,
+        [usuario]
       )
     : null;
 
   const passwordOk = await bcrypt.compare(password, user?.password_hash || DUMMY_PASSWORD_HASH);
-  if (!user || !user.activo || !passwordOk) {
+  if (!user || !user.activo || !allowedRoles.includes(String(user.rol)) || !passwordOk) {
     registerFailedLogin(rate.key, rate.state);
     return res.status(401).json({ error: 'Credenciales incorrectas.' });
   }
@@ -603,7 +604,7 @@ db.serialize(() => {
 // Seguridad de administradores y colaboradores
 app.post('/api/admin/auth/login', async (req, res) => {
   try {
-    return await authenticateUser(req, res, 'admin', ADMIN_COOKIE, 'admin');
+    return await authenticateUser(req, res, ['admin'], ADMIN_COOKIE, 'admin');
   } catch (error) {
     return res.status(500).json({ error: 'No se pudo iniciar sesión.' });
   }
@@ -627,7 +628,7 @@ app.post('/api/admin/auth/logout', (req, res) => {
 
 app.post('/api/colaboradores/auth/login', async (req, res) => {
   try {
-    return await authenticateUser(req, res, 'colaborador', COLLAB_COOKIE, 'colaborador');
+    return await authenticateUser(req, res, ['colaborador', 'admin'], COLLAB_COOKIE, 'colaborador');
   } catch (error) {
     return res.status(500).json({ error: 'No se pudo iniciar sesión.' });
   }
@@ -635,7 +636,7 @@ app.post('/api/colaboradores/auth/login', async (req, res) => {
 
 app.get('/api/colaboradores/auth/session', async (req, res) => {
   try {
-    const user = await resolveSessionUser(req, COLLAB_COOKIE, ['colaborador']);
+    const user = await resolveSessionUser(req, COLLAB_COOKIE, ['colaborador', 'admin']);
     if (!user) return res.status(401).json({ authenticated: false });
     return res.json({ authenticated: true, usuario: user.usuario, nombre: user.nombre, rol: user.rol });
   } catch (error) {
