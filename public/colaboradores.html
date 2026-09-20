@@ -6,8 +6,7 @@
   <title>D'chelis | Salidas del día</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script src="config.js"></script>
-   <script src="auth-config.js"></script>
-  <script src="digitacion-config.js"></script>
+<script src="digitacion-config.js"></script>
   <style>
     :root { --ink:#173c2b; --accent:#b75e36; --paper:#fffaf5; --line:#eadfd6; --muted:#766b64; }
     * { box-sizing:border-box; } body { margin:0; background:radial-gradient(circle at right top,#ffe5d1,transparent 28rem),var(--paper); color:#29221e; font-family:'Plus Jakarta Sans',sans-serif; }
@@ -83,32 +82,57 @@
   </main><footer>Esta vista es solo de consulta. Los pedidos se administran desde el panel administrativo.</footer>
   </div>
   <script>
-    const NOMBRES_COLABORADORES = { dchelis2: 'Colaborador 1', dchelis3: 'Colaborador 2' };
-    const ACCOUNTS = (window.DCHELIS_COLLABORATOR_ACCOUNTS || window.DCHELIS_ACCOUNTS || [])
-      .filter((cuenta) => cuenta.rol === 'colaborador' || cuenta.usuario !== 'dchelis')
-      .map((cuenta) => ({ ...cuenta, nombre: cuenta.nombre || NOMBRES_COLABORADORES[cuenta.usuario] || cuenta.usuario }));
-    const SESSION_KEY = 'dchelis_collaborator_session_v1';
-    const SESSION_MS = 60 * 60 * 1000;
-    const leerSesion = () => { try { return JSON.parse(localStorage.getItem(SESSION_KEY) || '{}'); } catch { return {}; } };
-    const sesionValida = () => Number(leerSesion().expira || 0) > Date.now();
-    const abrirApp = () => {
-      const sesion = leerSesion();
+    const base = String(window.DCHELIS_API_URL || localStorage.getItem('dchelis_api_url') || '').replace(/\/$/, '');
+    const api = (path) => base ? `${base}${path}` : path;
+    let collaboratorSession = null;
+
+    async function obtenerSesionColaborador() {
+      try {
+        const response = await fetch(api('/api/colaboradores/auth/session'), {
+          credentials: 'include',
+          cache: 'no-store'
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data.authenticated ? data : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function abrirApp(sesion) {
+      collaboratorSession = sesion || collaboratorSession || {};
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('collaboratorApp').classList.remove('hidden');
-      document.getElementById('collaboratorName').textContent = sesion.nombre || sesion.usuario || 'Colaborador';
+      document.getElementById('collaboratorName').textContent = collaboratorSession.nombre || collaboratorSession.usuario || 'Colaborador';
       cargar();
-    };
-    document.getElementById('loginForm').addEventListener('submit', (event) => {
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (event) => {
       event.preventDefault();
       const usuario = document.getElementById('loginUser').value.trim();
       const password = document.getElementById('loginPass').value;
-      const cuenta = ACCOUNTS.find((item) => item.usuario === usuario && item.password === password);
-      if (!cuenta) return alert('Usuario o contraseña incorrectos.');
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ expira: Date.now() + SESSION_MS, usuario: cuenta.usuario, nombre: cuenta.nombre || cuenta.usuario }));
-      abrirApp();
+      const boton = event.currentTarget.querySelector('button[type="submit"]');
+      if (boton) boton.disabled = true;
+
+      try {
+        const response = await fetch(api('/api/colaboradores/auth/login'), {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario, password })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) return alert(data.error || 'Usuario o contraseña incorrectos.');
+        document.getElementById('loginPass').value = '';
+        abrirApp(data);
+      } catch {
+        alert('No se pudo conectar con el servidor de autenticación.');
+      } finally {
+        if (boton) boton.disabled = false;
+      }
     });
-    const base = String(window.DCHELIS_API_URL || localStorage.getItem('dchelis_api_url') || '').replace(/\/$/, '');
-    const api = (path) => base ? `${base}${path}` : path;
+
     let catalogoColaborador = [];
     const fotosTortaColaborador = new Map();
     const normalizar = (texto) => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -194,7 +218,7 @@
       const total=detalles.reduce((s,d)=>s+d.subtotal,0), adelanto=Number(document.getElementById('colAdelanto').value||0);
       if(adelanto>total) return alert('El adelanto no puede superar el total.');
       const foto=detalles.find((detalle)=>detalle.foto_torta)?.foto_torta||'';
-      const respuesta=await fetch(api('/api/pedidos'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tipo_cliente:'Cliente',cliente_nombre:`${nombre} ${apellido}`,celular,monto_total:Number(total.toFixed(2)),adelanto:Number(adelanto.toFixed(2)),metodo_pago:'Efectivo',fecha_recoge:document.getElementById('colFecha').value||new Date().toISOString().slice(0,10),hora_recoge:document.getElementById('colHora').value||'18:00',tipo_comprobante:tipoComprobante,numero_documento:numeroDocumento,dedicatoria:'',foto_torta:foto,origen:'digitacion',detalles})});
+      const respuesta=await fetch(api('/api/pedidos'),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({tipo_cliente:'Cliente',cliente_nombre:`${nombre} ${apellido}`,celular,monto_total:Number(total.toFixed(2)),adelanto:Number(adelanto.toFixed(2)),metodo_pago:'Efectivo',fecha_recoge:document.getElementById('colFecha').value||new Date().toISOString().slice(0,10),hora_recoge:document.getElementById('colHora').value||'18:00',tipo_comprobante:tipoComprobante,numero_documento:numeroDocumento,dedicatoria:'',foto_torta:foto,origen:'digitacion',detalles})});
       const resultado=await respuesta.json();
       if(!respuesta.ok) return alert(resultado.error||'No se pudo registrar el pedido.');
       alert(`Pedido ${resultado.codigo||''} registrado.`);
@@ -212,9 +236,7 @@
     const safe = (text) => String(text || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     async function actualizarEstadoPedidoColaborador(id, estado) {
       try {
-        const sesion = leerSesion();
-        const despachado_por = estado === "Despachado (D'chelis)" ? (sesion.nombre || sesion.usuario || 'Colaborador') : '';
-        const r = await fetch(api(`/api/admin/pedidos/${id}/estado`), { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado, despachado_por}) });
+        const r = await fetch(api(`/api/admin/pedidos/${id}/estado`), { method:'PUT', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({estado}) });
         const data = await r.json().catch(()=>({}));
         if (!r.ok) throw new Error(data.error || 'No se pudo actualizar el pedido.');
         await cargar();
@@ -225,12 +247,30 @@
     }
     function cambiarArmado(id, marcado) { if (marcado) actualizarEstadoPedidoColaborador(id, 'Listo para despacho'); }
     function cambiarDespacho(id, marcado) { if (marcado) actualizarEstadoPedidoColaborador(id, "Despachado (D'chelis)"); }
-    async function cargar() { const out=document.getElementById('pedidos'), resumen=document.getElementById('resumen'); resumen.textContent='Cargando pedidos…'; out.innerHTML=''; try { const r=await fetch(api(`/api/colaboradores/salidas?fecha=${encodeURIComponent(fecha.value)}`)); const data=await r.json(); if(!r.ok) throw new Error(data.error || 'No se pudieron cargar los pedidos.'); const pedidos=data.pedidos || []; resumen.textContent=pedidos.length ? `${pedidos.length} pedido(s) programado(s) para hoy.` : 'No hay pedidos programados para esta fecha.'; out.innerHTML=pedidos.map(p=>{ const armado=['Listo para despacho',"Despachado (D'chelis)"].includes(String(p.estado || '')); return `<article><div class="top"><span class="code">${safe(p.codigo)}</span><span class="status">${safe(p.estado)}</span></div><div class="time">${safe(p.hora_recoge || '--:--')}</div><div class="name">${safe(p.cliente_nombre)}</div><ul>${p.detalles.map(d=>`<li><span>${safe(d.producto_nombre)}</span><strong>${Number(d.cantidad)||0}</strong></li>`).join('')}</ul><div class="dispatch-actions"><label class="dispatch-check armado"><input type="checkbox" ${armado ? 'checked' : ''} onchange="cambiarArmado(${Number(p.id)}, this.checked)" aria-label="Marcar pedido como armado"><span>Armado</span></label><label class="dispatch-check despachado"><input type="checkbox" onchange="cambiarDespacho(${Number(p.id)}, this.checked)" aria-label="Marcar pedido como despachado"><span>Despachado</span></label></div></article>`;}).join(''); } catch(e) { resumen.textContent=`${e.message}${!base && location.hostname.endsWith('github.io') ? ' Configura la URL del servidor en config.js.' : ''}`; } }
+    async function cargar() { const out=document.getElementById('pedidos'), resumen=document.getElementById('resumen'); resumen.textContent='Cargando pedidos…'; out.innerHTML=''; try { const r=await fetch(api(`/api/colaboradores/salidas?fecha=${encodeURIComponent(fecha.value)}`), { credentials:'include', cache:'no-store' }); const data=await r.json(); if(!r.ok) throw new Error(data.error || 'No se pudieron cargar los pedidos.'); const pedidos=data.pedidos || []; resumen.textContent=pedidos.length ? `${pedidos.length} pedido(s) programado(s) para hoy.` : 'No hay pedidos programados para esta fecha.'; out.innerHTML=pedidos.map(p=>{ const armado=['Listo para despacho',"Despachado (D'chelis)"].includes(String(p.estado || '')); return `<article><div class="top"><span class="code">${safe(p.codigo)}</span><span class="status">${safe(p.estado)}</span></div><div class="time">${safe(p.hora_recoge || '--:--')}</div><div class="name">${safe(p.cliente_nombre)}</div><ul>${p.detalles.map(d=>`<li><span>${safe(d.producto_nombre)}</span><strong>${Number(d.cantidad)||0}</strong></li>`).join('')}</ul><div class="dispatch-actions"><label class="dispatch-check armado"><input type="checkbox" ${armado ? 'checked' : ''} onchange="cambiarArmado(${Number(p.id)}, this.checked)" aria-label="Marcar pedido como armado"><span>Armado</span></label><label class="dispatch-check despachado"><input type="checkbox" onchange="cambiarDespacho(${Number(p.id)}, this.checked)" aria-label="Marcar pedido como despachado"><span>Despachado</span></label></div></article>`;}).join(''); } catch(e) { resumen.textContent=`${e.message}${!base && location.hostname.endsWith('github.io') ? ' Configura la URL del servidor en config.js.' : ''}`; } }
     document.getElementById('actualizar').addEventListener('click', cargar);
-    document.getElementById('cerrarSesion').addEventListener('click', () => { localStorage.removeItem(SESSION_KEY); location.reload(); });
+    document.getElementById('cerrarSesion').addEventListener('click', async () => {
+      try {
+        await fetch(api('/api/colaboradores/auth/logout'), { method:'POST', credentials:'include' });
+      } finally {
+        location.reload();
+      }
+    });
     fecha.addEventListener('change',cargar);
-    if (sesionValida()) abrirApp();
+    (async () => {
+      const sesion = await obtenerSesionColaborador();
+      if (sesion) abrirApp(sesion);
+    })();
     setInterval(() => { if (!document.getElementById('collaboratorApp').classList.contains('hidden')) cargar(); },30000);
+    setInterval(async () => {
+      if (document.getElementById('collaboratorApp').classList.contains('hidden')) return;
+      const sesion = await obtenerSesionColaborador();
+      if (!sesion) location.reload();
+      else {
+        collaboratorSession = sesion;
+        document.getElementById('collaboratorName').textContent = sesion.nombre || sesion.usuario || 'Colaborador';
+      }
+    },60000);
   </script>
 </body>
 </html>
