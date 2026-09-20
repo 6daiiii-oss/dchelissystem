@@ -1039,6 +1039,17 @@
     .cake-photo-control input[type="file"] { width:100%; }
     .cake-photo-preview { width:120px; height:84px; object-fit:cover; border:1px solid #d0d5dd; border-radius:9px; background:#fff; }
     .cake-detail-photo { display:block; width:min(260px,100%); max-height:220px; object-fit:contain; margin-top:8px; border:1px solid #d0d5dd; border-radius:10px; background:#fff; }
+    .users-admin-grid { display:grid; gap:14px; margin-top:18px; }
+    .user-admin-card { display:grid; grid-template-columns:minmax(160px,1fr) minmax(180px,1.3fr) 150px 110px minmax(180px,1.2fr) auto; gap:10px; align-items:end; padding:14px; border:1px solid var(--line); border-radius:14px; background:#fff; }
+    .user-admin-card .user-meta { align-self:center; }
+    .user-admin-card .user-name { display:block; font-weight:900; color:var(--brand); }
+    .user-admin-card .user-login { display:block; margin-top:3px; color:var(--muted); font-size:.78rem; }
+    .user-admin-card label { display:flex; flex-direction:column; gap:5px; color:var(--muted); font-size:.72rem; font-weight:800; text-transform:uppercase; }
+    .user-admin-card input, .user-admin-card select { width:100%; min-height:42px; border:1px solid var(--line); border-radius:10px; padding:9px 11px; background:#fff; font:inherit; }
+    .user-active-control { display:flex !important; flex-direction:row !important; align-items:center; gap:8px !important; min-height:42px; }
+    .user-active-control input { width:auto !important; min-height:auto !important; }
+    @media (max-width: 1050px) { .user-admin-card { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width: 640px) { .user-admin-card { grid-template-columns:1fr; } }
     @media print { body.printing-cocina .kitchen-section-title { display:none !important; } }
     @media (max-width: 640px) { .admin-shell { padding: 14px 12px 32px; } .topbar { border-radius: 15px; min-height: 100px; padding: 20px; } .tab-nav { width: 100%; } .panel { border-radius: 15px; } }
 
@@ -1078,6 +1089,7 @@
       <button class="tab-btn" data-tab="cocina">Cocina</button>
       <button class="tab-btn" data-tab="inventario">Inventario</button>
       <button class="tab-btn" data-tab="historial">Historial</button>
+      <button class="tab-btn" data-tab="usuarios">Usuarios</button>
     </nav>
 
     <section id="panel-general" class="tab-panel active">
@@ -1234,6 +1246,45 @@
       </div>
     </section>
 
+    <section id="panel-usuarios" class="tab-panel">
+      <div class="panel">
+        <div class="header-row">
+          <div>
+            <h3>Usuarios y accesos</h3>
+            <div style="margin-top:5px; color:var(--muted); font-size:.82rem;">Crea cuentas individuales. El nombre asignado es el que se registra cuando esa persona despacha un pedido.</div>
+          </div>
+        </div>
+
+        <form id="crearUsuarioForm" class="settings-grid" style="margin-top:16px;">
+          <div class="field">
+            <label for="nuevoUsuarioNombre">Nombre de la persona</label>
+            <input id="nuevoUsuarioNombre" required maxlength="80" placeholder="Ej. Carlos Mendoza" />
+          </div>
+          <div class="field">
+            <label for="nuevoUsuarioLogin">Usuario</label>
+            <input id="nuevoUsuarioLogin" required minlength="3" maxlength="40" autocomplete="off" placeholder="Ej. carlos" />
+          </div>
+          <div class="field">
+            <label for="nuevoUsuarioPassword">Contraseña</label>
+            <input id="nuevoUsuarioPassword" type="password" required minlength="10" autocomplete="new-password" placeholder="Mínimo 10 caracteres" />
+          </div>
+          <div class="field">
+            <label for="nuevoUsuarioRol">Rol</label>
+            <select id="nuevoUsuarioRol" class="form-control">
+              <option value="colaborador">Colaborador</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          <div class="controls" style="align-self:end;">
+            <button class="btn btn-primary" type="submit">Crear usuario</button>
+          </div>
+        </form>
+
+        <div id="usuariosAdminMensaje" style="margin-top:14px; color:var(--muted); font-size:.82rem;"></div>
+        <div id="usuariosAdminLista" class="users-admin-grid"></div>
+      </div>
+    </section>
+
   </div>
 
   <div id="pedidoDetalleModal" class="pedido-modal" onclick="cerrarDetallePedido(event)">
@@ -1288,6 +1339,118 @@
     let filtroHistorialPedidos = '';
     let buscarPedidosTimer = null;
     let buscarHistorialTimer = null;
+
+    function escapeHtmlAdmin(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[char]));
+    }
+
+    async function cargarUsuariosAdmin() {
+      const contenedor = document.getElementById('usuariosAdminLista');
+      const mensaje = document.getElementById('usuariosAdminMensaje');
+      if (!contenedor) return;
+      if (mensaje) mensaje.textContent = 'Cargando usuarios…';
+
+      try {
+        const response = await fetch('/api/admin/usuarios', { cache: 'no-store' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'No se pudieron cargar los usuarios.');
+
+        const usuarios = Array.isArray(data.usuarios) ? data.usuarios : [];
+        if (mensaje) mensaje.textContent = usuarios.length ? `${usuarios.length} cuenta(s) registrada(s).` : 'No hay usuarios registrados.';
+
+        contenedor.innerHTML = usuarios.map((usuario) => {
+          const id = Number(usuario.id);
+          const ultimoLogin = usuario.ultimo_login ? new Date(usuario.ultimo_login).toLocaleString('es-PE') : 'Nunca';
+          return `
+            <div class="user-admin-card" data-user-id="${id}">
+              <div class="user-meta">
+                <span class="user-name">${escapeHtmlAdmin(usuario.nombre)}</span>
+                <span class="user-login">@${escapeHtmlAdmin(usuario.usuario)} · Último acceso: ${escapeHtmlAdmin(ultimoLogin)}</span>
+              </div>
+              <label>Nombre
+                <input id="usuarioNombre-${id}" value="${escapeHtmlAdmin(usuario.nombre)}" maxlength="80" />
+              </label>
+              <label>Rol
+                <select id="usuarioRol-${id}">
+                  <option value="colaborador" ${usuario.rol === 'colaborador' ? 'selected' : ''}>Colaborador</option>
+                  <option value="admin" ${usuario.rol === 'admin' ? 'selected' : ''}>Administrador</option>
+                </select>
+              </label>
+              <label class="user-active-control">
+                <input id="usuarioActivo-${id}" type="checkbox" ${usuario.activo ? 'checked' : ''} />
+                Activo
+              </label>
+              <label>Nueva contraseña
+                <input id="usuarioPassword-${id}" type="password" minlength="10" autocomplete="new-password" placeholder="Dejar vacío para conservar" />
+              </label>
+              <button class="btn btn-primary" type="button" onclick="guardarUsuarioAdmin(${id})">Guardar</button>
+            </div>
+          `;
+        }).join('');
+      } catch (error) {
+        if (mensaje) mensaje.textContent = error.message || 'No se pudieron cargar los usuarios.';
+        contenedor.innerHTML = '';
+      }
+    }
+
+    async function crearUsuarioAdmin(event) {
+      event.preventDefault();
+      const payload = {
+        nombre: document.getElementById('nuevoUsuarioNombre').value.trim(),
+        usuario: document.getElementById('nuevoUsuarioLogin').value.trim(),
+        password: document.getElementById('nuevoUsuarioPassword').value,
+        rol: document.getElementById('nuevoUsuarioRol').value
+      };
+      const boton = event.currentTarget.querySelector('button[type="submit"]');
+      if (boton) boton.disabled = true;
+
+      try {
+        const response = await fetch('/api/admin/usuarios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'No se pudo crear el usuario.');
+
+        event.currentTarget.reset();
+        document.getElementById('nuevoUsuarioRol').value = 'colaborador';
+        await cargarUsuariosAdmin();
+        alert('Usuario creado correctamente.');
+      } catch (error) {
+        alert(error.message || 'No se pudo crear el usuario.');
+      } finally {
+        if (boton) boton.disabled = false;
+      }
+    }
+
+    async function guardarUsuarioAdmin(id) {
+      const payload = {
+        nombre: document.getElementById(`usuarioNombre-${id}`).value.trim(),
+        rol: document.getElementById(`usuarioRol-${id}`).value,
+        activo: document.getElementById(`usuarioActivo-${id}`).checked,
+        password: document.getElementById(`usuarioPassword-${id}`).value
+      };
+
+      try {
+        const response = await fetch(`/api/admin/usuarios/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'No se pudo actualizar el usuario.');
+        await cargarUsuariosAdmin();
+        alert('Usuario actualizado.');
+      } catch (error) {
+        alert(error.message || 'No se pudo actualizar el usuario.');
+      }
+    }
+
+    document.getElementById('crearUsuarioForm')?.addEventListener('submit', crearUsuarioAdmin);
+
     window.__quickCatalog = [];
     window.__quickCakePhotos = new Map();
 
@@ -2138,6 +2301,7 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
         document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${btn.dataset.tab}`));
         localStorage.setItem(ADMIN_TAB_KEY, btn.dataset.tab);
+        if (btn.dataset.tab === 'usuarios') cargarUsuariosAdmin();
       });
     });
 
@@ -3337,6 +3501,7 @@
       await cargarPedidosGenerales();
       await cargarHistorialPedidos();
       await cargarMatriz();
+      await cargarUsuariosAdmin();
       const fechaInventario = document.getElementById('inventarioFecha');
       if (fechaInventario && !fechaInventario.value) fechaInventario.value = new Date().toISOString().slice(0, 10);
       await generarCompraDia();
