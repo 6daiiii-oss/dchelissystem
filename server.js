@@ -12,28 +12,44 @@ const bcrypt = require('bcryptjs');
 app.set('trust proxy', 1);
 
 const ADMIN_COOKIE = 'dchelis_admin_session';
-const ADMIN_SESSION_MS = 60 * 60 * 1000;
-const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'dchelis').trim();
-const ADMIN_PASSWORD_HASH = String(process.env.ADMIN_PASSWORD_HASH || '').trim();
-const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '');
-const ADMIN_PASSWORD_DIGEST = ADMIN_PASSWORD_HASH || (ADMIN_PASSWORD ? bcrypt.hashSync(ADMIN_PASSWORD, 12) : '');
-const ADMIN_SESSION_SECRET = String(process.env.ADMIN_SESSION_SECRET || crypto.randomBytes(48).toString('hex'));
-const ADMIN_LOGIN_ATTEMPTS = new Map();
+const COLLAB_COOKIE = 'dchelis_collaborator_session';
+const SESSION_MS = 60 * 60 * 1000;
+const SESSION_SECRET = String(process.env.ADMIN_SESSION_SECRET || crypto.randomBytes(48).toString('hex'));
+const LOGIN_ATTEMPTS = new Map();
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 12);
 
-if (!ADMIN_PASSWORD_DIGEST) {
-  console.warn('SEGURIDAD ADMIN: configura ADMIN_PASSWORD o ADMIN_PASSWORD_HASH en Render. El acceso administrativo permanecerá bloqueado hasta hacerlo.');
-}
 if (!process.env.ADMIN_SESSION_SECRET) {
-  console.warn('SEGURIDAD ADMIN: ADMIN_SESSION_SECRET no está configurado. Se usará un secreto temporal y las sesiones se cerrarán al reiniciar.');
+  console.warn('SEGURIDAD: ADMIN_SESSION_SECRET no está configurado. Se usará un secreto temporal y las sesiones se cerrarán al reiniciar.');
+}
+
+function dbGetAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row || null));
+  });
+}
+
+function dbAllAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []));
+  });
+}
+
+function dbRunAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) return reject(err);
+      resolve({ lastID: this.lastID, changes: this.changes || 0 });
+    });
+  });
 }
 
 function encodeBase64Url(value) {
   return Buffer.from(value).toString('base64url');
 }
 
-function signAdminSession(payload) {
+function signSession(payload) {
   const encoded = encodeBase64Url(JSON.stringify(payload));
-  const signature = crypto.createHmac('sha256', ADMIN_SESSION_SECRET).update(encoded).digest('base64url');
+  const signature = crypto.createHmac('sha256', SESSION_SECRET).update(encoded).digest('base64url');
   return `${encoded}.${signature}`;
 }
 
@@ -49,24 +65,41 @@ function readCookie(req, name) {
   return '';
 }
 
-function verifyAdminSession(req) {
-  const token = readCookie(req, ADMIN_COOKIE);
+function verifySignedSession(req, cookieName) {
+  const token = readCookie(req, cookieName);
   if (!token) return null;
   const [encoded, signature] = token.split('.');
   if (!encoded || !signature) return null;
 
-  const expected = crypto.createHmac('sha256', ADMIN_SESSION_SECRET).update(encoded).digest('base64url');
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(encoded).digest('base64url');
   const receivedBuffer = Buffer.from(signature);
   const expectedBuffer = Buffer.from(expected);
   if (receivedBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(receivedBuffer, expectedBuffer)) return null;
 
   try {
     const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
-    if (payload.role !== 'admin' || payload.sub !== ADMIN_USERNAME || Number(payload.exp || 0) <= Date.now()) return null;
+    if (!payload.uid || Number(payload.exp || 0) <= Date.now()) return null;
     return payload;
   } catch {
     return null;
   }
+}
+
+async function resolveSessionUser(req, cookieName, allowedRoles) {
+  const session = verifySignedSession(req, cookieName);
+  if (!session) return null;
+
+  const user = await dbGetAsync(
+    `SELECT id, usuario, nombre, rol, activo FROM usuarios WHERE id = ? LIMIT 1`,
+    [Number(session.uid)]
+  );
+  if (!user || !user.activo || !allowedRoles.includes(String(user.rol))) return null;
+  return user;
+}
+
+async function resolveStaffUser(req) {
+  return await resolveSessionUser(req, ADMIN_COOKIE, ['admin'])
+    || await resolveSessionUser(req, COLLAB_COOKIE, ['colaborador']);
 }
 
 function sameOriginRequest(req) {
@@ -76,17 +109,46 @@ function sameOriginRequest(req) {
   return origin.replace(/\/$/, '') === expectedOrigin;
 }
 
-function requireAdminAuth(req, res, next) {
-  res.setHeader('Cache-Control', 'no-store');
-  const session = verifyAdminSession(req);
-  if (!session) return res.status(401).json({ error: 'Sesión administrativa requerida.' });
-
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !sameOriginRequest(req)) {
-    return res.status(403).json({ error: 'Origen no autorizado.' });
+async function requireAdminAuth(req, res, next) {
+  try {
+    res.setHeader('Cache-Control', 'no-store');
+    const user = await resolveSessionUser(req, ADMIN_COOKIE, ['admin']);
+    if (!user) return res.status(401).json({ error: 'Sesión administrativa requerida.' });
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !sameOriginRequest(req)) {
+      return res.status(403).json({ error: 'Origen no autorizado.' });
+    }
+    req.authUser = user;
+    next();
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo validar la sesión.' });
   }
+}
 
-  req.admin = session;
-  next();
+async function requireStaffAuth(req, res, next) {
+  try {
+    res.setHeader('Cache-Control', 'no-store');
+    const user = await resolveStaffUser(req);
+    if (!user) return res.status(401).json({ error: 'Sesión requerida.' });
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !sameOriginRequest(req)) {
+      return res.status(403).json({ error: 'Origen no autorizado.' });
+    }
+    req.authUser = user;
+    next();
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo validar la sesión.' });
+  }
+}
+
+async function protectDigitacionOrigin(req, res, next) {
+  if (String(req.body?.origen || '').trim().toLowerCase() !== 'digitacion') return next();
+  try {
+    const user = await resolveStaffUser(req);
+    if (!user) return res.status(401).json({ error: 'Sesión requerida para registrar pedidos por digitación.' });
+    req.authUser = user;
+    next();
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo validar la sesión.' });
+  }
 }
 
 function adminSecurityHeaders(req, res, next) {
@@ -98,29 +160,87 @@ function adminSecurityHeaders(req, res, next) {
   next();
 }
 
-function loginRateKey(req) {
-  return String(req.ip || req.socket?.remoteAddress || 'unknown');
+function loginRateKey(req, scope) {
+  return `${scope}:${String(req.ip || req.socket?.remoteAddress || 'unknown')}`;
 }
 
-function checkAdminLoginRate(req) {
-  const key = loginRateKey(req);
+function checkLoginRate(req, scope) {
+  const key = loginRateKey(req, scope);
   const now = Date.now();
   const windowMs = 15 * 60 * 1000;
   const maxAttempts = 5;
-  const previous = ADMIN_LOGIN_ATTEMPTS.get(key) || { count: 0, resetAt: now + windowMs };
+  const previous = LOGIN_ATTEMPTS.get(key) || { count: 0, resetAt: now + windowMs };
   const current = previous.resetAt <= now ? { count: 0, resetAt: now + windowMs } : previous;
   if (current.count >= maxAttempts) return { allowed: false, retryAfter: Math.ceil((current.resetAt - now) / 1000) };
   return { allowed: true, key, state: current };
 }
 
-function registerFailedAdminLogin(key, state) {
-  ADMIN_LOGIN_ATTEMPTS.set(key, { count: state.count + 1, resetAt: state.resetAt });
+function registerFailedLogin(key, state) {
+  LOGIN_ATTEMPTS.set(key, { count: state.count + 1, resetAt: state.resetAt });
 }
 
-function clearAdminLoginRate(req) {
-  ADMIN_LOGIN_ATTEMPTS.delete(loginRateKey(req));
+function clearLoginRate(req, scope) {
+  LOGIN_ATTEMPTS.delete(loginRateKey(req, scope));
 }
 
+function buildSessionCookie(req, cookieName, token, maxAgeSeconds) {
+  const secure = req.secure || process.env.NODE_ENV === 'production';
+  const attributes = [
+    `${cookieName}=${encodeURIComponent(token)}`,
+    'HttpOnly',
+    'SameSite=Strict',
+    'Path=/',
+    `Max-Age=${maxAgeSeconds}`
+  ];
+  if (secure) attributes.push('Secure');
+  return attributes.join('; ');
+}
+
+async function authenticateUser(req, res, role, cookieName, rateScope) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!sameOriginRequest(req)) return res.status(403).json({ error: 'Origen no autorizado.' });
+
+  const rate = checkLoginRate(req, rateScope);
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(rate.retryAfter));
+    return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos antes de volver a intentar.' });
+  }
+
+  const usuario = String(req.body?.usuario || '').trim();
+  const password = String(req.body?.password || '');
+  const user = usuario
+    ? await dbGetAsync(
+        `SELECT id, usuario, nombre, password_hash, rol, activo FROM usuarios WHERE LOWER(usuario) = LOWER(?) AND rol = ? LIMIT 1`,
+        [usuario, role]
+      )
+    : null;
+
+  const passwordOk = await bcrypt.compare(password, user?.password_hash || DUMMY_PASSWORD_HASH);
+  if (!user || !user.activo || !passwordOk) {
+    registerFailedLogin(rate.key, rate.state);
+    return res.status(401).json({ error: 'Credenciales incorrectas.' });
+  }
+
+  clearLoginRate(req, rateScope);
+  await dbRunAsync(`UPDATE usuarios SET ultimo_login = CURRENT_TIMESTAMP WHERE id = ?`, [user.id]).catch(() => {});
+
+  const expiresAt = Date.now() + SESSION_MS;
+  const token = signSession({
+    uid: Number(user.id),
+    sub: user.usuario,
+    name: user.nombre,
+    role: user.rol,
+    exp: expiresAt,
+    nonce: crypto.randomBytes(12).toString('hex')
+  });
+
+  res.setHeader('Set-Cookie', buildSessionCookie(req, cookieName, token, Math.floor(SESSION_MS / 1000)));
+  return res.json({ ok: true, usuario: user.usuario, nombre: user.nombre, rol: user.rol, expira: expiresAt });
+}
+
+function clearSessionCookie(req, res, cookieName) {
+  res.setHeader('Set-Cookie', buildSessionCookie(req, cookieName, '', 0));
+}
 
 function normalizarEstadoPedido(estado) {
   if (!estado) return 'Registrado';
@@ -434,7 +554,7 @@ function resolverNombreCocina(nombre) {
 // Middlewares
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-app.use(['/admin', '/admin.html', '/api/admin'], adminSecurityHeaders);
+app.use(['/admin', '/admin.html', '/api/admin', '/colaboradores', '/colaboradores.html', '/api/colaboradores'], adminSecurityHeaders);
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Inicialización de tablas SQLite para asegurar la persistencia de datos
@@ -480,65 +600,143 @@ db.serialize(() => {
   `);
 });
 
-// Seguridad exclusiva del panel administrativo
+// Seguridad de administradores y colaboradores
 app.post('/api/admin/auth/login', async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-
-  if (!sameOriginRequest(req)) return res.status(403).json({ error: 'Origen no autorizado.' });
-  if (!ADMIN_PASSWORD_DIGEST) return res.status(503).json({ error: 'El acceso administrativo seguro todavía no está configurado en el servidor.' });
-
-  const rate = checkAdminLoginRate(req);
-  if (!rate.allowed) {
-    res.setHeader('Retry-After', String(rate.retryAfter));
-    return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos antes de volver a intentar.' });
+  try {
+    return await authenticateUser(req, res, 'admin', ADMIN_COOKIE, 'admin');
+  } catch (error) {
+    return res.status(500).json({ error: 'No se pudo iniciar sesión.' });
   }
-
-  const usuario = String(req.body?.usuario || '').trim();
-  const password = String(req.body?.password || '');
-  const passwordOk = usuario === ADMIN_USERNAME && await bcrypt.compare(password, ADMIN_PASSWORD_DIGEST);
-
-  if (!passwordOk) {
-    registerFailedAdminLogin(rate.key, rate.state);
-    return res.status(401).json({ error: 'Credenciales incorrectas.' });
-  }
-
-  clearAdminLoginRate(req);
-  const expiresAt = Date.now() + ADMIN_SESSION_MS;
-  const token = signAdminSession({
-    sub: ADMIN_USERNAME,
-    role: 'admin',
-    exp: expiresAt,
-    nonce: crypto.randomBytes(12).toString('hex')
-  });
-
-  const secure = req.secure || process.env.NODE_ENV === 'production';
-  const attributes = [
-    `${ADMIN_COOKIE}=${encodeURIComponent(token)}`,
-    'HttpOnly',
-    'SameSite=Strict',
-    'Path=/',
-    `Max-Age=${Math.floor(ADMIN_SESSION_MS / 1000)}`
-  ];
-  if (secure) attributes.push('Secure');
-  res.setHeader('Set-Cookie', attributes.join('; '));
-  return res.json({ ok: true, usuario: ADMIN_USERNAME, expira: expiresAt });
 });
 
-app.get('/api/admin/auth/session', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  const session = verifyAdminSession(req);
-  if (!session) return res.status(401).json({ authenticated: false });
-  return res.json({ authenticated: true, usuario: session.sub, expira: session.exp });
+app.get('/api/admin/auth/session', requireAdminAuth, (req, res) => {
+  return res.json({
+    authenticated: true,
+    usuario: req.authUser.usuario,
+    nombre: req.authUser.nombre,
+    rol: req.authUser.rol
+  });
 });
 
 app.post('/api/admin/auth/logout', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!sameOriginRequest(req)) return res.status(403).json({ error: 'Origen no autorizado.' });
-  const secure = req.secure || process.env.NODE_ENV === 'production';
-  const attributes = [`${ADMIN_COOKIE}=`, 'HttpOnly', 'SameSite=Strict', 'Path=/', 'Max-Age=0'];
-  if (secure) attributes.push('Secure');
-  res.setHeader('Set-Cookie', attributes.join('; '));
+  clearSessionCookie(req, res, ADMIN_COOKIE);
   return res.json({ ok: true });
+});
+
+app.post('/api/colaboradores/auth/login', async (req, res) => {
+  try {
+    return await authenticateUser(req, res, 'colaborador', COLLAB_COOKIE, 'colaborador');
+  } catch (error) {
+    return res.status(500).json({ error: 'No se pudo iniciar sesión.' });
+  }
+});
+
+app.get('/api/colaboradores/auth/session', async (req, res) => {
+  try {
+    const user = await resolveSessionUser(req, COLLAB_COOKIE, ['colaborador']);
+    if (!user) return res.status(401).json({ authenticated: false });
+    return res.json({ authenticated: true, usuario: user.usuario, nombre: user.nombre, rol: user.rol });
+  } catch (error) {
+    return res.status(500).json({ error: 'No se pudo validar la sesión.' });
+  }
+});
+
+app.post('/api/colaboradores/auth/logout', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!sameOriginRequest(req)) return res.status(403).json({ error: 'Origen no autorizado.' });
+  clearSessionCookie(req, res, COLLAB_COOKIE);
+  return res.json({ ok: true });
+});
+
+app.get('/api/admin/usuarios', requireAdminAuth, async (req, res) => {
+  try {
+    const usuarios = await dbAllAsync(`
+      SELECT id, usuario, nombre, rol, activo, ultimo_login, creado_en, actualizado_en
+      FROM usuarios
+      ORDER BY CASE WHEN rol = 'admin' THEN 0 ELSE 1 END, nombre ASC, usuario ASC
+    `);
+    return res.json({ usuarios });
+  } catch (error) {
+    return res.status(500).json({ error: 'No se pudieron cargar los usuarios.' });
+  }
+});
+
+app.post('/api/admin/usuarios', requireAdminAuth, async (req, res) => {
+  try {
+    const usuario = String(req.body?.usuario || '').trim();
+    const nombre = String(req.body?.nombre || '').trim();
+    const password = String(req.body?.password || '');
+    const rol = String(req.body?.rol || '').trim().toLowerCase();
+
+    if (!/^[a-zA-Z0-9._-]{3,40}$/.test(usuario)) {
+      return res.status(400).json({ error: 'El usuario debe tener entre 3 y 40 caracteres y solo usar letras, números, punto, guion o guion bajo.' });
+    }
+    if (nombre.length < 2 || nombre.length > 80) return res.status(400).json({ error: 'Ingresa un nombre válido.' });
+    if (!['admin', 'colaborador'].includes(rol)) return res.status(400).json({ error: 'Rol no válido.' });
+    if (password.length < 10) return res.status(400).json({ error: 'La contraseña debe tener al menos 10 caracteres.' });
+
+    const existing = await dbGetAsync(`SELECT id FROM usuarios WHERE LOWER(usuario) = LOWER(?) LIMIT 1`, [usuario]);
+    if (existing) return res.status(409).json({ error: 'Ese nombre de usuario ya existe.' });
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const result = await dbRunAsync(
+      `INSERT INTO usuarios (usuario, nombre, password_hash, rol, activo, actualizado_en)
+       VALUES (?, ?, ?, ?, TRUE, CURRENT_TIMESTAMP)`,
+      [usuario, nombre, passwordHash, rol]
+    );
+    return res.status(201).json({ ok: true, id: result.lastID });
+  } catch (error) {
+    return res.status(500).json({ error: 'No se pudo crear el usuario.' });
+  }
+});
+
+app.put('/api/admin/usuarios/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Usuario no válido.' });
+
+    const target = await dbGetAsync(`SELECT id, usuario, nombre, rol, activo FROM usuarios WHERE id = ? LIMIT 1`, [id]);
+    if (!target) return res.status(404).json({ error: 'Usuario no encontrado.' });
+
+    const nombre = String(req.body?.nombre ?? target.nombre).trim();
+    const rol = String(req.body?.rol ?? target.rol).trim().toLowerCase();
+    const activo = req.body?.activo === undefined ? Boolean(target.activo) : Boolean(req.body.activo);
+    const password = String(req.body?.password || '');
+
+    if (nombre.length < 2 || nombre.length > 80) return res.status(400).json({ error: 'Ingresa un nombre válido.' });
+    if (!['admin', 'colaborador'].includes(rol)) return res.status(400).json({ error: 'Rol no válido.' });
+    if (password && password.length < 10) return res.status(400).json({ error: 'La contraseña debe tener al menos 10 caracteres.' });
+
+    if (Number(req.authUser.id) === id && (rol !== 'admin' || !activo)) {
+      return res.status(400).json({ error: 'No puedes quitarte tus propios permisos de administrador ni desactivar tu cuenta.' });
+    }
+
+    if (target.rol === 'admin' && target.activo && (rol !== 'admin' || !activo)) {
+      const admins = await dbGetAsync(`SELECT COUNT(*)::int AS total FROM usuarios WHERE rol = 'admin' AND activo = TRUE`);
+      if (Number(admins?.total || 0) <= 1) {
+        return res.status(400).json({ error: 'Debe existir al menos un administrador activo.' });
+      }
+    }
+
+    if (password) {
+      const passwordHash = await bcrypt.hash(password, 12);
+      await dbRunAsync(
+        `UPDATE usuarios SET nombre = ?, rol = ?, activo = ?, password_hash = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`,
+        [nombre, rol, activo, passwordHash, id]
+      );
+    } else {
+      await dbRunAsync(
+        `UPDATE usuarios SET nombre = ?, rol = ?, activo = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`,
+        [nombre, rol, activo, id]
+      );
+    }
+
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'No se pudo actualizar el usuario.' });
+  }
 });
 
 // Ruta principal para servir la interfaz web
@@ -678,7 +876,7 @@ app.get('/api/pedidos/estado/:codigo', (req, res) => {
 });
 
 // Endpoint para registrar un nuevo pedido y asegurar su visualización en producción
-app.post('/api/pedidos', (req, res) => {
+app.post('/api/pedidos', protectDigitacionOrigin, (req, res) => {
   const { tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, origen, detalles } = req.body;
 
   if (!validarComprobante(tipo_comprobante, numero_documento)) {
@@ -892,7 +1090,7 @@ app.get('/api/admin/historial-pedidos', requireAdminAuth, (req, res) => {
 
 // Vista de solo lectura para el personal de despacho. No expone acciones de
 // edición, eliminación, teléfonos ni importes de los clientes.
-app.get('/api/colaboradores/salidas', (req, res) => {
+app.get('/api/colaboradores/salidas', requireStaffAuth, (req, res) => {
   const fecha = String(req.query.fecha || new Date().toISOString().slice(0, 10)).trim();
   db.all(`
     SELECT p.id, p.codigo, p.cliente_nombre, p.fecha_recoge, p.hora_recoge, p.estado,
@@ -1119,15 +1317,20 @@ app.post('/api/admin/inventario/stock', requireAdminAuth, (req, res) => {
   });
 });
 
-app.put('/api/admin/pedidos/:id/estado', (req, res) => {
+app.put('/api/admin/pedidos/:id/estado', requireStaffAuth, (req, res) => {
   const { id } = req.params;
-  const { estado, despachado_por } = req.body;
+  const { estado } = req.body;
 
   if (!estado) return res.status(400).json({ error: 'Estado requerido' });
 
   const estadoNormalizado = String(estado).trim();
+  if (req.authUser?.rol === 'colaborador' && !['Listo para despacho', "Despachado (D'chelis)"].includes(estadoNormalizado)) {
+    return res.status(403).json({ error: 'El colaborador no tiene permiso para asignar ese estado.' });
+  }
 
-  const colaborador = estadoNormalizado === "Despachado (D'chelis)" ? String(despachado_por || '').trim() : '';
+  const colaborador = estadoNormalizado === "Despachado (D'chelis)"
+    ? String(req.authUser?.nombre || req.authUser?.usuario || '').trim()
+    : '';
   db.run(`UPDATE pedidos
     SET estado = ?,
         registrado_en = CASE WHEN ? IN ('Pendiente de pago', 'Despachado (D''chelis)') THEN CURRENT_TIMESTAMP ELSE NULL END,
