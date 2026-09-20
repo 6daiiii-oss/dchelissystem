@@ -1067,34 +1067,36 @@
 
 
     /* Interfaz administrativa: jerarquía visual, superficie cálida y controles consistentes. */
-    body { background: radial-gradient(circle at 100% -10%, #ffe8d6 0, transparent 28rem), var(--bg); }
-    .auth-shell { background: linear-gradient(135deg, #fff3e8, #edf4ef); }
+    body { background: radial-gradient(circle at 100% -10%, #e7f7ed 0, transparent 30rem), var(--bg); }
+    .auth-shell { background: linear-gradient(135deg, #f4fbf6, #eef3f0); }
     .auth-card { position: relative; overflow: hidden; border: 1px solid #eadfd6; box-shadow: 0 20px 45px rgba(71, 48, 33, .12); }
-    .auth-card::before { content: "D'"; display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 17px; border-radius: 50%; background: #f3b383; color: var(--brand); font-weight: 800; }
+    .auth-card::before { content: "D'"; display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 17px; border-radius: 50%; background: #00a33a; color: #fff; font-weight: 900; box-shadow: 0 8px 18px rgba(0,163,58,.18); }
     .auth-card h2 { font-size: 2rem; letter-spacing: -.06em; }
     .field input, input[type="date"], .form-control { border-color: #e6d8ce; border-radius: 11px; }
-    .field input:focus, input[type="date"]:focus, .form-control:focus { border-color: #b75e36; box-shadow: 0 0 0 3px rgba(183,94,54,.12); }
+    .field input:focus, input[type="date"]:focus, .form-control:focus { border-color: #00a33a; box-shadow: 0 0 0 3px rgba(0,163,58,.12); }
     .btn { border-radius: 11px; box-shadow: 0 2px 4px rgba(23,60,43,.08); }
     .btn-primary { background: var(--brand); }
-    .btn-success { background: #b75e36; }
-    .btn-success:hover { background: #9f4c2d; }
+    .btn-success { background: #009b38; }
+    .btn-success:hover { background: #087c32; }
     .btn-warning { background: #6b625d; }
     .btn-ghost { background: #fff5ee; color: #6d3724; }
     .admin-shell { max-width: 1500px; margin: auto; padding: 28px clamp(16px, 4vw, 52px) 48px; }
-    .topbar { position: relative; overflow: hidden; min-height: 112px; padding: 24px 27px; color: #fff; border: 0; background: linear-gradient(110deg, #173c2b 0%, #28533c 70%, #9d482b 150%); box-shadow: 0 16px 32px rgba(23,60,43,.16); }
+    .topbar { position: relative; overflow: hidden; min-height: 112px; padding: 24px 27px; color: #fff; border: 0; background: linear-gradient(112deg, #123825 0%, #176238 72%, #0a8a38 145%); box-shadow: 0 16px 32px rgba(23,60,43,.18); }
     .topbar::after { content: ''; position: absolute; width: 210px; height: 210px; right: 10%; top: -150px; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; box-shadow: 0 0 0 32px rgba(255,255,255,.035); }
     .topbar h1 { position: relative; color: #fff; letter-spacing: -.055em; }
-    .topbar .meta { position: relative; color: #f7d7bf; }
+    .topbar .meta { position: relative; color: #d7f2e0; }
     .topbar .btn-ghost { position: relative; color: #fff; background: rgba(255,255,255,.13); border: 1px solid rgba(255,255,255,.25); }
+    .topbar .brand-eyebrow { position: relative; color: #9ae6b2; }
+    .topbar .brand-logo-wrap { position: relative; z-index: 1; }
     .tab-nav { gap: 8px; padding: 7px; width: max-content; max-width: 100%; overflow-x: auto; border: 1px solid #eadfd6; border-radius: 14px; background: rgba(255,255,255,.72); box-shadow: 0 6px 18px rgba(74,48,31,.04); }
     .tab-btn { border: 0; border-radius: 9px; color: var(--muted); padding: 10px 15px; white-space: nowrap; }
-    .tab-btn:hover, .tab-btn.active { background: #fff0e5; color: #984728; }
-    .panel { border-radius: 20px; border-color: #eadfd6; padding: clamp(18px, 3vw, 28px); }
-    .header-row { border-bottom: 1px solid #f0e5dd; padding-bottom: 16px; }
+    .tab-btn:hover, .tab-btn.active { background: #eaf7ee; color: #0b7431; }
+    .panel { border-radius: 20px; border-color: #dde8e1; padding: clamp(18px, 3vw, 28px); }
+    .header-row { border-bottom: 1px solid #e7eee9; padding-bottom: 16px; }
     .header-row h3 { letter-spacing: -.04em; }
-    .order-card { border-radius: 15px; border-color: #eee1d7; border-top: 4px solid #b75e36; box-shadow: 0 6px 16px rgba(74,48,31,.06); }
+    .order-card { border-radius: 15px; border-color: #e0e9e3; border-top: 4px solid #00a33a; box-shadow: 0 6px 16px rgba(23,60,43,.06); }
     .order-card:hover { box-shadow: 0 15px 28px rgba(74,48,31,.12); }
-    .order-code { color: #984728; }
+    .order-code { color: #0b7431; }
     .badge { border-radius: 999px; }
     .pedido-modal-card { border-radius: 20px; border: 1px solid #eadfd6; box-shadow: 0 22px 50px rgba(41,34,30,.2); }
     .notice { border-radius: 12px; background: #fff4ea; border-color: #f0c9ad; }
@@ -3306,7 +3308,6 @@
                         <strong class="schedule-time">${pedido.hora_recoge || '--:--'}</strong>
                       </div>
                       ${renderizarResumenPago(pedido)}
-                      ${pedido.despachado_por ? `<div style="margin-top:-4px; padding:0 4px 8px; color:#667085; font-size:.72rem; font-weight:700;">Despachado por: ${pedido.despachado_por}</div>` : ''}
                     </article>
                   `;
                 }).join('')}
