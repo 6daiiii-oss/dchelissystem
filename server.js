@@ -552,6 +552,312 @@ function resolverNombreCocina(nombre) {
   return null;
 }
 
+
+const CASINO_DIAS = new Set(['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO']);
+const CASINO_MESES = {
+  ENE: 0, ENERO: 0, FEB: 1, FEBRERO: 1, MAR: 2, MARZO: 2, ABR: 3, ABRIL: 3,
+  MAY: 4, MAYO: 4, JUN: 5, JUNIO: 5, JUL: 6, JULIO: 6, AGO: 7, AGOSTO: 7,
+  SEP: 8, SET: 8, SEPT: 8, SETIEMBRE: 8, SEPTIEMBRE: 8, OCT: 9, OCTUBRE: 9,
+  NOV: 10, NOVIEMBRE: 10, DIC: 11, DICIEMBRE: 11
+};
+
+const CASINO_ALIAS_EXACTOS = Object.fromEntries(Object.entries({
+  'PAN BAGUETTE MINI': 'Baguetina',
+  'PAN CIABATTA MINI': 'Mini Ciabatta',
+  'PAN CROISSANT MINI': 'Mini Croissant',
+  'PAN FRANCES MINI': 'Mini Francés',
+  'PAN ARABE MINI': 'Mini Arabe',
+  'PAN PARA HOT DOG MINI': 'Mini Hot Dog',
+  'PAN HOT DOG MINI': 'Mini Hot Dog',
+  'PAN HAMBURGUESITA': 'Pan de Hamburguesa',
+  'PAN HAMBURGUESA MINI': 'Pan de Hamburguesa',
+  'EMPANADITAS DE QUESO': 'EMPANADA QUESO',
+  'EMPANADITA DE QUESO': 'EMPANADA QUESO',
+  'FRANCES POLLO PINA': 'Petipan de pollo c/piña',
+  'FRANCES POLLO DURAZNO': 'Petipan de pollo c/durazno',
+  'FRANCES POLLO CLASICO': 'Petipan de Pollo',
+  'FRANCES ASADO': 'Sandwich de Asado',
+  'FRANCES LOMITO': 'Sandwich de Lomito',
+  'FRANCES HAMBURGUESA': 'Sandwich Hamburguesita',
+  'TRIPLE POLLO C ACEITUNA': 'Triple pollo con aceituna',
+  'TRIPLE POLLO CON ACEITUNA': 'Triple pollo con aceituna',
+  'TRIPLE POLLO C PINA': 'Triple pollo con piña',
+  'TRIPLE POLLO CON PINA': 'Triple pollo con piña',
+  'TRIPLE POLLO TOCINO': 'Triple pollo y tocino',
+  'TRIPLE JAMON QUESO': 'Triple de Jamón y queso',
+  'TRIPLE POLLO JAMON QUESO': 'Triple pollo, jamón y queso',
+  'TRIPLE PALTA TOMATE HUEVO': 'Triple palta, tomate, huevo'
+}).map(([clave, valor]) => [normalizarProducto(clave), valor]));
+
+function valorCeldaCasino(cell) {
+  const valor = cell?.value;
+  if (valor && typeof valor === 'object' && !(valor instanceof Date)) {
+    if (Object.prototype.hasOwnProperty.call(valor, 'result')) return valor.result;
+    if (Array.isArray(valor.richText)) return valor.richText.map((item) => item.text || '').join('');
+    if (Object.prototype.hasOwnProperty.call(valor, 'text')) return valor.text;
+    if (Object.prototype.hasOwnProperty.call(valor, 'hyperlink')) return valor.text || '';
+  }
+  return valor;
+}
+
+function numeroCasino(valor) {
+  if (typeof valor === 'number' && Number.isFinite(valor)) return valor;
+  if (typeof valor !== 'string') return 0;
+  const limpio = valor.replace(/\u00a0/g, '').replace(',', '.').trim();
+  if (!limpio) return 0;
+  const numero = Number(limpio);
+  return Number.isFinite(numero) ? numero : 0;
+}
+
+function fechaExcelCasino(valor, anioReferencia = new Date().getFullYear()) {
+  if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+    return new Date(Date.UTC(valor.getFullYear(), valor.getMonth(), valor.getDate()));
+  }
+
+  if (typeof valor === 'number' && Number.isFinite(valor) && valor > 20000 && valor < 80000) {
+    const milisegundos = Date.UTC(1899, 11, 30) + Math.round(valor * 86400000);
+    return new Date(milisegundos);
+  }
+
+  const textoOriginal = String(valor ?? '').trim();
+  if (!textoOriginal) return null;
+  const texto = normalizarProducto(textoOriginal);
+
+  let match = texto.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+  if (match) {
+    let anio = Number(match[3]);
+    if (anio < 100) anio += 2000;
+    return new Date(Date.UTC(anio, Number(match[2]) - 1, Number(match[1])));
+  }
+
+  match = texto.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
+  if (match) return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+
+  match = texto.match(/^(\d{1,2})[\s\/-]+([A-Z]+)(?:[\s\/-]+(\d{2,4}))?$/);
+  if (match) {
+    const mes = CASINO_MESES[match[2]];
+    if (mes !== undefined) {
+      let anio = match[3] ? Number(match[3]) : Number(anioReferencia);
+      if (anio < 100) anio += 2000;
+      return new Date(Date.UTC(anio, mes, Number(match[1])));
+    }
+  }
+
+  return null;
+}
+
+function isoFechaCasino(fecha) {
+  if (!(fecha instanceof Date) || Number.isNaN(fecha.getTime())) return '';
+  const yyyy = fecha.getUTCFullYear();
+  const mm = String(fecha.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(fecha.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function diaFechaCasino(fecha) {
+  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  return dias[fecha.getUTCDay()] || '';
+}
+
+function resolverNombreCasino(nombre, pan = '', tipo = '') {
+  const combinado = [pan, tipo].filter(Boolean).join(' ').trim();
+  const candidatos = [combinado, nombre].filter(Boolean);
+
+  for (const candidato of candidatos) {
+    const clave = normalizarProducto(candidato);
+    if (!clave) continue;
+    if (CASINO_ALIAS_EXACTOS[clave]) return CASINO_ALIAS_EXACTOS[clave];
+    const resuelto = resolverNombreCocina(candidato);
+    if (resuelto) return resuelto;
+  }
+
+  const limpio = String(nombre || combinado || '').replace(/\s+/g, ' ').trim();
+  return limpio || 'Producto sin nombre';
+}
+
+function grupoProductoCasino(nombre, categoria = '', esFormatoPanTipo = false) {
+  const clave = normalizarProducto(nombre);
+  if (PRODUCTOS_COCINA_EXTRA.some((item) => normalizarProducto(item) === clave)) return 'extra';
+  if (PRODUCTOS_COCINA.some((item) => normalizarProducto(item) === clave)) return 'principal';
+
+  const contexto = normalizarProducto(`${categoria} ${nombre}`);
+  if (
+    esFormatoPanTipo ||
+    /\b(PAN|TRIPLE|SANDWICH|SANGUCHE|PETIPAN|CROISSANT|HAMBURGUESA|HOT DOG|BAGUET|CIABATTA|FRANCES)\b/.test(contexto)
+  ) return 'extra';
+
+  return 'principal';
+}
+
+async function procesarCronogramaCasinos(buffer) {
+  const libro = new ExcelJS.Workbook();
+  await libro.xlsx.load(buffer);
+
+  const diasMap = new Map();
+  const casinosOrden = [];
+  const advertencias = [];
+  const productosNoReconocidos = new Set();
+
+  libro.worksheets.forEach((hoja) => {
+    const casino = String(hoja.name || '').trim();
+    if (!casino) return;
+    casinosOrden.push(casino);
+
+    const limiteFilasCabecera = Math.min(Math.max(hoja.rowCount, 1), 15);
+    let filaCabecera = 0;
+
+    for (let fila = 1; fila <= limiteFilasCabecera; fila += 1) {
+      let diasDetectados = 0;
+      for (let columna = 1; columna <= hoja.columnCount; columna += 1) {
+        const valor = normalizarProducto(valorCeldaCasino(hoja.getCell(fila, columna)));
+        if (CASINO_DIAS.has(valor)) diasDetectados += 1;
+      }
+      if (diasDetectados >= 3) {
+        filaCabecera = fila;
+        break;
+      }
+    }
+
+    if (!filaCabecera) {
+      advertencias.push(`${casino}: no se encontró una fila de días reconocible.`);
+      return;
+    }
+
+    let columnaArticulo = 0;
+    let columnaPan = 0;
+    let columnaTipo = 0;
+    const columnasDia = [];
+
+    for (let columna = 1; columna <= hoja.columnCount; columna += 1) {
+      const encabezado = normalizarProducto(valorCeldaCasino(hoja.getCell(filaCabecera, columna)));
+      if (encabezado === 'ARTICULO') columnaArticulo = columna;
+      if (encabezado === 'PAN') columnaPan = columna;
+      if (encabezado === 'TIPO') columnaTipo = columna;
+      if (CASINO_DIAS.has(encabezado)) columnasDia.push({ columna, encabezado });
+    }
+
+    if (!columnaArticulo && !(columnaPan && columnaTipo)) {
+      advertencias.push(`${casino}: no se encontró la columna de artículos.`);
+      return;
+    }
+
+    const filaFechas = filaCabecera + 1;
+    let anioReferencia = new Date().getFullYear();
+
+    for (const item of columnasDia) {
+      const valorFecha = valorCeldaCasino(hoja.getCell(filaFechas, item.columna));
+      const fecha = fechaExcelCasino(valorFecha, anioReferencia);
+      if (fecha && (valorFecha instanceof Date || typeof valorFecha === 'number' || /\d{4}/.test(String(valorFecha)))) {
+        anioReferencia = fecha.getUTCFullYear();
+        break;
+      }
+    }
+
+    const fechasColumnas = columnasDia
+      .map((item) => {
+        const fecha = fechaExcelCasino(valorCeldaCasino(hoja.getCell(filaFechas, item.columna)), anioReferencia);
+        if (!fecha) return null;
+        const fechaIso = isoFechaCasino(fecha);
+        if (!diasMap.has(fechaIso)) {
+          diasMap.set(fechaIso, {
+            fecha: fechaIso,
+            dia: diaFechaCasino(fecha),
+            casinos: new Set(),
+            productos: new Map()
+          });
+        }
+        return { ...item, fecha, fechaIso };
+      })
+      .filter(Boolean);
+
+    let categoriaActual = '';
+    const esFormatoPanTipo = !columnaArticulo && columnaPan && columnaTipo;
+    const columnaCategoria = columnaArticulo > 1 ? columnaArticulo - 1 : 0;
+
+    for (let fila = filaFechas + 1; fila <= hoja.rowCount; fila += 1) {
+      if (columnaCategoria) {
+        const categoria = String(valorCeldaCasino(hoja.getCell(fila, columnaCategoria)) ?? '').replace(/\u00a0/g, ' ').trim();
+        if (categoria) categoriaActual = categoria;
+      }
+
+      const pan = columnaPan ? String(valorCeldaCasino(hoja.getCell(fila, columnaPan)) ?? '').replace(/\u00a0/g, ' ').trim() : '';
+      const tipo = columnaTipo ? String(valorCeldaCasino(hoja.getCell(fila, columnaTipo)) ?? '').replace(/\u00a0/g, ' ').trim() : '';
+      const nombreOriginal = columnaArticulo
+        ? String(valorCeldaCasino(hoja.getCell(fila, columnaArticulo)) ?? '').replace(/\u00a0/g, ' ').trim()
+        : [pan, tipo].filter(Boolean).join(' ').trim();
+
+      if (!nombreOriginal) continue;
+      const claveOriginal = normalizarProducto(nombreOriginal);
+      if (
+        !claveOriginal ||
+        claveOriginal === 'ITEM' ||
+        claveOriginal.includes('TOTAL CANTIDAD') ||
+        claveOriginal.includes('TOTAL SEMANAL') ||
+        claveOriginal.includes('TOTAL GASTO') ||
+        claveOriginal.includes('#REF')
+      ) continue;
+
+      const nombreProducto = resolverNombreCasino(nombreOriginal, pan, tipo);
+      const grupo = grupoProductoCasino(nombreProducto, categoriaActual, esFormatoPanTipo);
+      const reconocido = resolverNombreCocina(nombreOriginal) || CASINO_ALIAS_EXACTOS[normalizarProducto([pan, tipo].filter(Boolean).join(' '))];
+      if (!reconocido && nombreProducto === nombreOriginal) productosNoReconocidos.add(nombreOriginal);
+
+      fechasColumnas.forEach(({ columna, fechaIso }) => {
+        const cantidad = numeroCasino(valorCeldaCasino(hoja.getCell(fila, columna)));
+        if (!(cantidad > 0)) return;
+
+        const dia = diasMap.get(fechaIso);
+        dia.casinos.add(casino);
+
+        const claveProducto = normalizarProducto(nombreProducto) || nombreProducto;
+        if (!dia.productos.has(claveProducto)) {
+          dia.productos.set(claveProducto, {
+            nombre: nombreProducto,
+            grupo,
+            por_casino: {},
+            total: 0
+          });
+        }
+
+        const producto = dia.productos.get(claveProducto);
+        producto.por_casino[casino] = Number(producto.por_casino[casino] || 0) + cantidad;
+        producto.total += cantidad;
+        if (producto.grupo !== 'extra' && grupo === 'extra') producto.grupo = 'extra';
+      });
+    }
+  });
+
+  const ordenPrincipal = new Map(PRODUCTOS_COCINA.map((nombre, indice) => [normalizarProducto(nombre), indice]));
+  const ordenExtra = new Map(PRODUCTOS_COCINA_EXTRA.map((nombre, indice) => [normalizarProducto(nombre), indice]));
+
+  const ordenarProductosCasino = (a, b) => {
+    if (a.grupo !== b.grupo) return a.grupo === 'principal' ? -1 : 1;
+    const mapa = a.grupo === 'extra' ? ordenExtra : ordenPrincipal;
+    const ai = mapa.has(normalizarProducto(a.nombre)) ? mapa.get(normalizarProducto(a.nombre)) : 9999;
+    const bi = mapa.has(normalizarProducto(b.nombre)) ? mapa.get(normalizarProducto(b.nombre)) : 9999;
+    if (ai !== bi) return ai - bi;
+    return String(a.nombre).localeCompare(String(b.nombre), 'es');
+  };
+
+  const dias = [...diasMap.values()]
+    .sort((a, b) => a.fecha.localeCompare(b.fecha))
+    .map((dia) => ({
+      fecha: dia.fecha,
+      dia: dia.dia,
+      casinos: casinosOrden.filter((casino) => dia.casinos.has(casino)),
+      productos: [...dia.productos.values()]
+        .filter((producto) => Number(producto.total || 0) > 0)
+        .sort(ordenarProductosCasino)
+    }));
+
+  return {
+    casinos: casinosOrden,
+    dias,
+    advertencias,
+    productos_no_reconocidos: [...productosNoReconocidos].sort((a, b) => a.localeCompare(b, 'es'))
+  };
+}
+
 // Middlewares
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -737,6 +1043,40 @@ app.put('/api/admin/usuarios/:id', requireAdminAuth, async (req, res) => {
     return res.json({ ok: true });
   } catch (error) {
     return res.status(500).json({ error: 'No se pudo actualizar el usuario.' });
+  }
+});
+
+app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res) => {
+  try {
+    const archivoBase64 = String(req.body?.archivo_base64 || '').trim();
+    const nombreArchivo = String(req.body?.nombre_archivo || '').trim();
+
+    if (!archivoBase64) return res.status(400).json({ error: 'Selecciona un archivo Excel.' });
+    if (nombreArchivo && !/\.xlsx$/i.test(nombreArchivo)) {
+      return res.status(400).json({ error: 'El cronograma debe estar en formato .xlsx.' });
+    }
+
+    const base64Limpio = archivoBase64.includes(',') ? archivoBase64.split(',').pop() : archivoBase64;
+    const buffer = Buffer.from(base64Limpio, 'base64');
+
+    if (!buffer.length) return res.status(400).json({ error: 'El archivo Excel está vacío o no es válido.' });
+    if (buffer.length > 6 * 1024 * 1024) {
+      return res.status(413).json({ error: 'El archivo supera el límite de 6 MB.' });
+    }
+
+    const resultado = await procesarCronogramaCasinos(buffer);
+    if (!resultado.dias.length) {
+      return res.status(400).json({ error: 'No se encontraron días válidos en el cronograma.' });
+    }
+
+    return res.json({
+      ok: true,
+      nombre_archivo: nombreArchivo || 'Cronograma.xlsx',
+      ...resultado
+    });
+  } catch (error) {
+    console.error('Error procesando cronograma de casinos:', error);
+    return res.status(400).json({ error: 'No se pudo leer el Excel. Verifica que conserve el formato del cronograma de casinos.' });
   }
 });
 
