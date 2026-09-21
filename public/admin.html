@@ -2903,14 +2903,25 @@
       `;
     }
 
+    function obtenerFechaLocalIso() {
+      const ahora = new Date();
+      const yyyy = ahora.getFullYear();
+      const mm = String(ahora.getMonth() + 1).padStart(2, '0');
+      const dd = String(ahora.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
     function renderizarProduccionCasinos(data) {
       const contenedor = document.getElementById('casinosProduccion');
       const resumenDias = document.getElementById('casinoDiasResumen');
       const botonImprimir = document.getElementById('imprimirCasinosBtn');
       if (!contenedor || !resumenDias) return;
 
-      const dias = Array.isArray(data?.dias) ? data.dias : [];
-      const cronogramas = construirCronogramaPorCasino(data);
+      const hoyIso = obtenerFechaLocalIso();
+      const diasOriginales = Array.isArray(data?.dias) ? data.dias : [];
+      const dias = diasOriginales.filter((dia) => String(dia.fecha || '') >= hoyIso);
+      const dataDesdeHoy = { ...data, dias };
+      const cronogramas = construirCronogramaPorCasino(dataDesdeHoy);
 
       resumenDias.innerHTML = dias.map((dia) => {
         const tienePedidos = Array.isArray(dia.productos) && dia.productos.length > 0;
@@ -3004,7 +3015,9 @@
         const advertencias = Array.isArray(data.advertencias) ? data.advertencias.length : 0;
         if (estado) {
           estado.className = 'casino-status success';
-          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${data.dias?.length || 0} día(s) detectados · cronograma generado por casino${sinReconocer ? ` · ${sinReconocer} nombre(s) se conservaron tal como venían en el Excel` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
+          const hoyIso = obtenerFechaLocalIso();
+          const diasVigentes = (Array.isArray(data.dias) ? data.dias : []).filter((dia) => String(dia.fecha || '') >= hoyIso).length;
+          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes} día(s) desde hoy · cronograma generado por casino${sinReconocer ? ` · ${sinReconocer} nombre(s) se conservaron tal como venían en el Excel` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
         }
       } catch (error) {
         window.__casinoProduccionData = null;
