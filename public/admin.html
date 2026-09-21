@@ -1126,6 +1126,256 @@
     .user-active-control input { width:auto !important; min-height:auto !important; }
     @media (max-width: 1050px) { .user-admin-card { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     @media (max-width: 640px) { .user-admin-card { grid-template-columns:1fr; } }
+
+    .casino-panel { overflow: visible; }
+    .casino-upload-card {
+      display: grid;
+      grid-template-columns: minmax(220px, .8fr) minmax(360px, 1.2fr);
+      gap: 16px 22px;
+      align-items: end;
+      margin: 4px 0 18px;
+      padding: 18px;
+      border: 1px solid #dce8df;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #f7fcf8, #ffffff);
+      box-shadow: 0 7px 20px rgba(23,60,43,.05);
+    }
+    .casino-upload-copy { display:flex; flex-direction:column; gap:5px; }
+    .casino-upload-copy strong { color:var(--brand); font-size:1rem; }
+    .casino-upload-copy span { color:var(--muted); font-size:.8rem; line-height:1.45; }
+    .casino-upload-actions { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; }
+    .casino-upload-actions input[type="file"] {
+      width:100%;
+      min-width:0;
+      min-height:44px;
+      padding:9px 11px;
+      border:1px solid #dce8df;
+      border-radius:11px;
+      background:#fff;
+      color:var(--text);
+    }
+    .casino-upload-actions .btn { min-height:44px; white-space:nowrap; }
+    .casino-status {
+      grid-column:1 / -1;
+      min-height:20px;
+      color:var(--muted);
+      font-size:.8rem;
+      font-weight:700;
+    }
+    .casino-status.error { color:#b42318; }
+    .casino-status.success { color:#087c32; }
+
+    .casino-days-strip {
+      display:flex;
+      gap:7px;
+      overflow-x:auto;
+      padding:3px 0 12px;
+      margin-bottom:8px;
+      scrollbar-width:thin;
+      -webkit-overflow-scrolling:touch;
+    }
+    .casino-day-chip {
+      flex:0 0 auto;
+      padding:7px 10px;
+      border:1px solid #d7e5dc;
+      border-radius:999px;
+      background:#f7fbf8;
+      color:#24543a;
+      font-size:.72rem;
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .casino-day-chip.has-orders { background:#eaf7ee; border-color:#a8d9b7; color:#087c32; }
+    .casino-day-page {
+      margin:0 0 24px;
+      padding:18px;
+      border:1px solid #dce8df;
+      border-radius:16px;
+      background:#fff;
+      box-shadow:0 8px 22px rgba(23,60,43,.055);
+    }
+    .casino-day-heading {
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap:16px;
+      margin-bottom:14px;
+      padding-bottom:11px;
+      border-bottom:2px solid #173c2b;
+    }
+    .casino-day-heading .casino-kitchen-label {
+      display:block;
+      margin-bottom:3px;
+      color:#0b7431;
+      font-size:.67rem;
+      font-weight:900;
+      letter-spacing:.11em;
+      text-transform:uppercase;
+    }
+    .casino-day-heading h4 { margin:0; color:#173c2b; font-size:1.15rem; }
+    .casino-day-heading small { color:var(--muted); font-size:.72rem; font-weight:700; }
+    .casino-section { margin-top:14px; }
+    .casino-section + .casino-section { margin-top:20px; }
+    .casino-section-title {
+      margin:0 0 7px;
+      color:#173c2b;
+      font-size:.78rem;
+      font-weight:900;
+      text-transform:uppercase;
+      letter-spacing:.055em;
+    }
+    .casino-day-table-wrap {
+      overflow-x:auto;
+      border:1px solid #1f2937;
+      border-radius:10px;
+      background:#fff;
+      -webkit-overflow-scrolling:touch;
+    }
+    .casino-day-table { width:100%; table-layout:fixed; border-collapse:collapse; font-size:10px; }
+    .casino-day-table th,
+    .casino-day-table td { border:1px solid #1f2937; padding:5px; text-align:center; vertical-align:middle; }
+    .casino-day-table .casino-product-col {
+      width:220px;
+      min-width:220px;
+      max-width:220px;
+      text-align:left;
+      padding-left:8px;
+      background:#f9fafb;
+      font-weight:800;
+      word-break:break-word;
+    }
+    .casino-day-table .casino-client-head {
+      width:50px;
+      min-width:50px;
+      height:128px;
+      vertical-align:bottom;
+      padding:4px 2px 7px;
+    }
+    .casino-day-table .casino-client-head span {
+      display:block;
+      writing-mode:vertical-rl;
+      transform:rotate(180deg);
+      margin:auto;
+      color:#0b7431;
+      font-size:8px;
+      font-weight:900;
+      line-height:1.05;
+    }
+    .casino-day-table .casino-total-col {
+      width:66px;
+      min-width:66px;
+      background:#ecfdf3;
+      color:#166534;
+      font-weight:900;
+    }
+    .casino-day-table td.casino-qty { font-size:10px; font-weight:800; }
+    .casino-day-table td.casino-zero { color:#cbd5e1; }
+    .casino-empty-day {
+      padding:22px;
+      border:1px dashed #cbd5e1;
+      border-radius:12px;
+      color:var(--muted);
+      text-align:center;
+      font-size:.82rem;
+      font-weight:700;
+      background:#f8fafc;
+    }
+
+    @media screen and (max-width: 900px) {
+      .casino-upload-card { grid-template-columns:1fr; }
+      .casino-upload-actions { grid-template-columns:1fr; }
+      .casino-upload-actions .btn { width:100%; }
+      .casino-day-page { padding:14px; }
+    }
+
+    @media screen and (max-width: 640px) {
+      .casino-upload-card { padding:14px; border-radius:14px; }
+      .casino-day-page { padding:10px; border-radius:13px; }
+      .casino-day-heading { align-items:flex-start; flex-direction:column; gap:5px; }
+      .casino-day-table-wrap { width:100%; }
+      .casino-day-table .casino-product-col { width:170px; min-width:170px; max-width:170px; }
+    }
+
+    @media print {
+      body.printing-casinos .topbar,
+      body.printing-casinos .tab-nav,
+      body.printing-casinos .no-print,
+      body.printing-casinos #pedidoDetalleModal { display:none !important; }
+
+      body.printing-casinos .tab-panel { display:none !important; }
+      body.printing-casinos #panel-casinos { display:block !important; }
+      body.printing-casinos #panel-casinos .panel {
+        display:block !important;
+        border:0 !important;
+        box-shadow:none !important;
+        padding:0 !important;
+      }
+      body.printing-casinos #casinosProduccion { display:block !important; }
+      body.printing-casinos .casino-day-page {
+        display:block !important;
+        margin:0 !important;
+        padding:0 !important;
+        border:0 !important;
+        border-radius:0 !important;
+        box-shadow:none !important;
+        page-break-after:always;
+        break-after:page;
+      }
+      body.printing-casinos .casino-day-page:last-child {
+        page-break-after:auto;
+        break-after:auto;
+      }
+      body.printing-casinos .casino-day-heading {
+        margin:0 0 8px !important;
+        padding-bottom:6px !important;
+      }
+      body.printing-casinos .casino-day-heading h4 { font-size:12px !important; }
+      body.printing-casinos .casino-day-heading small,
+      body.printing-casinos .casino-kitchen-label { font-size:6.5px !important; }
+      body.printing-casinos .casino-section { margin-top:8px !important; break-inside:avoid; }
+      body.printing-casinos .casino-section + .casino-section { margin-top:10px !important; }
+      body.printing-casinos .casino-section-title { font-size:7px !important; margin-bottom:4px !important; }
+      body.printing-casinos .casino-day-table-wrap {
+        overflow:visible !important;
+        border:0 !important;
+        border-radius:0 !important;
+      }
+      body.printing-casinos .casino-day-table {
+        min-width:0 !important;
+        width:100% !important;
+        table-layout:fixed !important;
+        font-size:6px !important;
+      }
+      body.printing-casinos .casino-day-table thead { display:table-header-group; }
+      body.printing-casinos .casino-day-table tr { break-inside:avoid; page-break-inside:avoid; }
+      body.printing-casinos .casino-day-table th,
+      body.printing-casinos .casino-day-table td {
+        padding:2px 3px !important;
+        height:16px !important;
+        font-size:6px !important;
+      }
+      body.printing-casinos .casino-day-table .casino-product-col {
+        width:125px !important;
+        min-width:125px !important;
+        max-width:125px !important;
+        font-size:6px !important;
+      }
+      body.printing-casinos .casino-day-table .casino-client-head {
+        width:42px !important;
+        min-width:42px !important;
+        height:52px !important;
+      }
+      body.printing-casinos .casino-day-table .casino-client-head span {
+        font-size:5.6px !important;
+        max-height:48px;
+        overflow:hidden;
+      }
+      body.printing-casinos .casino-day-table .casino-total-col {
+        width:52px !important;
+        min-width:52px !important;
+      }
+    }
+
     @media print { body.printing-cocina .kitchen-section-title { display:none !important; } }
     @media (max-width: 640px) { .admin-shell { padding: 14px 12px 32px; } .topbar { border-radius: 15px; min-height: 100px; padding: 20px; } .tab-nav { width: 100%; } .panel { border-radius: 15px; } }
 
@@ -1271,6 +1521,7 @@
         overflow-x: auto !important;
       }
       .kitchen-page table { min-width: 720px; }
+      .casino-day-table-wrap { max-width:100%; overflow-x:auto !important; }
 
       input,
       select,
@@ -1333,6 +1584,7 @@
       <button class="tab-btn" data-tab="inventario">Inventario</button>
       <button class="tab-btn" data-tab="historial">Historial</button>
       <button class="tab-btn" data-tab="usuarios">Usuarios</button>
+      <button class="tab-btn" data-tab="casinos">Casinos</button>
     </nav>
 
     <section id="panel-general" class="tab-panel active">
@@ -1528,6 +1780,39 @@
       </div>
     </section>
 
+
+    <section id="panel-casinos" class="tab-panel">
+      <div class="panel casino-panel">
+        <div class="header-row no-print">
+          <div>
+            <h3>Hoja de cocina · Casinos</h3>
+            <div style="margin-top:5px; color:var(--muted); font-size:.82rem;">
+              Sube el cronograma Excel. Se generarán automáticamente todos los días que aparecen en la parte superior del archivo.
+            </div>
+          </div>
+          <button id="imprimirCasinosBtn" class="btn btn-warning" type="button" onclick="imprimirHojaCasinos()" disabled>
+            Imprimir todos los días
+          </button>
+        </div>
+
+        <div class="casino-upload-card no-print">
+          <div class="casino-upload-copy">
+            <strong>Subir cronograma de casinos</strong>
+            <span>Formato admitido: .xlsx con la misma estructura del cronograma de D'chelis.</span>
+          </div>
+          <div class="casino-upload-actions">
+            <input id="casinoExcelInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+            <button id="procesarCasinoExcelBtn" class="btn btn-success" type="button" onclick="procesarCronogramaCasinos()">
+              Generar hoja de cocina
+            </button>
+          </div>
+          <div id="casinoEstado" class="casino-status">Todavía no se ha cargado un cronograma.</div>
+        </div>
+
+        <div id="casinoDiasResumen" class="casino-days-strip no-print"></div>
+        <div id="casinosProduccion"></div>
+      </div>
+    </section>
   </div>
 
   <div id="pedidoDetalleModal" class="pedido-modal" onclick="cerrarDetallePedido(event)">
@@ -2489,6 +2774,214 @@
         quickOrderInFlight = false;
         if (submitButton) submitButton.disabled = false;
       }
+    }
+
+
+    window.__casinoProduccionData = null;
+
+    function archivoCasinoABase64(archivo) {
+      return new Promise((resolve, reject) => {
+        const lector = new FileReader();
+        lector.onload = () => {
+          const valor = String(lector.result || '');
+          resolve(valor.includes(',') ? valor.split(',').pop() : valor);
+        };
+        lector.onerror = () => reject(new Error('No se pudo leer el archivo seleccionado.'));
+        lector.readAsDataURL(archivo);
+      });
+    }
+
+    function formatearFechaCasino(fechaIso) {
+      const partes = String(fechaIso || '').split('-').map(Number);
+      if (partes.length !== 3 || partes.some((valor) => !Number.isFinite(valor))) return fechaIso || '';
+      return new Intl.DateTimeFormat('es-PE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      }).format(new Date(partes[0], partes[1] - 1, partes[2]));
+    }
+
+    function formatearCantidadCasino(valor) {
+      const numero = Number(valor || 0);
+      if (!Number.isFinite(numero)) return '';
+      if (Math.abs(numero - Math.round(numero)) < 0.0001) return String(Math.round(numero));
+      return numero.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+    }
+
+    function renderizarTablaCasino(productos, casinos, titulo) {
+      if (!productos.length) return '';
+      const anchoMinimo = Math.max(620, 220 + (casinos.length * 52) + 70);
+      const encabezados = casinos.map((casino) =>
+        `<th class="casino-client-head"><span>${escapeHtmlAdmin(casino)}</span></th>`
+      ).join('');
+
+      const filas = productos.map((producto) => {
+        const cantidades = casinos.map((casino) => {
+          const cantidad = Number(producto.por_casino?.[casino] || 0);
+          return `<td class="casino-qty${cantidad > 0 ? '' : ' casino-zero'}">${cantidad > 0 ? formatearCantidadCasino(cantidad) : ''}</td>`;
+        }).join('');
+
+        return `
+          <tr>
+            <td class="casino-product-col">${escapeHtmlAdmin(producto.nombre)}</td>
+            ${cantidades}
+            <td class="casino-total-col">${formatearCantidadCasino(producto.total)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      return `
+        <section class="casino-section">
+          <h5 class="casino-section-title">${escapeHtmlAdmin(titulo)}</h5>
+          <div class="casino-day-table-wrap">
+            <table class="casino-day-table" style="min-width:${anchoMinimo}px;">
+              <thead>
+                <tr>
+                  <th class="casino-product-col">Producto</th>
+                  ${encabezados}
+                  <th class="casino-total-col">TOTAL</th>
+                </tr>
+              </thead>
+              <tbody>${filas}</tbody>
+            </table>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderizarProduccionCasinos(data) {
+      const contenedor = document.getElementById('casinosProduccion');
+      const resumenDias = document.getElementById('casinoDiasResumen');
+      const botonImprimir = document.getElementById('imprimirCasinosBtn');
+      if (!contenedor || !resumenDias) return;
+
+      const dias = Array.isArray(data?.dias) ? data.dias : [];
+      resumenDias.innerHTML = dias.map((dia) => {
+        const tienePedidos = Array.isArray(dia.productos) && dia.productos.length > 0;
+        return `<span class="casino-day-chip${tienePedidos ? ' has-orders' : ''}">${escapeHtmlAdmin(dia.dia)} · ${escapeHtmlAdmin(formatearFechaCasino(dia.fecha))}</span>`;
+      }).join('');
+
+      contenedor.innerHTML = dias.map((dia) => {
+        const productos = Array.isArray(dia.productos) ? dia.productos : [];
+        const casinos = Array.isArray(dia.casinos) ? dia.casinos : [];
+        const principales = productos.filter((producto) => producto.grupo !== 'extra');
+        const extras = productos.filter((producto) => producto.grupo === 'extra');
+        const cuerpo = productos.length
+          ? [
+              renderizarTablaCasino(principales, casinos, 'Hoja 1 · Bocaditos'),
+              renderizarTablaCasino(extras, casinos, 'Hoja 2 · Sanguches, triples y panes')
+            ].filter(Boolean).join('')
+          : '<div class="casino-empty-day">Sin pedidos en el cronograma para este día.</div>';
+
+        return `
+          <article class="casino-day-page">
+            <div class="casino-day-heading">
+              <div>
+                <span class="casino-kitchen-label">D'chelis · Hoja de cocina · Casinos</span>
+                <h4>${escapeHtmlAdmin(dia.dia)} · ${escapeHtmlAdmin(formatearFechaCasino(dia.fecha))}</h4>
+              </div>
+              <small>${casinos.length ? `${casinos.length} casino(s) con producción` : 'Sin producción'}</small>
+            </div>
+            ${cuerpo}
+          </article>
+        `;
+      }).join('');
+
+      if (botonImprimir) botonImprimir.disabled = !dias.length;
+    }
+
+    async function procesarCronogramaCasinos() {
+      const input = document.getElementById('casinoExcelInput');
+      const estado = document.getElementById('casinoEstado');
+      const boton = document.getElementById('procesarCasinoExcelBtn');
+      const archivo = input?.files?.[0];
+
+      if (!archivo) {
+        if (estado) {
+          estado.className = 'casino-status error';
+          estado.textContent = 'Selecciona primero el cronograma Excel.';
+        }
+        return;
+      }
+
+      if (!/\.xlsx$/i.test(archivo.name)) {
+        if (estado) {
+          estado.className = 'casino-status error';
+          estado.textContent = 'El archivo debe estar en formato .xlsx.';
+        }
+        return;
+      }
+
+      if (archivo.size > 6 * 1024 * 1024) {
+        if (estado) {
+          estado.className = 'casino-status error';
+          estado.textContent = 'El archivo supera el límite de 6 MB.';
+        }
+        return;
+      }
+
+      if (boton) boton.disabled = true;
+      if (estado) {
+        estado.className = 'casino-status';
+        estado.textContent = 'Leyendo cronograma y preparando todos los días…';
+      }
+
+      try {
+        const archivoBase64 = await archivoCasinoABase64(archivo);
+        const respuesta = await fetch('/api/admin/casinos/procesar-excel', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nombre_archivo: archivo.name,
+            archivo_base64: archivoBase64
+          })
+        });
+        const data = await respuesta.json().catch(() => ({}));
+
+        if (respuesta.status === 401) {
+          closeDashboard();
+          throw new Error('Tu sesión expiró. Inicia sesión nuevamente.');
+        }
+        if (!respuesta.ok) throw new Error(data.error || 'No se pudo procesar el cronograma.');
+
+        window.__casinoProduccionData = data;
+        renderizarProduccionCasinos(data);
+
+        const sinReconocer = Array.isArray(data.productos_no_reconocidos) ? data.productos_no_reconocidos.length : 0;
+        const advertencias = Array.isArray(data.advertencias) ? data.advertencias.length : 0;
+        if (estado) {
+          estado.className = 'casino-status success';
+          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${data.dias?.length || 0} día(s) detectados · todos los días fueron generados${sinReconocer ? ` · ${sinReconocer} nombre(s) se conservaron tal como venían en el Excel` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
+        }
+      } catch (error) {
+        window.__casinoProduccionData = null;
+        document.getElementById('casinosProduccion').innerHTML = '';
+        document.getElementById('casinoDiasResumen').innerHTML = '';
+        const imprimir = document.getElementById('imprimirCasinosBtn');
+        if (imprimir) imprimir.disabled = true;
+        if (estado) {
+          estado.className = 'casino-status error';
+          estado.textContent = error.message || 'No se pudo procesar el cronograma.';
+        }
+      } finally {
+        if (boton) boton.disabled = false;
+      }
+    }
+
+    function imprimirHojaCasinos() {
+      const data = window.__casinoProduccionData;
+      if (!data || !Array.isArray(data.dias) || !data.dias.length) {
+        alert('Primero carga y procesa un cronograma de casinos.');
+        return;
+      }
+
+      document.body.classList.remove('printing-cocina');
+      document.body.classList.add('printing-casinos');
+      window.addEventListener('afterprint', () => {
+        document.body.classList.remove('printing-casinos');
+      }, { once: true });
+      window.print();
     }
 
     let adminStarted = false;
