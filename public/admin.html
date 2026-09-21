@@ -1360,11 +1360,6 @@
       .casino-day-table .casino-product-col { width:170px; min-width:170px; max-width:170px; }
     }
 
-    @page casinoLandscape {
-      size: A4 landscape;
-      margin: 0;
-    }
-
     @media print {
       body.printing-casinos .topbar,
       body.printing-casinos .tab-nav,
@@ -1394,25 +1389,32 @@
       body.printing-casinos .casino-day-heading { display:none !important; }
 
       body.printing-casinos .casino-print-sheet {
-        page: casinoLandscape;
-        display:block !important;
+        display:flex !important;
+        flex-direction:column !important;
         width:297mm !important;
         height:210mm !important;
         min-height:210mm !important;
         max-height:210mm !important;
         margin:0 !important;
-        padding:6mm !important;
+        padding:4mm !important;
         border:0 !important;
         border-radius:0 !important;
         box-shadow:none !important;
         overflow:hidden !important;
         box-sizing:border-box !important;
+        page-break-before:auto !important;
+        break-before:auto !important;
         page-break-after:always;
         break-after:page;
       }
       body.printing-casinos .casino-print-sheet:last-child {
         page-break-after:always;
         break-after:page;
+      }
+      body.printing-casinos .casino-day-page:first-of-type .casino-print-sheet:first-child,
+      body.printing-casinos.printing-casino-single .casino-print-target .casino-print-sheet:first-child {
+        page-break-before:auto !important;
+        break-before:auto !important;
       }
       body.printing-casinos .casino-day-page:last-child .casino-print-sheet:last-child {
         page-break-after:auto;
@@ -1424,8 +1426,9 @@
       }
       body.printing-casinos .casino-print-sheet-head {
         display:flex !important;
-        margin:0 0 4mm !important;
-        padding-bottom:2.5mm !important;
+        flex:0 0 auto !important;
+        margin:0 0 2.5mm !important;
+        padding-bottom:1.8mm !important;
         border-bottom:0.6mm solid #173c2b !important;
       }
       body.printing-casinos .casino-print-sheet-head h5 {
@@ -1435,11 +1438,21 @@
       body.printing-casinos .casino-print-sheet-head span {
         font-size:7pt !important;
       }
-      body.printing-casinos .casino-section { margin-top:8px !important; break-inside:auto; }
+      body.printing-casinos .casino-section {
+        display:flex !important;
+        flex:1 1 auto !important;
+        flex-direction:column !important;
+        min-height:0 !important;
+        margin-top:0 !important;
+        break-inside:auto;
+      }
       body.printing-casinos .casino-section + .casino-section { margin-top:10px !important; }
       body.printing-casinos .casino-section-title { font-size:7px !important; margin-bottom:4px !important; }
       body.printing-casinos .casino-day-table-wrap {
+        display:flex !important;
+        flex:1 1 auto !important;
         width:100% !important;
+        min-height:0 !important;
         overflow:visible !important;
         border:0 !important;
         border-radius:0 !important;
@@ -1447,23 +1460,24 @@
       body.printing-casinos .casino-day-table {
         min-width:0 !important;
         width:100% !important;
-        height:auto !important;
+        height:100% !important;
+        min-height:100% !important;
         table-layout:fixed !important;
-        font-size:7px !important;
+        font-size:8px !important;
       }
       body.printing-casinos .casino-day-table thead { display:table-header-group; }
       body.printing-casinos .casino-day-table tr { break-inside:avoid; page-break-inside:avoid; }
       body.printing-casinos .casino-day-table th,
       body.printing-casinos .casino-day-table td {
-        padding:2.2mm 1.2mm !important;
+        padding:2.6mm 1.4mm !important;
         height:auto !important;
-        font-size:7px !important;
+        font-size:8px !important;
       }
       body.printing-casinos .casino-day-table .casino-product-col {
         width:38mm !important;
         min-width:38mm !important;
         max-width:38mm !important;
-        font-size:7px !important;
+        font-size:8px !important;
       }
       body.printing-casinos .casino-day-table .casino-day-head {
         width:auto !important;
@@ -1472,12 +1486,12 @@
         padding:2px !important;
       }
       body.printing-casinos .casino-day-table .casino-day-name {
-        font-size:5.6px !important;
+        font-size:6.4px !important;
         line-height:1 !important;
       }
       body.printing-casinos .casino-day-table .casino-day-date {
         margin-top:2px !important;
-        font-size:5px !important;
+        font-size:5.8px !important;
         line-height:1 !important;
       }
       body.printing-casinos .casino-day-table .casino-total-col {
