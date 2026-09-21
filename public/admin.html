@@ -1404,25 +1404,25 @@
         box-sizing:border-box !important;
         page-break-before:auto !important;
         break-before:auto !important;
-        page-break-after:always;
-        break-after:page;
+        page-break-after:auto !important;
+        break-after:auto !important;
       }
-      body.printing-casinos .casino-print-sheet:last-child {
-        page-break-after:always;
-        break-after:page;
+      body.printing-casinos .casino-print-sheet + .casino-print-sheet {
+        page-break-before:always !important;
+        break-before:page !important;
+      }
+      body.printing-casinos .casino-day-page + .casino-day-page .casino-print-sheet:first-child {
+        page-break-before:always !important;
+        break-before:page !important;
       }
       body.printing-casinos .casino-day-page:first-of-type .casino-print-sheet:first-child,
       body.printing-casinos.printing-casino-single .casino-print-target .casino-print-sheet:first-child {
         page-break-before:auto !important;
         break-before:auto !important;
       }
-      body.printing-casinos .casino-day-page:last-child .casino-print-sheet:last-child {
-        page-break-after:auto;
-        break-after:auto;
-      }
-      body.printing-casinos.printing-casino-single .casino-print-target .casino-print-sheet:last-child {
-        page-break-after:auto;
-        break-after:auto;
+      body.printing-casinos .casino-print-sheet:last-child {
+        page-break-after:auto !important;
+        break-after:auto !important;
       }
       body.printing-casinos .casino-print-sheet-head {
         display:flex !important;
@@ -1525,9 +1525,96 @@
       }
       body.printing-casinos .casino-day-table td.casino-qty:not(.casino-zero) {
         background:#eef8f1 !important;
-        box-shadow:inset 0 -0.6mm 0 #9bd5ad !important;
+        box-shadow:inset 0 -0.8mm 0 #8fc9a2 !important;
         -webkit-print-color-adjust:exact;
         print-color-adjust:exact;
+      }
+
+      /* La tipografía se adapta a la cantidad de productos para ocupar gran parte de cada casilla. */
+      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-day-table th,
+      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-day-table td {
+        padding:4mm 1.6mm !important;
+        font-size:18px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-product-col {
+        font-size:18px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-xl td.casino-qty,
+      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-total-col {
+        font-size:25px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-day-name {
+        font-size:15px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-day-date {
+        font-size:13px !important;
+      }
+
+      body.printing-casinos .casino-print-sheet.casino-density-large .casino-day-table th,
+      body.printing-casinos .casino-print-sheet.casino-density-large .casino-day-table td {
+        padding:3.2mm 1.5mm !important;
+        font-size:16px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-large .casino-product-col {
+        font-size:16px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-large td.casino-qty,
+      body.printing-casinos .casino-print-sheet.casino-density-large .casino-total-col {
+        font-size:22px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-large .casino-day-name {
+        font-size:14px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-large .casino-day-date {
+        font-size:12px !important;
+      }
+
+      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-day-table th,
+      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-day-table td {
+        padding:2.2mm 1.25mm !important;
+        font-size:14px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-product-col {
+        font-size:14px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-medium td.casino-qty,
+      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-total-col {
+        font-size:19px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-day-name {
+        font-size:12.5px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-day-date {
+        font-size:11px !important;
+      }
+
+      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-day-table th,
+      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-day-table td {
+        padding:1.25mm 1mm !important;
+        font-size:12px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-product-col {
+        font-size:12px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-compact td.casino-qty,
+      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-total-col {
+        font-size:16px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-day-name {
+        font-size:11px !important;
+      }
+      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-day-date {
+        font-size:10px !important;
+      }
+
+      body.printing-casinos,
+      body.printing-casinos #adminApp,
+      body.printing-casinos .admin-shell {
+        margin:0 !important;
+        width:297mm !important;
+        min-width:297mm !important;
+        max-width:297mm !important;
+        padding:0 !important;
       }
     }
 
@@ -3081,8 +3168,17 @@
     function renderizarHojaQuincenaCasino(casino, productos, dias, quincena, categoriaTitulo) {
       const nombreQuincena = quincena === 1 ? 'Primera quincena' : 'Segunda quincena';
       const diasQuincena = obtenerQuincenaCasino(dias, quincena);
+      const cantidadProductos = productosConPedidoEnDias(productos, diasQuincena).length;
+      const densidad = cantidadProductos <= 10
+        ? 'casino-density-xl'
+        : cantidadProductos <= 16
+          ? 'casino-density-large'
+          : cantidadProductos <= 24
+            ? 'casino-density-medium'
+            : 'casino-density-compact';
+
       return `
-        <section class="casino-print-sheet">
+        <section class="casino-print-sheet ${densidad}">
           <div class="casino-print-sheet-head">
             <div>
               <span>D'chelis · Cronograma de producción · Casinos</span>
