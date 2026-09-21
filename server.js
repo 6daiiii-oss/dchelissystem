@@ -799,7 +799,9 @@ async function procesarCronogramaCasinos(buffer) {
 
       const nombreProducto = resolverNombreCasino(nombreOriginal, pan, tipo);
       const grupo = grupoProductoCasino(nombreProducto, categoriaActual, esFormatoPanTipo);
-      const reconocido = resolverNombreCocina(nombreOriginal) || CASINO_ALIAS_EXACTOS[normalizarProducto([pan, tipo].filter(Boolean).join(' '))];
+      const reconocido = resolverNombreCocina(nombreOriginal)
+        || CASINO_ALIAS_EXACTOS[normalizarProducto(nombreOriginal)]
+        || CASINO_ALIAS_EXACTOS[normalizarProducto([pan, tipo].filter(Boolean).join(' '))];
       if (!reconocido && nombreProducto === nombreOriginal) productosNoReconocidos.add(nombreOriginal);
 
       fechasColumnas.forEach(({ columna, fechaIso }) => {
