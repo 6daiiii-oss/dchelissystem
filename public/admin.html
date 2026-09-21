@@ -1244,22 +1244,28 @@
       font-weight:800;
       word-break:break-word;
     }
-    .casino-day-table .casino-client-head {
-      width:50px;
-      min-width:50px;
-      height:128px;
-      vertical-align:bottom;
-      padding:4px 2px 7px;
+    .casino-day-table .casino-day-head {
+      width:86px;
+      min-width:86px;
+      height:58px;
+      padding:6px 4px;
+      background:#f3faf5;
+      color:#173c2b;
     }
-    .casino-day-table .casino-client-head span {
+    .casino-day-table .casino-day-name {
       display:block;
-      writing-mode:vertical-rl;
-      transform:rotate(180deg);
-      margin:auto;
-      color:#0b7431;
       font-size:8px;
       font-weight:900;
-      line-height:1.05;
+      line-height:1.1;
+      text-transform:uppercase;
+    }
+    .casino-day-table .casino-day-date {
+      display:block;
+      margin-top:4px;
+      color:#0b7431;
+      font-size:7px;
+      font-weight:800;
+      line-height:1.1;
     }
     .casino-day-table .casino-total-col {
       width:66px;
@@ -1360,15 +1366,20 @@
         max-width:125px !important;
         font-size:6px !important;
       }
-      body.printing-casinos .casino-day-table .casino-client-head {
-        width:42px !important;
-        min-width:42px !important;
-        height:52px !important;
+      body.printing-casinos .casino-day-table .casino-day-head {
+        width:auto !important;
+        min-width:0 !important;
+        height:36px !important;
+        padding:2px !important;
       }
-      body.printing-casinos .casino-day-table .casino-client-head span {
+      body.printing-casinos .casino-day-table .casino-day-name {
         font-size:5.6px !important;
-        max-height:48px;
-        overflow:hidden;
+        line-height:1 !important;
+      }
+      body.printing-casinos .casino-day-table .casino-day-date {
+        margin-top:2px !important;
+        font-size:5px !important;
+        line-height:1 !important;
       }
       body.printing-casinos .casino-day-table .casino-total-col {
         width:52px !important;
@@ -1787,11 +1798,11 @@
           <div>
             <h3>Hoja de cocina · Casinos</h3>
             <div style="margin-top:5px; color:var(--muted); font-size:.82rem;">
-              Sube el cronograma Excel. Se generarán automáticamente todos los días que aparecen en la parte superior del archivo.
+              Sube el cronograma Excel. Se generará un cronograma por casino, conservando todos los días y fechas en la parte superior.
             </div>
           </div>
           <button id="imprimirCasinosBtn" class="btn btn-warning" type="button" onclick="imprimirHojaCasinos()" disabled>
-            Imprimir todos los días
+            Imprimir todos los casinos
           </button>
         </div>
 
@@ -2808,16 +2819,59 @@
       return numero.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
     }
 
-    function renderizarTablaCasino(productos, casinos, titulo) {
+    function construirCronogramaPorCasino(data) {
+      const dias = Array.isArray(data?.dias) ? data.dias : [];
+      const casinos = Array.isArray(data?.casinos) ? data.casinos : [];
+
+      return casinos.map((casino) => {
+        const productosMap = new Map();
+
+        dias.forEach((dia) => {
+          (Array.isArray(dia.productos) ? dia.productos : []).forEach((producto) => {
+            const cantidad = Number(producto?.por_casino?.[casino] || 0);
+            if (!(cantidad > 0)) return;
+
+            const clave = normalizarNombreProducto(producto.nombre || '') || String(producto.nombre || '');
+            if (!productosMap.has(clave)) {
+              productosMap.set(clave, {
+                nombre: producto.nombre || 'Producto',
+                grupo: producto.grupo === 'extra' ? 'extra' : 'principal',
+                por_fecha: {},
+                total: 0
+              });
+            }
+
+            const fila = productosMap.get(clave);
+            fila.por_fecha[dia.fecha] = Number(fila.por_fecha[dia.fecha] || 0) + cantidad;
+            fila.total += cantidad;
+            if (fila.grupo !== 'extra' && producto.grupo === 'extra') fila.grupo = 'extra';
+          });
+        });
+
+        const productos = [...productosMap.values()];
+        return {
+          casino,
+          productos,
+          principales: productos.filter((producto) => producto.grupo !== 'extra'),
+          extras: productos.filter((producto) => producto.grupo === 'extra')
+        };
+      });
+    }
+
+    function renderizarTablaCasino(productos, dias, titulo) {
       if (!productos.length) return '';
-      const anchoMinimo = Math.max(620, 220 + (casinos.length * 52) + 70);
-      const encabezados = casinos.map((casino) =>
-        `<th class="casino-client-head"><span>${escapeHtmlAdmin(casino)}</span></th>`
-      ).join('');
+
+      const anchoMinimo = Math.max(720, 220 + (dias.length * 86) + 70);
+      const encabezados = dias.map((dia) => `
+        <th class="casino-day-head">
+          <span class="casino-day-name">${escapeHtmlAdmin(dia.dia)}</span>
+          <span class="casino-day-date">${escapeHtmlAdmin(formatearFechaCasino(dia.fecha))}</span>
+        </th>
+      `).join('');
 
       const filas = productos.map((producto) => {
-        const cantidades = casinos.map((casino) => {
-          const cantidad = Number(producto.por_casino?.[casino] || 0);
+        const cantidades = dias.map((dia) => {
+          const cantidad = Number(producto.por_fecha?.[dia.fecha] || 0);
           return `<td class="casino-qty${cantidad > 0 ? '' : ' casino-zero'}">${cantidad > 0 ? formatearCantidadCasino(cantidad) : ''}</td>`;
         }).join('');
 
@@ -2856,38 +2910,36 @@
       if (!contenedor || !resumenDias) return;
 
       const dias = Array.isArray(data?.dias) ? data.dias : [];
+      const cronogramas = construirCronogramaPorCasino(data);
+
       resumenDias.innerHTML = dias.map((dia) => {
         const tienePedidos = Array.isArray(dia.productos) && dia.productos.length > 0;
         return `<span class="casino-day-chip${tienePedidos ? ' has-orders' : ''}">${escapeHtmlAdmin(dia.dia)} · ${escapeHtmlAdmin(formatearFechaCasino(dia.fecha))}</span>`;
       }).join('');
 
-      contenedor.innerHTML = dias.map((dia) => {
-        const productos = Array.isArray(dia.productos) ? dia.productos : [];
-        const casinos = Array.isArray(dia.casinos) ? dia.casinos : [];
-        const principales = productos.filter((producto) => producto.grupo !== 'extra');
-        const extras = productos.filter((producto) => producto.grupo === 'extra');
-        const cuerpo = productos.length
+      contenedor.innerHTML = cronogramas.map((cronograma) => {
+        const cuerpo = cronograma.productos.length
           ? [
-              renderizarTablaCasino(principales, casinos, 'Hoja 1 · Bocaditos'),
-              renderizarTablaCasino(extras, casinos, 'Hoja 2 · Sanguches, triples y panes')
+              renderizarTablaCasino(cronograma.principales, dias, 'Hoja 1 · Bocaditos'),
+              renderizarTablaCasino(cronograma.extras, dias, 'Hoja 2 · Sanguches, triples y panes')
             ].filter(Boolean).join('')
-          : '<div class="casino-empty-day">Sin pedidos en el cronograma para este día.</div>';
+          : '<div class="casino-empty-day">Este casino no tiene pedidos en el cronograma cargado.</div>';
 
         return `
           <article class="casino-day-page">
             <div class="casino-day-heading">
               <div>
-                <span class="casino-kitchen-label">D'chelis · Hoja de cocina · Casinos</span>
-                <h4>${escapeHtmlAdmin(dia.dia)} · ${escapeHtmlAdmin(formatearFechaCasino(dia.fecha))}</h4>
+                <span class="casino-kitchen-label">D'chelis · Cronograma de producción · Casinos</span>
+                <h4>${escapeHtmlAdmin(cronograma.casino)}</h4>
               </div>
-              <small>${casinos.length ? `${casinos.length} casino(s) con producción` : 'Sin producción'}</small>
+              <small>${cronograma.productos.length ? `${cronograma.productos.length} producto(s) · ${dias.length} día(s)` : 'Sin producción'}</small>
             </div>
             ${cuerpo}
           </article>
         `;
       }).join('');
 
-      if (botonImprimir) botonImprimir.disabled = !dias.length;
+      if (botonImprimir) botonImprimir.disabled = !cronogramas.some((cronograma) => cronograma.productos.length);
     }
 
     async function procesarCronogramaCasinos() {
@@ -2923,7 +2975,7 @@
       if (boton) boton.disabled = true;
       if (estado) {
         estado.className = 'casino-status';
-        estado.textContent = 'Leyendo cronograma y preparando todos los días…';
+        estado.textContent = 'Leyendo cronograma y preparando los casinos con todos sus días…';
       }
 
       try {
@@ -2952,7 +3004,7 @@
         const advertencias = Array.isArray(data.advertencias) ? data.advertencias.length : 0;
         if (estado) {
           estado.className = 'casino-status success';
-          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${data.dias?.length || 0} día(s) detectados · todos los días fueron generados${sinReconocer ? ` · ${sinReconocer} nombre(s) se conservaron tal como venían en el Excel` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
+          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${data.dias?.length || 0} día(s) detectados · cronograma generado por casino${sinReconocer ? ` · ${sinReconocer} nombre(s) se conservaron tal como venían en el Excel` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
         }
       } catch (error) {
         window.__casinoProduccionData = null;
