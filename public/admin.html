@@ -1384,6 +1384,18 @@
   <script>
     const ADMIN_TAB_KEY = 'dchelis_admin_tab_v1';
     const ADMIN_FORM_KEY = 'dchelis_admin_digitacion_v1';
+
+    function mostrarErrorAdmin(mensaje, focoId = null) {
+      const texto = String(mensaje || 'Ocurrió un error.');
+      if (focoId) {
+        const campo = document.getElementById(focoId);
+        if (campo) {
+          campo.focus();
+          campo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+      alert(texto);
+    }
     const PRODUCTOS_COCINA_ORDEN = [
       'Torta Chantilly - Foto', 'Torta Chantilly (30 Porciones aprox)', 'Torta Chantilly (60 Porciones aprox)', 'Torta Chantilly (90 Porciones aprox)',
       'Torta de Chantilly', 'Torta Mousse de Fresa', 'Torta Mousse de Maracuyá', 'Torta Tres Leches', 'Torta Pye de Manzana',
@@ -2212,12 +2224,12 @@
       const texto = document.getElementById('quickEntryInput')?.value || '';
 
       if (!nombreCliente || !apellidoCliente || !celular || !texto.trim()) {
-        mostrarError('Falta nombre, apellido, celular o producto.', 'quickCustomerName');
+        mostrarErrorAdmin('Falta nombre, apellido, celular o producto.', 'quickCustomerName');
         return;
       }
 
       if (tipoComprobante && !numeroDocumento) {
-        mostrarError(`Ingresa el ${tipoComprobante === 'factura' ? 'RUC' : 'DNI'} para emitir el comprobante.`, 'quickNumeroDocumento');
+        mostrarErrorAdmin(`Ingresa el ${tipoComprobante === 'factura' ? 'RUC' : 'DNI'} para emitir el comprobante.`, 'quickNumeroDocumento');
         return;
       }
 
@@ -2231,7 +2243,7 @@
         const productoTexto = match ? match[2] : linea;
         const producto = resolverProductoDigitado(productoTexto);
         if (!producto || !cantidad || cantidad <= 0) {
-          mostrarError(`No se pudo interpretar: "${linea}". Usa formato como "25 triples PJQ".`, 'quickEntryInput');
+          mostrarErrorAdmin(`No se pudo interpretar: "${linea}". Usa formato como "25 triples PJQ".`, 'quickEntryInput');
           return;
         }
 
@@ -2254,7 +2266,7 @@
       const montoConExtras = Math.round(detalles.reduce((sum, item) => sum + Number(item.subtotal || 0), 0));
       const adelanto = Number.isFinite(adelantoInput) ? Math.max(0, adelantoInput) : 0;
       if (adelanto > montoConExtras) {
-        mostrarError('El adelanto no puede ser mayor que el total del pedido.', 'quickAdelanto');
+        mostrarErrorAdmin('El adelanto no puede ser mayor que el total del pedido.', 'quickAdelanto');
         return;
       }
 
@@ -2264,6 +2276,7 @@
       try {
         const respuesta = await fetch('/api/pedidos', {
           method: 'POST',
+          credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tipo_cliente: 'Cliente',
@@ -2283,7 +2296,11 @@
           })
         });
 
-        const resultado = await respuesta.json();
+        const resultado = await respuesta.json().catch(() => ({}));
+        if (respuesta.status === 401) {
+          closeDashboard();
+          throw new Error('Tu sesión expiró. Inicia sesión nuevamente para registrar el pedido.');
+        }
         if (!respuesta.ok) throw new Error(resultado.error || 'No se pudo registrar el pedido.');
 
         document.getElementById('quickEntryInput').value = '';
