@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>D'chelis | Panel Administrativo</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -1128,6 +1129,167 @@
     @media print { body.printing-cocina .kitchen-section-title { display:none !important; } }
     @media (max-width: 640px) { .admin-shell { padding: 14px 12px 32px; } .topbar { border-radius: 15px; min-height: 100px; padding: 20px; } .tab-nav { width: 100%; } .panel { border-radius: 15px; } }
 
+
+    /* Responsive: escritorio, tablet y teléfono. No altera la lógica del panel. */
+    @media screen and (max-width: 1180px) {
+      .admin-shell { padding-inline: 22px; }
+      .digitacion-panel { grid-template-columns: 1fr; }
+      .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .general-order-actions { flex-wrap: wrap; }
+      .general-order-actions .search-input { min-width: 240px; }
+      .topbar { min-height: 104px; }
+      .brand-logo-wrap { width: 160px; height: 68px; }
+    }
+
+    @media screen and (max-width: 900px) {
+      .admin-shell { padding: 18px 16px 36px; }
+      .topbar { padding: 20px; align-items: center; }
+      .admin-brand { gap: 14px; }
+      .brand-logo-wrap { width: 135px; height: 60px; padding: 6px 9px; }
+      .topbar h1 { font-size: 1.45rem; }
+      .topbar .meta { font-size: .8rem; }
+      .tab-nav {
+        width: 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+      }
+      .tab-btn { flex: 0 0 auto; min-height: 44px; }
+      .panel { padding: 20px; }
+      .header-row { align-items: flex-start; }
+      .general-order-actions { width: 100%; }
+      .general-order-actions .search-input { flex: 1 1 100%; width: 100%; max-width: none; }
+      .general-order-actions .btn { flex: 1 1 auto; }
+      #pedidosGeneral .date-group .cards-grid,
+      #pedidosHistorial .date-group .cards-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .order-card { aspect-ratio: auto; min-height: 250px; }
+      .pedido-modal-card { width: min(680px, 96vw); }
+      .pedido-editor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .cake-photo-control { grid-template-columns: minmax(0, 1fr) 110px; }
+      .table-container {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+      }
+      .kitchen-page table { min-width: 760px; }
+      .users-admin-grid { gap: 12px; }
+      .user-admin-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media screen and (max-width: 640px) {
+      html { -webkit-text-size-adjust: 100%; }
+      body { overflow-x: hidden; }
+      .admin-shell { padding: 10px 10px 28px; }
+      .auth-shell { padding: 16px; }
+      .auth-card { padding: 22px 18px; border-radius: 16px; }
+      .auth-card h2 { font-size: 1.65rem; }
+
+      .topbar {
+        min-height: auto;
+        padding: 16px;
+        border-radius: 14px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 14px;
+      }
+      .admin-brand { align-items: center; gap: 11px; }
+      .brand-logo-wrap { width: 108px; height: 52px; border-radius: 10px; }
+      .brand-eyebrow { font-size: .58rem; letter-spacing: .09em; }
+      .topbar h1 { font-size: 1.2rem; letter-spacing: -.035em; }
+      .topbar .meta { font-size: .72rem; }
+      .topbar .btn-ghost { width: 100%; min-height: 44px; }
+
+      .tab-nav {
+        margin-bottom: 12px;
+        padding: 5px;
+        border-radius: 12px;
+      }
+      .tab-btn { padding: 10px 13px; font-size: .82rem; }
+
+      .panel { padding: 15px 12px; border-radius: 14px; }
+      .header-row { gap: 10px; margin-bottom: 14px; padding-bottom: 12px; }
+      .header-row h3 { font-size: 1.1rem; }
+      .controls { width: 100%; align-items: stretch; }
+      .controls > * { min-width: 0; }
+      .controls .btn { flex: 1 1 100%; min-height: 44px; }
+      .controls input[type="date"],
+      .controls select,
+      .controls .form-control { width: 100%; }
+
+      .general-order-actions { display: grid; grid-template-columns: 1fr; width: 100%; }
+      .general-order-actions .search-input,
+      .search-input { min-width: 0; width: 100%; max-width: none; }
+      .general-order-actions .btn { width: 100%; min-height: 44px; }
+
+      #pedidosGeneral .date-group .cards-grid,
+      #pedidosHistorial .date-group .cards-grid { grid-template-columns: 1fr; }
+      .order-card { aspect-ratio: auto; min-height: 0; padding: 14px; }
+      .order-head { align-items: flex-start; flex-wrap: wrap; gap: 7px; }
+      .history-dispatch-badge { max-width: 100%; text-align: left; }
+      .order-schedule { align-items: flex-start; }
+      .order-summary-line::after { display: none; }
+      .payment-summary { grid-template-columns: 1fr; }
+
+      .digitacion-panel { grid-template-columns: 1fr; gap: 12px; }
+      .digitacion-box { padding: 14px; }
+      .digitacion-box .mini-grid { grid-template-columns: 1fr; }
+      .digitacion-box textarea { min-height: 135px; }
+      .digitacion-summary { max-height: none; }
+      .digitacion-summary li { align-items: flex-start; }
+
+      .settings-grid { grid-template-columns: 1fr; gap: 12px; }
+      .pedido-editor-grid { grid-template-columns: 1fr; }
+      .pedido-item-editor { grid-template-columns: 1fr !important; }
+      .pedido-editor-actions { grid-template-columns: 1fr; }
+
+      .pedido-modal {
+        padding: 0;
+        align-items: end;
+      }
+      .pedido-modal-card {
+        width: 100%;
+        max-width: none;
+        max-height: 92dvh;
+        border-radius: 18px 18px 0 0;
+        padding: 18px 14px calc(18px + env(safe-area-inset-bottom));
+      }
+      .pedido-modal-info,
+      .order-info { grid-template-columns: 1fr; }
+      .pedido-modal-close { min-width: 44px; min-height: 44px; }
+
+      .cake-photo-control { grid-template-columns: 1fr; }
+      .cake-photo-preview { width: 100%; height: auto; max-height: 220px; }
+      .user-admin-card { grid-template-columns: 1fr; padding: 12px; }
+      .user-admin-card .btn { width: 100%; min-height: 44px; }
+
+      .table-container {
+        width: calc(100vw - 44px);
+        max-width: 100%;
+        overflow-x: auto !important;
+      }
+      .kitchen-page table { min-width: 720px; }
+
+      input,
+      select,
+      textarea,
+      button,
+      .form-control,
+      .search-input { font-size: 16px; }
+    }
+
+    @media screen and (max-width: 420px) {
+      .admin-shell { padding-inline: 8px; }
+      .panel { padding-inline: 10px; }
+      .brand-logo-wrap { width: 92px; height: 46px; }
+      .topbar h1 { font-size: 1.08rem; }
+      .topbar .meta { display: none; }
+      .order-schedule { flex-direction: column; }
+      .schedule-time { align-self: flex-start; }
+      .badge { font-size: .68rem; }
+    }
   </style>
 </head>
 <body>
