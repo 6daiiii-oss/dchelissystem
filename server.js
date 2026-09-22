@@ -561,6 +561,41 @@ const CASINO_MESES = {
   NOV: 10, NOVIEMBRE: 10, DIC: 11, DICIEMBRE: 11
 };
 
+const CASINO_PETIPAN_VARIANTES = Object.fromEntries(Object.entries({
+  'PETIPAN': 'Petipan',
+  'PETIPAN CON POLLO': 'Petipan de Pollo',
+  'PETIPAN POLLO': 'Petipan de Pollo',
+  'PETIPAN DE POLLO': 'Petipan de Pollo',
+  'PETIPAN POLLO CON DURAZNO': 'Petipan de pollo c/durazno',
+  'PETIPAN POLLO DURAZNO': 'Petipan de pollo c/durazno',
+  'PETIPAN DE POLLO C DURAZNO': 'Petipan de pollo c/durazno',
+  'PETIPAN POLLO CON PINA': 'Petipan de pollo c/piña',
+  'PETIPAN POLLO PINA': 'Petipan de pollo c/piña',
+  'PETIPAN DE POLLO C PINA': 'Petipan de pollo c/piña',
+  'PETIPAN CON JAMON': 'Petipan con jamón',
+  'PETIPAN CON HOT DOG': 'Petipan con hot dog',
+  'PETIPAN CON LOMITO': 'Petipan con lomito',
+  'PETIPAN HAMBURGUESA QUESO': 'Petipan hamburguesa queso',
+  'PETIPAN JAMON QUESO': 'Petipan jamón queso',
+  'PETIPAN MECHADA': 'Petipan mechada',
+  'PETIPAN POLLO CAMPESINO': 'Petipan pollo campesino',
+  'PETIPAN POLLO CON APIO': 'Petipan pollo con apio',
+  'PETIPAN POLLO CON PECANAS': 'Petipan pollo con pecanas',
+  'PETIPAN POLLO CRISPY': 'Petipan pollo crispy'
+}).map(([clave, valor]) => [normalizarProducto(clave), valor]));
+
+function resolverVariantePetipanCasino(nombre) {
+  const limpio = String(nombre || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  const clave = normalizarProducto(limpio);
+  if (!clave || !/^PETIPAN(?:\s|$)/.test(clave)) return null;
+
+  if (CASINO_PETIPAN_VARIANTES[clave]) return CASINO_PETIPAN_VARIANTES[clave];
+
+  // Cualquier sabor/relleno no catalogado se conserva como un ítem independiente.
+  // Nunca se colapsa una variante de PETIPAN al producto genérico "Petipan".
+  return limpio;
+}
+
 const CASINO_ALIAS_EXACTOS = Object.fromEntries(Object.entries({
   'PAN BAGUETTE MINI': 'Baguetina',
   'PAN CIABATTA MINI': 'Mini Ciabatta',
@@ -666,6 +701,13 @@ function resolverNombreCasino(nombre, pan = '', tipo = '') {
   for (const candidato of candidatos) {
     const clave = normalizarProducto(candidato);
     if (!clave) continue;
+
+    // PETIPAN necesita identidad por relleno/sabor. Se resuelve antes que los
+    // aliases generales para impedir que "PETIPAN POLLO CRISPY", por ejemplo,
+    // termine agrupado simplemente como "Petipan".
+    const petipan = resolverVariantePetipanCasino(candidato);
+    if (petipan) return petipan;
+
     if (CASINO_ALIAS_EXACTOS[clave]) return CASINO_ALIAS_EXACTOS[clave];
     const resuelto = resolverNombreCocina(candidato);
     if (resuelto) return resuelto;
@@ -799,7 +841,9 @@ async function procesarCronogramaCasinos(buffer) {
 
       const nombreProducto = resolverNombreCasino(nombreOriginal, pan, tipo);
       const grupo = grupoProductoCasino(nombreProducto, categoriaActual, esFormatoPanTipo);
-      const reconocido = resolverNombreCocina(nombreOriginal)
+      const reconocido = resolverVariantePetipanCasino([pan, tipo].filter(Boolean).join(' '))
+        || resolverVariantePetipanCasino(nombreOriginal)
+        || resolverNombreCocina(nombreOriginal)
         || CASINO_ALIAS_EXACTOS[normalizarProducto(nombreOriginal)]
         || CASINO_ALIAS_EXACTOS[normalizarProducto([pan, tipo].filter(Boolean).join(' '))];
       if (!reconocido && nombreProducto === nombreOriginal) productosNoReconocidos.add(nombreOriginal);
