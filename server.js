@@ -257,6 +257,95 @@ function validarComprobante(tipo, numero) {
   return false;
 }
 
+
+function sumarDiasIso(fechaIso, dias = 1) {
+  const match = String(fechaIso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return '';
+  const fecha = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  fecha.setUTCDate(fecha.getUTCDate() + Number(dias || 0));
+  return fecha.toISOString().slice(0, 10);
+}
+
+function firmaDetallesPedido(detalles = []) {
+  const acumulado = new Map();
+  (Array.isArray(detalles) ? detalles : []).forEach((item) => {
+    const nombre = normalizarProducto(item?.producto_nombre || '');
+    const cantidad = Number(item?.cantidad || 0);
+    if (!nombre || !(cantidad > 0)) return;
+    acumulado.set(nombre, Number(acumulado.get(nombre) || 0) + cantidad);
+  });
+  return [...acumulado.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], 'es'))
+    .map(([nombre, cantidad]) => `${nombre}::${Number(cantidad.toFixed(3))}`)
+    .join('|');
+}
+
+function similitudDetallesPedido(a = [], b = []) {
+  const mapa = (detalles) => {
+    const m = new Map();
+    (detalles || []).forEach((item) => {
+      const nombre = normalizarProducto(item?.producto_nombre || '');
+      const cantidad = Number(item?.cantidad || 0);
+      if (!nombre || !(cantidad > 0)) return;
+      m.set(nombre, Number(m.get(nombre) || 0) + cantidad);
+    });
+    return m;
+  };
+  const ma = mapa(a);
+  const mb = mapa(b);
+  const claves = new Set([...ma.keys(), ...mb.keys()]);
+  if (!claves.size) return 0;
+  let coincidencias = 0;
+  let total = 0;
+  claves.forEach((clave) => {
+    const qa = Number(ma.get(clave) || 0);
+    const qb = Number(mb.get(clave) || 0);
+    coincidencias += Math.min(qa, qb);
+    total += Math.max(qa, qb);
+  });
+  return total > 0 ? coincidencias / total : 0;
+}
+
+async function buscarPedidoDuplicado({ celular, fecha_recoge, hora_recoge, detalles, excluir_id = null }) {
+  const telefono = String(celular || '').replace(/\D/g, '');
+  if (!telefono || !fecha_recoge || !hora_recoge || !Array.isArray(detalles) || !detalles.length) return null;
+
+  const params = [telefono, String(fecha_recoge), String(hora_recoge)];
+  let sql = `
+    SELECT id, codigo, cliente_nombre, celular, fecha_recoge, hora_recoge
+    FROM pedidos
+    WHERE REGEXP_REPLACE(COALESCE(celular, ''), '[^0-9]', '', 'g') = ?
+      AND fecha_recoge = ?
+      AND hora_recoge = ?
+      AND COALESCE(estado, 'Registrado') <> 'Cancelado'
+      AND COALESCE(origen, 'pg') <> 'casino'
+  `;
+  if (excluir_id) {
+    sql += ' AND id <> ?';
+    params.push(Number(excluir_id));
+  }
+  sql += ' ORDER BY id DESC LIMIT 8';
+
+  const candidatos = await dbAllAsync(sql, params);
+  const firmaNueva = firmaDetallesPedido(detalles);
+
+  for (const pedido of candidatos) {
+    const existentes = await dbAllAsync(
+      `SELECT producto_nombre, cantidad FROM detalles_pedido WHERE pedido_id = ? ORDER BY id ASC`,
+      [pedido.id]
+    );
+    const firmaExistente = firmaDetallesPedido(existentes);
+    const similitud = similitudDetallesPedido(detalles, existentes);
+    if (firmaNueva && firmaNueva === firmaExistente) {
+      return { ...pedido, tipo_coincidencia: 'exacta', similitud: 1 };
+    }
+    if (similitud >= 0.78) {
+      return { ...pedido, tipo_coincidencia: 'similar', similitud: Number(similitud.toFixed(2)) };
+    }
+  }
+  return null;
+}
+
 const PRODUCTOS_TORTAS = [
   'Torta Chantilly - Foto',
   'Torta Chantilly (30 Porciones aprox)',
@@ -1092,7 +1181,36 @@ app.put('/api/admin/usuarios/:id', requireAdminAuth, async (req, res) => {
   }
 });
 
+app.get('/api/admin/casinos/cronograma', requireAdminAuth, async (req, res) => {
+  try {
+    const row = await dbGetAsync(`
+      SELECT id, nombre_archivo, fecha_inicio, fecha_fin, datos_json, creado_en
+      FROM casino_cronogramas
+      ORDER BY id DESC
+      LIMIT 1
+    `);
+    if (!row) return res.json({ existe: false, cronograma: null });
+
+    let datos = {};
+    try { datos = JSON.parse(row.datos_json || '{}'); } catch { datos = {}; }
+    return res.json({
+      existe: true,
+      cronograma: {
+        id: row.id,
+        nombre_archivo: row.nombre_archivo,
+        fecha_inicio: row.fecha_inicio,
+        fecha_fin: row.fecha_fin,
+        creado_en: row.creado_en,
+        ...datos
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'No se pudo cargar el cronograma de casinos.' });
+  }
+});
+
 app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res) => {
+  let transaccion = false;
   try {
     const archivoBase64 = String(req.body?.archivo_base64 || '').trim();
     const nombreArchivo = String(req.body?.nombre_archivo || '').trim();
@@ -1104,25 +1222,87 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
 
     const base64Limpio = archivoBase64.includes(',') ? archivoBase64.split(',').pop() : archivoBase64;
     const buffer = Buffer.from(base64Limpio, 'base64');
-
     if (!buffer.length) return res.status(400).json({ error: 'El archivo Excel está vacío o no es válido.' });
-    if (buffer.length > 6 * 1024 * 1024) {
-      return res.status(413).json({ error: 'El archivo supera el límite de 6 MB.' });
+    if (buffer.length > 6 * 1024 * 1024) return res.status(413).json({ error: 'El archivo supera el límite de 6 MB.' });
+
+    const huella = crypto.createHash('sha256').update(buffer).digest('hex');
+    const existente = await dbGetAsync(`SELECT id, nombre_archivo, fecha_inicio, fecha_fin FROM casino_cronogramas WHERE huella = ? LIMIT 1`, [huella]);
+    if (existente) {
+      return res.status(409).json({
+        error: 'Este cronograma ya fue importado anteriormente. No se volverán a crear los pedidos de casino.',
+        cronograma_existente: existente
+      });
     }
 
     const resultado = await procesarCronogramaCasinos(buffer);
-    if (!resultado.dias.length) {
-      return res.status(400).json({ error: 'No se encontraron días válidos en el cronograma.' });
+    if (!resultado.dias.length) return res.status(400).json({ error: 'No se encontraron días válidos en el cronograma.' });
+
+    const fechaInicio = resultado.dias[0]?.fecha || '';
+    const fechaFin = resultado.dias.at(-1)?.fecha || fechaInicio;
+    await dbRunAsync('BEGIN TRANSACTION');
+    transaccion = true;
+
+    const cronograma = await dbRunAsync(
+      `INSERT INTO casino_cronogramas (huella, nombre_archivo, fecha_inicio, fecha_fin, datos_json)
+       VALUES (?, ?, ?, ?, ?)`,
+      [huella, nombreArchivo || 'Cronograma.xlsx', fechaInicio, fechaFin, JSON.stringify(resultado)]
+    );
+
+    let pedidosImportados = 0;
+    let detallesImportados = 0;
+
+    for (const casino of resultado.casinos || []) {
+      for (const dia of resultado.dias || []) {
+        const detalles = (dia.productos || [])
+          .map((producto) => ({
+            producto_nombre: producto.nombre,
+            cantidad: Number(producto?.por_casino?.[casino] || 0),
+            subtotal: 0,
+            paquetes: {}
+          }))
+          .filter((item) => item.cantidad > 0);
+
+        if (!detalles.length) continue;
+
+        const codigo = `CAS-${String(dia.fecha || '').replace(/-/g, '')}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+        const pedido = await dbRunAsync(
+          `INSERT INTO pedidos (
+            codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
+            fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento,
+            nro_operacion, estado, fecha_emision, origen, cronograma_casino_id
+          ) VALUES (?, 'Casino', ?, ?, 0, 0, 'Cronograma Casino', ?, '12:00', '', '', '', '', '', 'Registrado', CURRENT_TIMESTAMP, 'casino', ?)`,
+          [codigo, casino, `CASINO-${normalizarProducto(casino).replace(/\s+/g, '-').slice(0, 30)}`, dia.fecha, cronograma.lastID]
+        );
+
+        for (const det of detalles) {
+          await dbRunAsync(
+            `INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta)
+             VALUES (?, ?, ?, 0, '{}', '')`,
+            [pedido.lastID, det.producto_nombre, det.cantidad]
+          );
+          detallesImportados += 1;
+        }
+        pedidosImportados += 1;
+      }
     }
+
+    await dbRunAsync('COMMIT');
+    transaccion = false;
 
     return res.json({
       ok: true,
       nombre_archivo: nombreArchivo || 'Cronograma.xlsx',
+      cronograma_id: cronograma.lastID,
+      pedidos_importados: pedidosImportados,
+      detalles_importados: detallesImportados,
+      fecha_inicio: fechaInicio,
+      fecha_fin: fechaFin,
       ...resultado
     });
   } catch (error) {
+    if (transaccion) await dbRunAsync('ROLLBACK').catch(() => {});
     console.error('Error procesando cronograma de casinos:', error);
-    return res.status(400).json({ error: 'No se pudo leer el Excel. Verifica que conserve el formato del cronograma de casinos.' });
+    return res.status(400).json({ error: 'No se pudo importar el Excel. Verifica que conserve el formato del cronograma de casinos.' });
   }
 });
 
@@ -1263,7 +1443,7 @@ app.get('/api/pedidos/estado/:codigo', (req, res) => {
 });
 
 // Endpoint para registrar un nuevo pedido y asegurar su visualización en producción
-app.post('/api/pedidos', protectDigitacionOrigin, (req, res) => {
+app.post('/api/pedidos', protectDigitacionOrigin, async (req, res) => {
   const { tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, origen, detalles } = req.body;
 
   if (!validarComprobante(tipo_comprobante, numero_documento)) {
@@ -1274,6 +1454,21 @@ app.post('/api/pedidos', protectDigitacionOrigin, (req, res) => {
     return res.status(400).json({ error: 'El pedido debe incluir al menos un detalle.' });
   }
 
+  if (!req.body?.confirmar_duplicado && String(origen || '').toLowerCase() !== 'casino') {
+    try {
+      const duplicado = await buscarPedidoDuplicado({ celular, fecha_recoge, hora_recoge, detalles });
+      if (duplicado) {
+        return res.status(409).json({
+          error: `Posible pedido duplicado (${duplicado.tipo_coincidencia}). Confirma antes de registrarlo nuevamente.`,
+          duplicado: true,
+          coincidencia: duplicado
+        });
+      }
+    } catch (error) {
+      console.warn('No se pudo verificar duplicados:', error.message);
+    }
+  }
+
   db.serialize(() => {
     db.run('BEGIN TRANSACTION');
 
@@ -1282,12 +1477,13 @@ app.post('/api/pedidos', protectDigitacionOrigin, (req, res) => {
     const estadoInicial = pagoPendiente
       ? 'Pendiente de verificación de pago'
       : (esDigitacionSinPago ? 'Pendiente de pago' : 'Registrado');
-    const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, nro_operacion, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const origenPedido = String(origen || '').trim().toLowerCase() === 'digitacion' ? 'digitacion' : 'web';
+    const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, nro_operacion, estado, fecha_emision, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)`;
 
     const fechaCodigo = String(fecha_recoge || '').replace(/-/g, '');
     const sufijoUnico = crypto.randomBytes(4).toString('hex').toUpperCase();
     const codigoPedido = `PED-${fechaCodigo}-${sufijoUnico}`;
-    db.run(queryPedido, [codigoPedido, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, String(dedicatoria || '').trim(), String(foto_torta || ''), String(tipo_comprobante || '').trim(), String(numero_documento || '').trim(), '', estadoInicial], function (err) {
+    db.run(queryPedido, [codigoPedido, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, String(dedicatoria || '').trim(), String(foto_torta || ''), String(tipo_comprobante || '').trim(), String(numero_documento || '').trim(), '', estadoInicial, origenPedido], function (err) {
       if (err) {
         db.run('ROLLBACK');
         return res.status(500).json({ error: err.message });
@@ -1394,7 +1590,7 @@ setInterval(eliminarPedidosRegistradosAntiguos, 60 * 60 * 1000);
 app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
   db.all(`
         SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-          fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en, despachado_por
+          fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, registrado_en, despachado_por
     FROM pedidos
     WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')
     ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
@@ -1436,7 +1632,7 @@ app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
 app.get('/api/admin/historial-pedidos', requireAdminAuth, (req, res) => {
   db.all(`
     SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-      fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, registrado_en, despachado_por
+      fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, registrado_en, despachado_por
     FROM pedidos
     WHERE COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
       AND COALESCE(registrado_en, fecha_registro) >= (CURRENT_TIMESTAMP - INTERVAL '1 year')
@@ -1729,7 +1925,7 @@ app.put('/api/admin/pedidos/:id/estado', requireStaffAuth, (req, res) => {
   });
 });
 
-app.put('/api/admin/pedidos/:id', requireAdminAuth, (req, res) => {
+app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
   const { id } = req.params;
   const pedido = req.body || {};
   const clienteNombre = String(pedido.cliente_nombre || '').trim();
@@ -1741,6 +1937,7 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, (req, res) => {
   const numeroDocumento = String(pedido.numero_documento || '').trim();
   const dedicatoria = String(pedido.dedicatoria || '').trim();
   const fotoTorta = String(pedido.foto_torta || '').trim();
+  const fechaEmision = String(pedido.fecha_emision || '').trim();
   const detalles = Array.isArray(pedido.detalles) ? pedido.detalles : [];
 
   if (!validarComprobante(tipoComprobante, numeroDocumento)) {
@@ -1770,6 +1967,27 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, (req, res) => {
     return res.status(400).json({ error: 'El monto pagado no puede ser mayor que el total del pedido.' });
   }
 
+  if (!pedido.confirmar_duplicado) {
+    try {
+      const duplicado = await buscarPedidoDuplicado({
+        celular,
+        fecha_recoge: fechaRecoge,
+        hora_recoge: horaRecoge,
+        detalles,
+        excluir_id: id
+      });
+      if (duplicado) {
+        return res.status(409).json({
+          error: `Posible pedido duplicado (${duplicado.tipo_coincidencia}). Confirma antes de guardar.`,
+          duplicado: true,
+          coincidencia: duplicado
+        });
+      }
+    } catch (error) {
+      console.warn('No se pudo verificar duplicados al editar:', error.message);
+    }
+  }
+
   db.run('BEGIN TRANSACTION');
 
   db.run(`UPDATE pedidos SET
@@ -1783,8 +2001,9 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, (req, res) => {
     fecha_recoge = ?,
     hora_recoge = ?,
     dedicatoria = ?,
-    foto_torta = ?
-    WHERE id = ?`, [clienteNombre, celular, montoTotal, adelanto, metodoPago, tipoComprobante, numeroDocumento, fechaRecoge, horaRecoge, dedicatoria, fotoTorta, id], function (err) {
+    foto_torta = ?,
+    fecha_emision = COALESCE(NULLIF(?, ''), fecha_emision, CURRENT_TIMESTAMP)
+    WHERE id = ?`, [clienteNombre, celular, montoTotal, adelanto, metodoPago, tipoComprobante, numeroDocumento, fechaRecoge, horaRecoge, dedicatoria, fotoTorta, fechaEmision, id], function (err) {
     if (err) {
       db.run('ROLLBACK');
       return res.status(500).json({ error: err.message });
@@ -1861,56 +2080,80 @@ app.delete('/api/admin/pedidos/:id', requireAdminAuth, (req, res) => {
   });
 });
 
-// Endpoint: Obtener Datos de Producción del Día
-app.get('/api/admin/produccion', requireAdminAuth, (req, res) => {
-  const { fecha } = req.query;
-  if (!fecha) return res.status(400).json({ error: 'Fecha requerida' });
+// Endpoint: ventana diaria de producción/embalaje (15:00 del día elegido a 15:00 del siguiente)
+app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
+  try {
+    const fecha = String(req.query.fecha || '').trim();
+    if (!fecha) return res.status(400).json({ error: 'Fecha requerida' });
+    const fechaSiguiente = sumarDiasIso(fecha, 1);
+    if (!fechaSiguiente) return res.status(400).json({ error: 'Fecha inválida' });
 
-  // La plantilla siempre muestra las mismas 47 filas fijas (igual que el papel de la dueña),
-  // sin importar si un producto tuvo pedidos ese día o no.
-  const listaProductos = PRODUCTOS_COCINA;
+    const clientes = await dbAllAsync(`
+      SELECT id, codigo, cliente_nombre, tipo_cliente, origen, fecha_recoge, hora_recoge,
+             fecha_emision, cronograma_casino_id,
+             CASE WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN TRUE ELSE FALSE END AS es_urgente
+      FROM pedidos
+      WHERE (
+        (fecha_recoge = ? AND hora_recoge >= '15:00')
+        OR
+        (fecha_recoge = ? AND hora_recoge < '15:00')
+      )
+        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
+      ORDER BY
+        CASE WHEN COALESCE(origen, 'pg') = 'casino' THEN 2
+             WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN 0
+             ELSE 1 END,
+        fecha_recoge ASC, hora_recoge ASC, id ASC
+    `, [fecha, fecha, fechaSiguiente, fecha]);
 
-  db.all(`SELECT id, cliente_nombre, tipo_cliente FROM pedidos WHERE fecha_recoge = ? AND estado <> 'Pendiente de verificación de pago' ORDER BY id ASC`, [fecha], (err, clientes) => {
-    if (err) return res.status(500).json({ error: err.message });
+    const ids = clientes.map((item) => Number(item.id)).filter(Boolean);
+    let detalles = [];
+    if (ids.length) {
+      const placeholders = ids.map(() => '?').join(',');
+      const rows = await dbAllAsync(
+        `SELECT p.id AS pedido_id, p.origen, p.tipo_cliente, p.fecha_recoge, p.hora_recoge,
+                dp.producto_nombre, dp.cantidad, dp.paquetes, dp.foto_torta
+         FROM detalles_pedido dp
+         JOIN pedidos p ON dp.pedido_id = p.id
+         WHERE p.id IN (${placeholders})
+         ORDER BY p.id ASC, dp.id ASC`,
+        ids
+      );
 
-    db.all(
-      `SELECT p.id as pedido_id, dp.producto_nombre, dp.cantidad, dp.paquetes, dp.foto_torta 
-       FROM detalles_pedido dp 
-       JOIN pedidos p ON dp.pedido_id = p.id 
-       WHERE p.fecha_recoge = ? AND p.estado <> 'Pendiente de verificación de pago'`,
-      [fecha],
-      (err, detalles) => {
-        if (err) return res.status(500).json({ error: err.message });
+      detalles = (rows || []).map((det) => {
+        const resuelto = resolverNombreCocina(det.producto_nombre)
+          || PRODUCTOS_COCINA_EXTRA.find((producto) => normalizarProducto(producto) === normalizarProducto(det.producto_nombre))
+          || det.producto_nombre;
+        return {
+          pedido_id: det.pedido_id,
+          origen: det.origen || 'pg',
+          tipo_cliente: det.tipo_cliente || 'Cliente',
+          fecha_recoge: det.fecha_recoge,
+          hora_recoge: det.hora_recoge,
+          es_urgente: det.fecha_recoge === fecha && String(det.hora_recoge || '') >= '15:00',
+          producto_nombre: resuelto,
+          producto_nombre_original: det.producto_nombre,
+          cantidad: Number(det.cantidad || 0),
+          paquetes: det.paquetes ? JSON.parse(det.paquetes) : {},
+          foto_torta: det.foto_torta || ''
+        };
+      });
+    }
 
-        // Clave del arreglo: producto_nombre pasa a ser el nombre CANÓNICO
-        // (el mismo que aparece en PRODUCTOS_COCINA), así el frontend puede
-        // comparar por igualdad exacta sin preocuparse por los alias.
-        const detallesFiltrados = (detalles || [])
-          .map((det) => {
-            const nombreCanonico = resolverNombreCocina(det.producto_nombre) ||
-              PRODUCTOS_COCINA_EXTRA.find((producto) => normalizarProducto(producto) === normalizarProducto(det.producto_nombre));
-            return { ...det, nombre_canonico: nombreCanonico || det.producto_nombre };
-          })
-          .filter((det) => det.nombre_canonico)
-          .map((det) => ({
-            pedido_id: det.pedido_id,
-            producto_nombre: det.nombre_canonico,
-            producto_nombre_original: det.producto_nombre,
-            cantidad: det.cantidad,
-            paquetes: det.paquetes ? JSON.parse(det.paquetes) : {},
-            foto_torta: det.foto_torta || ''
-          }));
-
-        res.json({
-          fecha: fecha,
-          productos: listaProductos,
-          clientes: clientes || [],
-          detalles: detallesFiltrados || []
-        });
-      }
-    );
-  });
+    return res.json({
+      fecha,
+      fecha_siguiente: fechaSiguiente,
+      ventana: { desde: `${fecha} 15:00`, hasta: `${fechaSiguiente} 15:00` },
+      productos: PRODUCTOS_COCINA,
+      clientes,
+      detalles
+    });
+  } catch (error) {
+    console.error('Error cargando producción:', error);
+    return res.status(500).json({ error: 'No se pudo cargar la ventana de producción.' });
+  }
 });
+
 // Endpoint para recibir la notificación desde MacroDroid / Yape
 app.post('/api/yape-webhook', (req, res) => {
   const payload = req.body || {};
@@ -2027,166 +2270,105 @@ app.post('/api/yape-webhook', (req, res) => {
   return res.status(404).json({ ok: false, status: 'not_found', message: 'No se encontró pedido coincidente' });
 });
 
-// Endpoint: Descargar Excel
-app.get('/api/admin/exportar-excel', requireAdminAuth, (req, res) => {
-  const { fecha } = req.query;
-  if (!fecha) return res.status(400).send('Fecha requerida');
+// Hoja de embalaje en Excel: urgentes a la izquierda, normales a la derecha y casinos al extremo derecho.
+app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
+  try {
+    const fecha = String(req.query.fecha || '').trim();
+    if (!fecha) return res.status(400).send('Fecha requerida');
+    const fechaSiguiente = sumarDiasIso(fecha, 1);
 
-  // 47 filas fijas, igual que el papel de la dueña (no depende de lo que se pidió ese día)
-  const listaProductos = PRODUCTOS_COCINA;
+    const clientes = await dbAllAsync(`
+      SELECT id, cliente_nombre, origen, fecha_recoge, hora_recoge,
+             CASE WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN TRUE ELSE FALSE END AS es_urgente
+      FROM pedidos
+      WHERE ((fecha_recoge = ? AND hora_recoge >= '15:00') OR (fecha_recoge = ? AND hora_recoge < '15:00'))
+        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
+      ORDER BY
+        CASE WHEN COALESCE(origen, 'pg') = 'casino' THEN 2
+             WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN 0
+             ELSE 1 END,
+        fecha_recoge, hora_recoge, id
+    `, [fecha, fecha, fechaSiguiente, fecha]);
 
-  db.all(`SELECT id, cliente_nombre FROM pedidos WHERE fecha_recoge = ? AND estado <> 'Pendiente de verificación de pago' ORDER BY id ASC`, [fecha], async (err, clientes) => {
-      if (err) return res.status(500).send(err.message);
-      const listaClientes = clientes || [];
-
-      db.all(
-        `SELECT p.id as pedido_id, dp.producto_nombre, dp.cantidad, dp.paquetes 
-         FROM detalles_pedido dp 
-         JOIN pedidos p ON dp.pedido_id = p.id 
-         WHERE p.fecha_recoge = ? AND p.estado <> 'Pendiente de verificación de pago'`,
-        [fecha],
-        async (err, detalles) => {
-          if (err) return res.status(500).send(err.message);
-          // nombre canónico (resuelve alias) para que el emparejo con la fila sea exacto
-          const listaDetalles = (detalles || [])
-            .map((det) => ({ ...det, producto_nombre: resolverNombreCocina(det.producto_nombre) }))
-            .filter((det) => det.producto_nombre)
-            .map((det) => ({ ...det, paquetes: det.paquetes ? JSON.parse(det.paquetes) : {} }));
-
-          const workbook = new ExcelJS.Workbook();
-          const worksheet = workbook.addWorksheet('Producción');
-
-          worksheet.getCell('A1').value = `FECHA: ${fecha}`;
-          worksheet.getCell('A1').font = { bold: true };
-
-          listaClientes.forEach((cli, idx) => {
-            const colNum = idx + 2;
-            const cell = worksheet.getCell(1, colNum);
-            cell.value = cli.cliente_nombre.toUpperCase();
-            cell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
-            cell.font = { bold: true, color: { argb: 'FFCC0000' } };
-          });
-
-          const colTotalIdx = Math.max(listaClientes.length + 2, 19);
-          const cellTotalHeader = worksheet.getCell(1, colTotalIdx);
-          cellTotalHeader.value = 'Total';
-          cellTotalHeader.font = { bold: true };
-
-          listaProductos.forEach((prodNombre, pIdx) => {
-            const rowNum = pIdx + 2;
-            worksheet.getCell(rowNum, 1).value = prodNombre;
-            worksheet.getCell(rowNum, 1).font = { bold: true };
-
-            listaClientes.forEach((cli, cIdx) => {
-              const colNum = cIdx + 2;
-              const cantidadTotal = listaDetalles
-                .filter(d => d.pedido_id === cli.id && d.producto_nombre === prodNombre)
-                .reduce((sum, d) => sum + (d.cantidad || 0), 0);
-              if (cantidadTotal > 0) {
-                worksheet.getCell(rowNum, colNum).value = cantidadTotal;
-                worksheet.getCell(rowNum, colNum).font = { color: { argb: 'FFCC0000' }, bold: true };
-              }
-            });
-
-            const colStartLetter = 'B';
-            const colEndLetter = worksheet.getColumn(colTotalIdx - 1).letter;
-            worksheet.getCell(rowNum, colTotalIdx).value = { formula: `SUM(${colStartLetter}${rowNum}:${colEndLetter}${rowNum})` };
-            worksheet.getCell(rowNum, colTotalIdx).font = { bold: true };
-          });
-
-          const rowFinal = listaProductos.length + 2;
-          const colTotalLetter = worksheet.getColumn(colTotalIdx).letter;
-          worksheet.getCell(rowFinal, colTotalIdx).value = { formula: `SUM(${colTotalLetter}2:${colTotalLetter}${rowFinal - 1})` };
-          worksheet.getCell(rowFinal, colTotalIdx).font = { bold: true };
-
-          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-          res.setHeader('Content-Disposition', `attachment; filename=Produccion_${fecha}.xlsx`);
-          await workbook.xlsx.write(res);
-          res.end();
-        }
+    const ids = clientes.map((c) => c.id);
+    let detalles = [];
+    if (ids.length) {
+      const placeholders = ids.map(() => '?').join(',');
+      detalles = await dbAllAsync(
+        `SELECT dp.pedido_id, dp.producto_nombre, dp.cantidad
+         FROM detalles_pedido dp WHERE dp.pedido_id IN (${placeholders})`,
+        ids
       );
-  });
-});
+      detalles = detalles.map((det) => ({
+        ...det,
+        producto_nombre: resolverNombreCocina(det.producto_nombre) || det.producto_nombre
+      }));
+    }
 
-// Endpoint: Descargar Excel
-app.get('/api/admin/exportar-excel', requireAdminAuth, (req, res) => {
-  const { fecha } = req.query;
-  if (!fecha) return res.status(400).send('Fecha requerida');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Embalaje');
+    worksheet.getCell('A1').value = `HOJA DE EMBALAJE · ${fecha} 15:00 → ${fechaSiguiente} 15:00`;
+    worksheet.getCell('A1').font = { bold: true, size: 12 };
 
-  // 47 filas fijas, igual que el papel de la dueña (no depende de lo que se pidió ese día)
-  const listaProductos = PRODUCTOS_COCINA;
+    clientes.forEach((cli, idx) => {
+      const colNum = idx + 2;
+      const cell = worksheet.getCell(2, colNum);
+      cell.value = `${String(cli.cliente_nombre || '').toUpperCase()}${cli.origen === 'casino' ? ' · CASINO' : ''}`;
+      cell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
+      cell.font = {
+        bold: true,
+        color: { argb: cli.es_urgente ? 'FFCC0000' : (cli.origen === 'casino' ? 'FF0B7431' : 'FF111111') }
+      };
+    });
 
-  db.all(`SELECT id, cliente_nombre FROM pedidos WHERE fecha_recoge = ? AND estado <> 'Pendiente de verificación de pago' ORDER BY id ASC`, [fecha], async (err, clientes) => {
-      if (err) return res.status(500).send(err.message);
-      const listaClientes = clientes || [];
+    const productosDinamicos = [...new Set([
+      ...PRODUCTOS_COCINA,
+      ...PRODUCTOS_COCINA_EXTRA,
+      ...detalles.map((d) => d.producto_nombre).filter(Boolean)
+    ])];
 
-      db.all(
-        `SELECT p.id as pedido_id, dp.producto_nombre, dp.cantidad, dp.paquetes 
-         FROM detalles_pedido dp 
-         JOIN pedidos p ON dp.pedido_id = p.id 
-         WHERE p.fecha_recoge = ? AND p.estado <> 'Pendiente de verificación de pago'`,
-        [fecha],
-        async (err, detalles) => {
-          if (err) return res.status(500).send(err.message);
-          // nombre canónico (resuelve alias) para que el emparejo con la fila sea exacto
-          const listaDetalles = (detalles || [])
-            .map((det) => ({ ...det, producto_nombre: resolverNombreCocina(det.producto_nombre) }))
-            .filter((det) => det.producto_nombre)
-            .map((det) => ({ ...det, paquetes: det.paquetes ? JSON.parse(det.paquetes) : {} }));
+    const colTotalIdx = Math.max(clientes.length + 2, 19);
+    worksheet.getCell(2, colTotalIdx).value = 'TOTAL';
+    worksheet.getCell(2, colTotalIdx).font = { bold: true };
 
-          const workbook = new ExcelJS.Workbook();
-          const worksheet = workbook.addWorksheet('Producción');
+    productosDinamicos.forEach((prodNombre, pIdx) => {
+      const rowNum = pIdx + 3;
+      worksheet.getCell(rowNum, 1).value = prodNombre;
+      worksheet.getCell(rowNum, 1).font = { bold: true };
 
-          worksheet.getCell('A1').value = `FECHA: ${fecha}`;
-          worksheet.getCell('A1').font = { bold: true };
-
-          listaClientes.forEach((cli, idx) => {
-            const colNum = idx + 2;
-            const cell = worksheet.getCell(1, colNum);
-            cell.value = cli.cliente_nombre.toUpperCase();
-            cell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
-            cell.font = { bold: true, color: { argb: 'FFCC0000' } };
-          });
-
-          const colTotalIdx = Math.max(listaClientes.length + 2, 19);
-          const cellTotalHeader = worksheet.getCell(1, colTotalIdx);
-          cellTotalHeader.value = 'Total';
-          cellTotalHeader.font = { bold: true };
-
-          listaProductos.forEach((prodNombre, pIdx) => {
-            const rowNum = pIdx + 2;
-            worksheet.getCell(rowNum, 1).value = prodNombre;
-            worksheet.getCell(rowNum, 1).font = { bold: true };
-
-            listaClientes.forEach((cli, cIdx) => {
-              const colNum = cIdx + 2;
-              const cantidadTotal = listaDetalles
-                .filter(d => d.pedido_id === cli.id && d.producto_nombre === prodNombre)
-                .reduce((sum, d) => sum + (d.cantidad || 0), 0);
-              if (cantidadTotal > 0) {
-                worksheet.getCell(rowNum, colNum).value = cantidadTotal;
-                worksheet.getCell(rowNum, colNum).font = { color: { argb: 'FFCC0000' }, bold: true };
-              }
-            });
-
-            const colStartLetter = 'B';
-            const colEndLetter = worksheet.getColumn(colTotalIdx - 1).letter;
-            worksheet.getCell(rowNum, colTotalIdx).value = { formula: `SUM(${colStartLetter}${rowNum}:${colEndLetter}${rowNum})` };
-            worksheet.getCell(rowNum, colTotalIdx).font = { bold: true };
-          });
-
-          const rowFinal = listaProductos.length + 2;
-          const colTotalLetter = worksheet.getColumn(colTotalIdx).letter;
-          worksheet.getCell(rowFinal, colTotalIdx).value = { formula: `SUM(${colTotalLetter}2:${colTotalLetter}${rowFinal - 1})` };
-          worksheet.getCell(rowFinal, colTotalIdx).font = { bold: true };
-
-          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-          res.setHeader('Content-Disposition', `attachment; filename=Produccion_${fecha}.xlsx`);
-          await workbook.xlsx.write(res);
-          res.end();
+      clientes.forEach((cli, cIdx) => {
+        const cantidad = detalles
+          .filter((d) => Number(d.pedido_id) === Number(cli.id) && normalizarProducto(d.producto_nombre) === normalizarProducto(prodNombre))
+          .reduce((sum, d) => sum + Number(d.cantidad || 0), 0);
+        if (cantidad > 0) {
+          const cell = worksheet.getCell(rowNum, cIdx + 2);
+          cell.value = cantidad;
+          cell.font = {
+            bold: true,
+            color: { argb: cli.es_urgente ? 'FFCC0000' : (cli.origen === 'casino' ? 'FF0B7431' : 'FF111111') }
+          };
         }
-      );
-  });
+      });
+
+      const desde = worksheet.getColumn(2).letter;
+      const hasta = worksheet.getColumn(Math.max(2, colTotalIdx - 1)).letter;
+      worksheet.getCell(rowNum, colTotalIdx).value = { formula: `SUM(${desde}${rowNum}:${hasta}${rowNum})` };
+      worksheet.getCell(rowNum, colTotalIdx).font = { bold: true };
+    });
+
+    worksheet.getColumn(1).width = 30;
+    for (let i = 2; i <= colTotalIdx; i += 1) worksheet.getColumn(i).width = i === colTotalIdx ? 10 : 8;
+    worksheet.getRow(2).height = 115;
+    worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="Embalaje_${fecha}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Error exportando embalaje:', error);
+    if (!res.headersSent) res.status(500).send('No se pudo generar la hoja de embalaje.');
+  }
 });
 
 const PORT = process.env.PORT || 3000;
