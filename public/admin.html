@@ -1186,6 +1186,28 @@
       white-space:nowrap;
     }
     .casino-day-chip.has-orders { background:#eaf7ee; border-color:#a8d9b7; color:#087c32; }
+    .casino-days-strip:empty { display:none; }
+    .casino-week-btn {
+      flex:0 0 auto;
+      min-height:40px;
+      padding:8px 12px;
+      border:1px solid #b9d7c3;
+      border-radius:11px;
+      background:#fff;
+      color:#24543a;
+      font:inherit;
+      font-size:.76rem;
+      font-weight:900;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .casino-week-btn:hover { background:#f0faf3; }
+    .casino-week-btn.active {
+      border-color:#0b7431;
+      background:#173c2b;
+      color:#fff;
+      box-shadow:0 4px 12px rgba(23,60,43,.18);
+    }
     .casino-day-page {
       margin:0 0 24px;
       padding:18px;
@@ -1399,10 +1421,13 @@
         border:0 !important;
         box-shadow:none !important;
         padding:0 !important;
+        margin:0 !important;
       }
-      body.printing-casinos #casinosProduccion { display:block !important; }
+      body.printing-casinos #casinosProduccion { display:block !important; margin:0 !important; padding:0 !important; }
+
       body.printing-casinos .casino-day-page {
         display:block !important;
+        width:210mm !important;
         margin:0 !important;
         padding:0 !important;
         border:0 !important;
@@ -1417,10 +1442,10 @@
       body.printing-casinos .casino-print-sheet {
         display:flex !important;
         flex-direction:column !important;
-        width:297mm !important;
-        height:210mm !important;
-        min-height:210mm !important;
-        max-height:210mm !important;
+        width:210mm !important;
+        height:297mm !important;
+        min-height:297mm !important;
+        max-height:297mm !important;
         margin:0 !important;
         padding:4mm !important;
         border:0 !important;
@@ -1450,203 +1475,79 @@
         page-break-after:auto !important;
         break-after:auto !important;
       }
+
       body.printing-casinos .casino-print-sheet-head {
         display:flex !important;
         flex:0 0 auto !important;
+        align-items:flex-end !important;
+        justify-content:space-between !important;
+        gap:3mm !important;
         margin:0 0 2.5mm !important;
-        padding-bottom:1.8mm !important;
-        border-bottom:0.6mm solid #173c2b !important;
+        padding:0 0 2mm !important;
+        border-bottom:0.65mm solid #173c2b !important;
       }
       body.printing-casinos .casino-print-sheet-head h5 {
-        font-size:17pt !important;
-        line-height:1.12 !important;
+        margin:0 !important;
+        font-family:Arial, Helvetica, sans-serif !important;
+        font-size:16pt !important;
+        line-height:1.08 !important;
         font-weight:900 !important;
         color:#111 !important;
       }
       body.printing-casinos .casino-print-sheet-head span {
-        font-size:11pt !important;
-        font-weight:800 !important;
+        font-family:Arial, Helvetica, sans-serif !important;
+        font-size:9.5pt !important;
+        line-height:1.05 !important;
+        font-weight:900 !important;
         color:#173c2b !important;
       }
+
       body.printing-casinos .casino-section {
         display:flex !important;
         flex:1 1 auto !important;
         flex-direction:column !important;
         min-height:0 !important;
-        margin-top:0 !important;
-        break-inside:auto;
+        margin:0 !important;
+        break-inside:avoid !important;
+        page-break-inside:avoid !important;
       }
-      body.printing-casinos .casino-section + .casino-section { margin-top:10px !important; }
-      body.printing-casinos .casino-section-title { font-size:7px !important; margin-bottom:4px !important; }
+      body.printing-casinos .casino-section-title { display:none !important; }
       body.printing-casinos .casino-day-table-wrap {
         display:flex !important;
         flex:1 1 auto !important;
         width:100% !important;
         min-height:0 !important;
-        overflow:visible !important;
+        overflow:hidden !important;
         border:0 !important;
         border-radius:0 !important;
       }
       body.printing-casinos .casino-day-table {
-        min-width:0 !important;
         width:100% !important;
+        min-width:0 !important;
         height:100% !important;
         min-height:100% !important;
         table-layout:fixed !important;
+        border-collapse:collapse !important;
         font-family:Arial, Helvetica, sans-serif !important;
-        font-size:13px !important;
         color:#111 !important;
       }
-      body.printing-casinos .casino-day-table thead { display:table-header-group; }
+      body.printing-casinos .casino-day-table thead {
+        display:table-header-group !important;
+      }
+      body.printing-casinos .casino-day-table tr {
+        break-inside:avoid !important;
+        page-break-inside:avoid !important;
+      }
       body.printing-casinos .casino-day-table th,
       body.printing-casinos .casino-day-table td {
-        border:1.2px solid #111 !important;
-      }
-      body.printing-casinos .casino-day-table tr { break-inside:avoid; page-break-inside:avoid; }
-      body.printing-casinos .casino-day-table th,
-      body.printing-casinos .casino-day-table td {
-        padding:2.8mm 1.3mm !important;
-        height:auto !important;
-        font-size:13px !important;
-        line-height:1.15 !important;
-        color:#111 !important;
-      }
-      body.printing-casinos .casino-day-table .casino-product-col {
-        width:44mm !important;
-        min-width:44mm !important;
-        max-width:44mm !important;
-        font-size:13px !important;
-        line-height:1.15 !important;
-        font-weight:900 !important;
-      }
-      body.printing-casinos .casino-day-table .casino-day-head {
-        width:auto !important;
-        min-width:0 !important;
-        height:36px !important;
-        padding:2px !important;
-      }
-      body.printing-casinos .casino-day-table .casino-day-name {
-        font-size:11.5px !important;
-        line-height:1.05 !important;
-        font-weight:900 !important;
-        color:#111 !important;
-      }
-      body.printing-casinos .casino-day-table .casino-day-date {
-        margin-top:3px !important;
-        font-size:10.5px !important;
-        line-height:1.05 !important;
-        font-weight:900 !important;
-        color:#0b7431 !important;
-      }
-      body.printing-casinos .casino-day-table .casino-total-col {
-        width:14mm !important;
-        min-width:14mm !important;
-      }
-      body.printing-casinos .casino-day-table td.casino-qty,
-      body.printing-casinos .casino-day-table .casino-total-col {
-        font-size:16px !important;
-        line-height:1 !important;
-        font-weight:900 !important;
-        color:#111 !important;
-      }
-      body.printing-casinos .casino-number-value {
-        display:inline-block !important;
-        max-width:100% !important;
-        white-space:nowrap !important;
-        overflow:visible !important;
+        border:1.25px solid #111 !important;
+        box-sizing:border-box !important;
+        overflow:hidden !important;
         text-overflow:clip !important;
-        line-height:1 !important;
-        vertical-align:middle !important;
-      }
-      body.printing-casinos .casino-day-table td.casino-qty:not(.casino-zero) {
-        background:#eef8f1 !important;
-        box-shadow:inset 0 -0.8mm 0 #8fc9a2 !important;
-        -webkit-print-color-adjust:exact;
-        print-color-adjust:exact;
       }
 
-      /* La tipografía se adapta a la cantidad de productos para ocupar gran parte de cada casilla. */
-      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-day-table th,
-      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-day-table td {
-        padding:4mm 1.6mm !important;
-        font-size:18px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-product-col {
-        font-size:18px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-xl td.casino-qty,
-      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-total-col {
-        font-size:25px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-day-name {
-        font-size:15px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-xl .casino-day-date {
-        font-size:13px !important;
-      }
-
-      body.printing-casinos .casino-print-sheet.casino-density-large .casino-day-table th,
-      body.printing-casinos .casino-print-sheet.casino-density-large .casino-day-table td {
-        padding:3.2mm 1.5mm !important;
-        font-size:16px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-large .casino-product-col {
-        font-size:16px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-large td.casino-qty,
-      body.printing-casinos .casino-print-sheet.casino-density-large .casino-total-col {
-        font-size:22px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-large .casino-day-name {
-        font-size:14px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-large .casino-day-date {
-        font-size:12px !important;
-      }
-
-      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-day-table th,
-      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-day-table td {
-        padding:2.2mm 1.25mm !important;
-        font-size:14px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-product-col {
-        font-size:14px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-medium td.casino-qty,
-      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-total-col {
-        font-size:19px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-day-name {
-        font-size:12.5px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-medium .casino-day-date {
-        font-size:11px !important;
-      }
-
-      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-day-table th,
-      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-day-table td {
-        padding:1.25mm 1mm !important;
-        font-size:12px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-product-col {
-        font-size:12px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-compact td.casino-qty,
-      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-total-col {
-        font-size:16px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-day-name {
-        font-size:11px !important;
-      }
-      body.printing-casinos .casino-print-sheet.casino-density-compact .casino-day-date {
-        font-size:10px !important;
-      }
-
-
-      /* Ajuste final: nunca corta productos. La hoja calcula el tamaño según la cantidad de filas. */
-      body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table {
-        height:100% !important;
-        min-height:100% !important;
+      body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table thead tr {
+        height:14mm !important;
       }
       body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table tbody tr {
         height:var(--casino-row-mm) !important;
@@ -1655,49 +1556,119 @@
       }
       body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table th,
       body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table td {
-        padding:var(--casino-pad-y-mm) 1mm !important;
+        padding:var(--casino-pad-y-mm) 0.75mm !important;
         font-size:var(--casino-font-px) !important;
         line-height:1 !important;
       }
-      body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table .casino-product-col {
-        width:52mm !important;
-        min-width:52mm !important;
-        max-width:52mm !important;
+
+      body.printing-casinos .casino-day-table .casino-product-col {
+        width:48mm !important;
+        min-width:48mm !important;
+        max-width:48mm !important;
+        padding-left:1.4mm !important;
+        background:#f9fafb !important;
+        text-align:left !important;
+        vertical-align:middle !important;
         font-size:var(--casino-product-font-px) !important;
         line-height:1 !important;
-        vertical-align:middle !important;
+        font-weight:900 !important;
+        -webkit-print-color-adjust:exact;
+        print-color-adjust:exact;
       }
-      body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table td.casino-qty,
-      body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table .casino-total-col {
-        font-size:var(--casino-number-font-px) !important;
+      body.printing-casinos .casino-product-value {
+        display:inline-block !important;
+        max-width:100% !important;
+        white-space:nowrap !important;
+        overflow:visible !important;
+        text-overflow:clip !important;
         line-height:1 !important;
-        vertical-align:bottom !important;
-        padding-bottom:max(0.35mm, var(--casino-pad-y-mm)) !important;
       }
-      body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table .casino-day-name {
+
+      body.printing-casinos .casino-day-table .casino-day-head {
+        width:auto !important;
+        min-width:0 !important;
+        height:14mm !important;
+        padding:0.8mm 0.3mm !important;
+        background:#f3faf5 !important;
+        vertical-align:bottom !important;
+        -webkit-print-color-adjust:exact;
+        print-color-adjust:exact;
+      }
+      body.printing-casinos .casino-day-table .casino-day-name {
+        display:block !important;
         font-size:var(--casino-day-font-px) !important;
         line-height:1 !important;
+        font-weight:900 !important;
+        color:#111 !important;
       }
-      body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table .casino-day-date {
+      body.printing-casinos .casino-day-table .casino-day-date {
+        display:block !important;
+        margin-top:1mm !important;
         font-size:var(--casino-date-font-px) !important;
         line-height:1 !important;
+        font-weight:900 !important;
+        color:#0b7431 !important;
       }
-      body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table thead tr {
-        height:12mm !important;
+
+      body.printing-casinos .casino-day-table .casino-total-col {
+        width:15mm !important;
+        min-width:15mm !important;
+        background:#ecfdf3 !important;
+        -webkit-print-color-adjust:exact;
+        print-color-adjust:exact;
       }
-      body.printing-casinos .casino-print-sheet.casino-fit-sheet .casino-day-table .casino-day-head {
-        height:12mm !important;
-        padding:0.8mm 0.5mm !important;
+      body.printing-casinos .casino-day-table td.casino-qty,
+      body.printing-casinos .casino-day-table .casino-total-col {
+        font-size:var(--casino-number-font-px) !important;
+        line-height:1 !important;
+        font-weight:900 !important;
+        color:#111 !important;
+        text-align:center !important;
         vertical-align:bottom !important;
+        padding-bottom:max(0.35mm, var(--casino-pad-y-mm)) !important;
+        white-space:nowrap !important;
+      }
+      body.printing-casinos .casino-number-value {
+        display:inline-block !important;
+        max-width:100% !important;
+        white-space:nowrap !important;
+        overflow:visible !important;
+        text-overflow:clip !important;
+        line-height:1 !important;
+        vertical-align:bottom !important;
+      }
+      body.printing-casinos .casino-day-table td.casino-qty:not(.casino-zero) {
+        background:#eef8f1 !important;
+        box-shadow:inset 0 -0.75mm 0 #8fc9a2 !important;
+        -webkit-print-color-adjust:exact;
+        print-color-adjust:exact;
+      }
+      body.printing-casinos .casino-day-table td.casino-zero {
+        color:#cbd5e1 !important;
+      }
+
+      body.printing-casinos .casino-empty-day {
+        display:flex !important;
+        flex:1 1 auto !important;
+        align-items:center !important;
+        justify-content:center !important;
+        margin:0 !important;
+        padding:8mm !important;
+        border:1.2px dashed #94a3b8 !important;
+        border-radius:0 !important;
+        font-size:16pt !important;
+        font-weight:900 !important;
+        color:#64748b !important;
+        background:#fff !important;
       }
 
       body.printing-casinos,
       body.printing-casinos #adminApp,
       body.printing-casinos .admin-shell {
+        width:210mm !important;
+        min-width:210mm !important;
+        max-width:210mm !important;
         margin:0 !important;
-        width:297mm !important;
-        min-width:297mm !important;
-        max-width:297mm !important;
         padding:0 !important;
       }
     }
@@ -2113,7 +2084,7 @@
           <div>
             <h3>Hoja de cocina · Casinos</h3>
             <div style="margin-top:5px; color:var(--muted); font-size:.82rem;">
-              Sube el cronograma Excel. Se generará un cronograma por casino, conservando todos los días y fechas en la parte superior.
+              Sube el cronograma Excel. Después de cargarlo podrás cambiar entre las semanas detectadas y la impresión se ajustará a la semana seleccionada.
             </div>
           </div>
           <button id="imprimirCasinosBtn" class="btn btn-warning" type="button" onclick="imprimirHojaCasinos()" disabled>
@@ -3104,6 +3075,8 @@
 
 
     window.__casinoProduccionData = null;
+    window.__casinoSemanaIndex = 0;
+    window.__casinoSemanas = [];
 
     function archivoCasinoABase64(archivo) {
       return new Promise((resolve, reject) => {
@@ -3157,18 +3130,7 @@
       const casinos = Array.isArray(data?.casinos) ? data.casinos : [];
 
       return casinos.map((casino) => {
-        let ultimoDiaConPedido = -1;
-
-        dias.forEach((dia, indice) => {
-          const tienePedidoCasino = (Array.isArray(dia.productos) ? dia.productos : []).some((producto) =>
-            Number(producto?.por_casino?.[casino] || 0) > 0
-          );
-          if (tienePedidoCasino) ultimoDiaConPedido = indice;
-        });
-
-        // Mantiene huecos intermedios (p. ej. domingo sin pedido entre sábado y lunes),
-        // pero elimina todos los días vacíos que queden después del último pedido del casino.
-        const diasCasino = ultimoDiaConPedido >= 0 ? dias.slice(0, ultimoDiaConPedido + 1) : [];
+        const diasCasino = [...dias];
         const productosMap = new Map();
 
         diasCasino.forEach((dia) => {
@@ -3204,9 +3166,62 @@
       });
     }
 
-    function obtenerQuincenaCasino(dias, quincena) {
-      const lista = Array.isArray(dias) ? dias : [];
-      return quincena === 1 ? lista.slice(0, 15) : lista.slice(15);
+    function fechaCasinoADate(fechaIso) {
+      const partes = String(fechaIso || '').split('-').map(Number);
+      if (partes.length !== 3 || partes.some((valor) => !Number.isFinite(valor))) return null;
+      return new Date(partes[0], partes[1] - 1, partes[2], 12, 0, 0, 0);
+    }
+
+    function isoDateCasino(fecha) {
+      const yyyy = fecha.getFullYear();
+      const mm = String(fecha.getMonth() + 1).padStart(2, '0');
+      const dd = String(fecha.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function lunesDeFechaCasino(fechaIso) {
+      const fecha = fechaCasinoADate(fechaIso);
+      if (!fecha) return fechaIso || '';
+      const dia = fecha.getDay();
+      const retroceso = (dia + 6) % 7;
+      fecha.setDate(fecha.getDate() - retroceso);
+      return isoDateCasino(fecha);
+    }
+
+    function crearSemanasCasino(dias) {
+      const lista = [...(Array.isArray(dias) ? dias : [])]
+        .filter((dia) => dia && dia.fecha)
+        .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+
+      const grupos = [];
+      lista.forEach((dia) => {
+        const lunes = lunesDeFechaCasino(dia.fecha);
+        let grupo = grupos[grupos.length - 1];
+        if (!grupo || grupo.lunes !== lunes) {
+          grupo = { lunes, dias: [] };
+          grupos.push(grupo);
+        }
+        grupo.dias.push(dia);
+      });
+
+      // Si al final quedan solo 1 o 2 días del cronograma, se agregan a la última semana completa.
+      if (grupos.length > 1 && grupos[grupos.length - 1].dias.length <= 2) {
+        const sobrante = grupos.pop();
+        grupos[grupos.length - 1].dias.push(...sobrante.dias);
+      }
+
+      return grupos.map((grupo, indice) => {
+        const inicio = grupo.dias[0]?.fecha || grupo.lunes;
+        const fin = grupo.dias[grupo.dias.length - 1]?.fecha || inicio;
+        return {
+          indice,
+          numero: indice + 1,
+          dias: grupo.dias,
+          inicio,
+          fin,
+          rango: `${formatearFechaCasino(inicio)} – ${formatearFechaCasino(fin)}`
+        };
+      });
     }
 
     function productosConPedidoEnDias(productos, dias) {
@@ -3218,10 +3233,10 @@
     function renderizarTablaCasino(productos, dias, titulo) {
       const productosVisibles = productosConPedidoEnDias(productos, dias);
       if (!dias.length || !productosVisibles.length) {
-        return `<div class="casino-empty-day">Sin pedidos en esta quincena.</div>`;
+        return `<div class="casino-empty-day">Sin pedidos de ${escapeHtmlAdmin(titulo.toLowerCase())} en esta semana.</div>`;
       }
 
-      const anchoMinimo = Math.max(720, 220 + (dias.length * 86) + 70);
+      const anchoMinimo = Math.max(620, 220 + (dias.length * 72) + 70);
       const encabezados = dias.map((dia) => `
         <th class="casino-day-head">
           <span class="casino-day-name">${escapeHtmlAdmin(dia.dia)}</span>
@@ -3230,10 +3245,10 @@
       `).join('');
 
       const filas = productosVisibles.map((producto) => {
-        let totalQuincena = 0;
+        let totalSemana = 0;
         const cantidades = dias.map((dia) => {
           const cantidad = Number(producto.por_fecha?.[dia.fecha] || 0);
-          totalQuincena += cantidad;
+          totalSemana += cantidad;
           return `<td class="casino-qty${cantidad > 0 ? '' : ' casino-zero'}">${cantidad > 0 ? renderizarNumeroCasino(cantidad) : ''}</td>`;
         }).join('');
 
@@ -3241,7 +3256,7 @@
           <tr>
             <td class="casino-product-col">${renderizarNombreCasino(producto.nombre)}</td>
             ${cantidades}
-            <td class="casino-total-col">${renderizarNumeroCasino(totalQuincena)}</td>
+            <td class="casino-total-col">${renderizarNumeroCasino(totalSemana)}</td>
           </tr>
         `;
       }).join('');
@@ -3265,29 +3280,21 @@
       `;
     }
 
-    function renderizarHojaQuincenaCasino(casino, productos, dias, quincena, categoriaTitulo) {
-      const nombreQuincena = quincena === 1 ? 'Primera quincena desde hoy' : 'Segunda quincena';
-      const diasQuincena = obtenerQuincenaCasino(dias, quincena);
-      const cantidadProductos = productosConPedidoEnDias(productos, diasQuincena).length;
-      const densidad = cantidadProductos <= 10
-        ? 'casino-density-xl'
-        : cantidadProductos <= 16
-          ? 'casino-density-large'
-          : cantidadProductos <= 24
-            ? 'casino-density-medium'
-            : 'casino-density-compact';
+    function renderizarHojaSemanaCasino(casino, productos, semana, categoriaTitulo) {
+      const diasSemana = Array.isArray(semana?.dias) ? semana.dias : [];
+      const cantidadProductos = productosConPedidoEnDias(productos, diasSemana).length;
 
-      // A4 horizontal: reserva espacio para título + cabecera y reparte el resto
-      // entre TODAS las filas. Si hay más productos, reduce solo lo indispensable.
+      // A4 vertical: todo el listado debe caber en una sola hoja.
+      // La letra solo baja cuando la cantidad de filas lo exige.
       const filas = Math.max(1, cantidadProductos);
-      const altoDisponibleMm = 166;
-      const altoFilaMm = Math.max(2.15, Math.min(13.5, altoDisponibleMm / filas));
-      const fuenteBasePx = Math.max(6.5, Math.min(18, altoFilaMm * 2.42));
-      const fuenteProductoPx = Math.max(6.3, Math.min(18, fuenteBasePx));
-      const fuenteNumeroPx = Math.max(8, Math.min(25, altoFilaMm * 3.05));
-      const paddingMm = Math.max(0.15, Math.min(1.8, altoFilaMm * 0.11));
-      const fuenteDiaPx = Math.max(8, Math.min(15, 11.8));
-      const fuenteFechaPx = Math.max(7, Math.min(13, 10.5));
+      const altoDisponibleMm = 252;
+      const altoFilaMm = Math.max(1.65, Math.min(18, altoDisponibleMm / filas));
+      const fuenteBasePx = Math.max(6, Math.min(19, altoFilaMm * 2.35));
+      const fuenteProductoPx = Math.max(5.8, Math.min(19, fuenteBasePx));
+      const fuenteNumeroPx = Math.max(7, Math.min(27, altoFilaMm * 3.0));
+      const paddingMm = Math.max(0.08, Math.min(2.0, altoFilaMm * 0.10));
+      const fuenteDiaPx = Math.max(8, Math.min(14.5, diasSemana.length > 8 ? 10.5 : 12.5));
+      const fuenteFechaPx = Math.max(7, Math.min(12.5, diasSemana.length > 8 ? 8.8 : 10.5));
 
       const estiloAjuste = [
         `--casino-row-mm:${altoFilaMm.toFixed(3)}mm`,
@@ -3300,15 +3307,15 @@
       ].join(';');
 
       return `
-        <section class="casino-print-sheet casino-fit-sheet ${densidad}" style="${estiloAjuste}">
+        <section class="casino-print-sheet casino-fit-sheet" style="${estiloAjuste}">
           <div class="casino-print-sheet-head">
             <div>
               <span>D'chelis · Cronograma de producción · Casinos</span>
-              <h5>${escapeHtmlAdmin(casino)} · ${nombreQuincena} · ${escapeHtmlAdmin(categoriaTitulo)}</h5>
+              <h5>${escapeHtmlAdmin(casino)} · Semana ${semana.numero} · ${escapeHtmlAdmin(categoriaTitulo)}</h5>
             </div>
-            <span>${diasQuincena.length ? `${diasQuincena.length} día(s)` : 'Sin fechas vigentes'}</span>
+            <span>${escapeHtmlAdmin(semana.rango)}</span>
           </div>
-          ${renderizarTablaCasino(productos, diasQuincena, categoriaTitulo)}
+          ${renderizarTablaCasino(productos, diasSemana, categoriaTitulo)}
         </section>
       `;
     }
@@ -3337,39 +3344,74 @@
       return ultimoDiaConPedido >= 0 ? desdeHoy.slice(0, ultimoDiaConPedido + 1) : [];
     }
 
+    function renderizarSelectorSemanasCasino(semanas) {
+      const contenedor = document.getElementById('casinoDiasResumen');
+      if (!contenedor) return;
+
+      contenedor.innerHTML = semanas.map((semana) => `
+        <button
+          type="button"
+          class="casino-week-btn${semana.indice === window.__casinoSemanaIndex ? ' active' : ''}"
+          onclick="seleccionarSemanaCasino(${semana.indice})"
+        >
+          Semana ${semana.numero} · ${escapeHtmlAdmin(semana.rango)}
+        </button>
+      `).join('');
+    }
+
+    function seleccionarSemanaCasino(indice) {
+      const semanas = Array.isArray(window.__casinoSemanas) ? window.__casinoSemanas : [];
+      const numero = Number(indice);
+      if (!Number.isInteger(numero) || numero < 0 || numero >= semanas.length) return;
+      window.__casinoSemanaIndex = numero;
+      if (window.__casinoProduccionData) renderizarProduccionCasinos(window.__casinoProduccionData);
+    }
+
     function renderizarProduccionCasinos(data) {
       const contenedor = document.getElementById('casinosProduccion');
-      const resumenDias = document.getElementById('casinoDiasResumen');
       const botonImprimir = document.getElementById('imprimirCasinosBtn');
-      if (!contenedor || !resumenDias) return;
+      if (!contenedor) return;
 
       const dias = obtenerDiasCasinoVigentes(data);
-      const dataDesdeHoy = { ...data, dias };
-      const cronogramas = construirCronogramaPorCasino(dataDesdeHoy);
+      const semanas = crearSemanasCasino(dias);
+      window.__casinoSemanas = semanas;
 
-      resumenDias.innerHTML = dias.map((dia) => {
-        const tienePedidos = Array.isArray(dia.productos) && dia.productos.length > 0;
-        return `<span class="casino-day-chip${tienePedidos ? ' has-orders' : ''}">${escapeHtmlAdmin(dia.dia)} · ${escapeHtmlAdmin(formatearFechaCasino(dia.fecha))}</span>`;
-      }).join('');
+      if (!semanas.length) {
+        window.__casinoSemanaIndex = 0;
+        renderizarSelectorSemanasCasino([]);
+        contenedor.innerHTML = '<div class="casino-empty-day">No hay pedidos vigentes desde hoy.</div>';
+        if (botonImprimir) botonImprimir.disabled = true;
+        return;
+      }
+
+      if (window.__casinoSemanaIndex < 0 || window.__casinoSemanaIndex >= semanas.length) {
+        window.__casinoSemanaIndex = 0;
+      }
+
+      const semana = semanas[window.__casinoSemanaIndex];
+      renderizarSelectorSemanasCasino(semanas);
+
+      const dataSemana = { ...data, dias: semana.dias };
+      const cronogramas = construirCronogramaPorCasino(dataSemana)
+        .filter((cronograma) => cronograma.productos.length > 0);
 
       contenedor.innerHTML = cronogramas.map((cronograma, indice) => {
+        // Orden de impresión: casino → bocaditos → sánguches → siguiente casino.
         const hojas = [
-          renderizarHojaQuincenaCasino(cronograma.casino, cronograma.principales, cronograma.dias, 1, 'Bocaditos'),
-          renderizarHojaQuincenaCasino(cronograma.casino, cronograma.principales, cronograma.dias, 2, 'Bocaditos'),
-          renderizarHojaQuincenaCasino(cronograma.casino, cronograma.extras, cronograma.dias, 1, 'Sánguches, triples y panes'),
-          renderizarHojaQuincenaCasino(cronograma.casino, cronograma.extras, cronograma.dias, 2, 'Sánguches, triples y panes')
+          renderizarHojaSemanaCasino(cronograma.casino, cronograma.principales, semana, 'Bocaditos'),
+          renderizarHojaSemanaCasino(cronograma.casino, cronograma.extras, semana, 'Sánguches, triples y panes')
         ].join('');
 
         return `
           <article class="casino-day-page" data-casino-index="${indice}">
             <div class="casino-day-heading no-print">
               <div>
-                <span class="casino-kitchen-label">D'chelis · Cronograma de producción · Casinos</span>
+                <span class="casino-kitchen-label">D'chelis · Cronograma semanal · Casinos</span>
                 <h4>${escapeHtmlAdmin(cronograma.casino)}</h4>
               </div>
               <div class="casino-heading-actions">
-                <small>${cronograma.productos.length ? `${cronograma.productos.length} producto(s) · ${cronograma.dias.length} día(s)` : 'Sin producción'}</small>
-                <button type="button" class="casino-print-btn" onclick="imprimirCasinoIndividual(${indice})" ${cronograma.productos.length ? '' : 'disabled'}>
+                <small>Semana ${semana.numero} · ${escapeHtmlAdmin(semana.rango)} · ${cronograma.productos.length} producto(s)</small>
+                <button type="button" class="casino-print-btn" onclick="imprimirCasinoIndividual(${indice})">
                   Imprimir este casino
                 </button>
               </div>
@@ -3379,7 +3421,11 @@
         `;
       }).join('');
 
-      if (botonImprimir) botonImprimir.disabled = !cronogramas.some((cronograma) => cronograma.productos.length);
+      if (!cronogramas.length) {
+        contenedor.innerHTML = '<div class="casino-empty-day">No hay casinos con pedidos en esta semana.</div>';
+      }
+
+      if (botonImprimir) botonImprimir.disabled = !cronogramas.length;
     }
 
     async function procesarCronogramaCasinos() {
@@ -3438,17 +3484,21 @@
         if (!respuesta.ok) throw new Error(data.error || 'No se pudo procesar el cronograma.');
 
         window.__casinoProduccionData = data;
+        window.__casinoSemanaIndex = 0;
         renderizarProduccionCasinos(data);
 
         const sinReconocer = Array.isArray(data.productos_no_reconocidos) ? data.productos_no_reconocidos.length : 0;
         const advertencias = Array.isArray(data.advertencias) ? data.advertencias.length : 0;
         if (estado) {
           estado.className = 'casino-status success';
-          const diasVigentes = obtenerDiasCasinoVigentes(data).length;
-          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes} día(s) útiles desde hoy · cronograma generado por casino${sinReconocer ? ` · ${sinReconocer} nombre(s) se conservaron tal como venían en el Excel` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
+          const diasVigentes = obtenerDiasCasinoVigentes(data);
+          const semanasDetectadas = crearSemanasCasino(diasVigentes);
+          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes.length} día(s) útiles · ${semanasDetectadas.length} semana(s) detectada(s)${sinReconocer ? ` · ${sinReconocer} nombre(s) se conservaron tal como venían en el Excel` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
         }
       } catch (error) {
         window.__casinoProduccionData = null;
+        window.__casinoSemanaIndex = 0;
+        window.__casinoSemanas = [];
         document.getElementById('casinosProduccion').innerHTML = '';
         document.getElementById('casinoDiasResumen').innerHTML = '';
         const imprimir = document.getElementById('imprimirCasinosBtn');
@@ -3462,11 +3512,22 @@
       }
     }
 
+    function prepararOrientacionImpresionCasino() {
+      let estilo = document.getElementById('casinoPrintPageStyle');
+      if (!estilo) {
+        estilo = document.createElement('style');
+        estilo.id = 'casinoPrintPageStyle';
+        document.head.appendChild(estilo);
+      }
+      estilo.textContent = '@media print { @page { size: A4 portrait; margin: 0; } }';
+    }
+
     function limpiarModoImpresionCasino() {
       document.body.classList.remove('printing-casinos', 'printing-casino-single');
       document.querySelectorAll('.casino-day-page.casino-print-target').forEach((elemento) => {
         elemento.classList.remove('casino-print-target');
       });
+      document.getElementById('casinoPrintPageStyle')?.remove();
     }
 
     function imprimirCasinoIndividual(indice) {
@@ -3474,6 +3535,7 @@
       if (!objetivo) return;
 
       limpiarModoImpresionCasino();
+      prepararOrientacionImpresionCasino();
       objetivo.classList.add('casino-print-target');
       document.body.classList.remove('printing-cocina');
       document.body.classList.add('printing-casinos', 'printing-casino-single');
@@ -3490,6 +3552,7 @@
       }
 
       limpiarModoImpresionCasino();
+      prepararOrientacionImpresionCasino();
       document.body.classList.remove('printing-cocina');
       document.body.classList.add('printing-casinos');
       window.addEventListener('afterprint', limpiarModoImpresionCasino, { once: true });
