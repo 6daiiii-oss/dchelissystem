@@ -4144,6 +4144,7 @@
         mostrarCargaCasino(true, 'Generando las hojas semanales y la vista previa…');
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         renderizarProduccionCasinos(data);
+        await Promise.all([cargarPedidosGenerales(), cargarMatriz()]);
 
         const sinReconocer = Array.isArray(data.productos_no_reconocidos) ? data.productos_no_reconocidos.length : 0;
         const advertencias = Array.isArray(data.advertencias) ? data.advertencias.length : 0;
