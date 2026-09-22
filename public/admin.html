@@ -815,6 +815,28 @@
       background: #fff;
     }
 
+    .external-order-tools {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top:8px;
+    }
+    .external-order-tools .btn {
+      min-height:38px;
+      padding:8px 11px;
+      font-size:.78rem;
+    }
+    .external-order-status {
+      flex:1 1 220px;
+      color:var(--muted);
+      font-size:.75rem;
+      font-weight:700;
+      line-height:1.3;
+    }
+    .external-order-status.ok { color:#087c32; }
+    .external-order-status.warn { color:#9a6700; }
+
     .digitacion-box .mini-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1958,7 +1980,12 @@
             <form id="quickEntryForm">
               <div class="field">
                 <label for="quickEntryInput">Digitación rápida</label>
-                <textarea id="quickEntryInput" placeholder="Ejemplo:&#10;25 triples PJQ&#10;12 sandwich de asado&#10;8 petipan pollo&#10;10 alfajor"></textarea>
+                <textarea id="quickEntryInput" placeholder="Pega aquí un pedido de WhatsApp o escribe, por ejemplo:&#10;25 triples PJQ&#10;12 sandwich de asado&#10;8 petipan pollo&#10;10 alfajor"></textarea>
+                <div class="external-order-tools">
+                  <button class="btn btn-ghost" type="button" onclick="pegarPedidoExterno()">Pegar desde WhatsApp</button>
+                  <button class="btn btn-ghost" type="button" onclick="limpiarPedidoExternoActual()">Limpiar y corregir</button>
+                  <span id="quickExternalStatus" class="external-order-status">Al pegar un mensaje externo se quitarán fechas, saludos y texto adicional.</span>
+                </div>
               </div>
               <div class="controls">
                 <button class="btn btn-success" type="submit">Registrar pedido</button>
@@ -2724,9 +2751,254 @@
       const input = document.getElementById('quickEntryInput');
       if (!input) return [];
       return String(input.value || '')
-        .split(/\n|,/)
+        .replace(/,\s*(?=\d+\s*(?:x\s*)?[^\d])/gi, '\n')
+        .split(/\n/)
         .map((linea) => linea.trim())
         .filter(Boolean);
+    }
+
+    const PEDIDO_EXTERNO_DIRECTOS = {
+      'PYE MANZANA': 'Pye de Manzana',
+      'PYE DE MANZANA': 'Pye de Manzana',
+      'PYE LIMON': 'Pye de Limón',
+      'PYE DE LIMON': 'Pye de Limón',
+      'PIONONO': 'Piononitos',
+      'PIONONOS': 'Piononitos',
+      'PIONONITO': 'Piononitos',
+      'PIONONITOS': 'Piononitos',
+      'TRUFA': 'Trufas',
+      'TRUFAS': 'Trufas'
+    };
+
+    const PEDIDO_EXTERNO_NOMBRES_LIMPIOS = {
+      'PYE MANZANA': 'Pye de manzana mini',
+      'PYE LIMON': 'Pye de limón mini',
+      'PIONONITOS': 'Pionono mini'
+    };
+
+    function normalizarTextoPedidoExterno(texto) {
+      return normalizarNombreProducto(texto || '')
+        .replace(/\bMANSANA\b/g, 'MANZANA')
+        .replace(/\bMANSSANA\b/g, 'MANZANA')
+        .replace(/\bMANZANNA\b/g, 'MANZANA')
+        .replace(/\bPIE\b/g, 'PYE')
+        .replace(/\bPIONONNO\b/g, 'PIONONO')
+        .replace(/\bTRUFF?AS?\b/g, 'TRUFAS')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function distanciaLevenshteinPedido(a, b) {
+      const x = String(a || '');
+      const y = String(b || '');
+      if (!x) return y.length;
+      if (!y) return x.length;
+
+      const anterior = Array.from({ length: y.length + 1 }, (_, i) => i);
+      const actual = new Array(y.length + 1);
+
+      for (let i = 1; i <= x.length; i += 1) {
+        actual[0] = i;
+        for (let j = 1; j <= y.length; j += 1) {
+          const costo = x[i - 1] === y[j - 1] ? 0 : 1;
+          actual[j] = Math.min(
+            actual[j - 1] + 1,
+            anterior[j] + 1,
+            anterior[j - 1] + costo
+          );
+        }
+        for (let j = 0; j <= y.length; j += 1) anterior[j] = actual[j];
+      }
+
+      return anterior[y.length];
+    }
+
+    function resolverProductoPedidoExterno(texto) {
+      const valor = normalizarTextoPedidoExterno(texto);
+      if (!valor) return null;
+
+      if (PEDIDO_EXTERNO_DIRECTOS[valor]) return PEDIDO_EXTERNO_DIRECTOS[valor];
+
+      const directo = resolverProductoDigitado(valor);
+      if (directo) {
+        // Evita que "pye de manzana" sin la palabra torta termine convertido en torta.
+        const directoNorm = normalizarNombreProducto(directo);
+        if (valor.includes('PYE') && valor.includes('MANZANA') && !valor.includes('TORTA')) return 'Pye de Manzana';
+        if (valor.includes('PYE') && valor.includes('LIMON') && !valor.includes('TORTA')) return 'Pye de Limón';
+        return directo;
+      }
+
+      const candidatos = [];
+      const agregar = (producto, alias) => {
+        const nombre = String(producto || '').trim();
+        const aliasNormalizado = normalizarTextoPedidoExterno(alias || producto);
+        if (!nombre || !aliasNormalizado) return;
+        candidatos.push({ producto: nombre, alias: aliasNormalizado });
+      };
+
+      (window.__quickCatalog || []).forEach((item) => agregar(item.nombre, item.nombre));
+
+      Object.entries(window.DCHELIS_DIGITACION_ALIASES || {}).forEach(([producto, aliases]) => {
+        agregar(producto, producto);
+        (aliases || []).forEach((alias) => agregar(producto, alias));
+      });
+
+      Object.entries(PRODUCTOS_DIGITACION_ALIAS || {}).forEach(([producto, aliases]) => {
+        agregar(producto, producto);
+        (aliases || []).forEach((alias) => agregar(producto, alias));
+      });
+
+      let mejor = null;
+      for (const candidato of candidatos) {
+        const maxLen = Math.max(valor.length, candidato.alias.length, 1);
+        const distancia = distanciaLevenshteinPedido(valor, candidato.alias);
+        let similitud = 1 - (distancia / maxLen);
+
+        const tokensValor = new Set(valor.split(' ').filter((token) => token.length >= 3));
+        const tokensAlias = new Set(candidato.alias.split(' ').filter((token) => token.length >= 3));
+        const comunes = [...tokensValor].filter((token) => tokensAlias.has(token)).length;
+        const union = new Set([...tokensValor, ...tokensAlias]).size || 1;
+        const similitudTokens = comunes / union;
+
+        if (valor.includes(candidato.alias) || candidato.alias.includes(valor)) {
+          similitud = Math.max(similitud, 0.9);
+        }
+        const score = (similitud * 0.78) + (similitudTokens * 0.22);
+
+        if (!mejor || score > mejor.score) mejor = { producto: candidato.producto, score };
+      }
+
+      if (!mejor || mejor.score < 0.66) return null;
+
+      const mejorNorm = normalizarNombreProducto(mejor.producto);
+      if (valor.includes('PYE') && valor.includes('MANZANA') && !valor.includes('TORTA')) return 'Pye de Manzana';
+      if (valor.includes('PYE') && valor.includes('LIMON') && !valor.includes('TORTA')) return 'Pye de Limón';
+      if (valor.startsWith('PIONONO') && mejorNorm.includes('PIONON')) return 'Piononitos';
+
+      return mejor.producto;
+    }
+
+    function nombreLimpioPedidoExterno(producto) {
+      const clave = normalizarNombreProducto(producto || '');
+      return PEDIDO_EXTERNO_NOMBRES_LIMPIOS[clave] || producto;
+    }
+
+    function procesarPedidoExterno(texto) {
+      const lineasCrudas = String(texto || '')
+        .replace(/\r/g, '')
+        .replace(/[;]+/g, '\n')
+        .split(/\n/)
+        .map((linea) => linea
+          .replace(/^\s*[•●▪◦►▶*-]+\s*/, '')
+          .replace(/^\s*\[[^\]]+\]\s*[^:]{1,40}:\s*/, '')
+          .trim())
+        .filter(Boolean);
+
+      const acumulado = new Map();
+      const orden = [];
+      const noReconocidos = [];
+
+      const agregarLinea = (cantidad, productoTexto) => {
+        const cantidadNumero = Number(String(cantidad).replace(',', '.'));
+        if (!(cantidadNumero > 0)) return;
+
+        const productoLimpio = String(productoTexto || '')
+          .replace(/\s+(?:UND(?:IDADES?)?|UDS?|UNIDADES?|U)\.?$/i, '')
+          .replace(/[.。]+$/g, '')
+          .trim();
+        if (!productoLimpio) return;
+
+        const producto = resolverProductoPedidoExterno(productoLimpio);
+        const visible = producto ? nombreLimpioPedidoExterno(producto) : productoLimpio;
+        const clave = normalizarNombreProducto(visible) || visible;
+
+        if (!acumulado.has(clave)) {
+          acumulado.set(clave, { cantidad: 0, visible, reconocido: !!producto });
+          orden.push(clave);
+        }
+        acumulado.get(clave).cantidad += cantidadNumero;
+
+        if (!producto) noReconocidos.push(productoLimpio);
+      };
+
+      lineasCrudas.forEach((linea) => {
+        let match = linea.match(/^\s*(\d+(?:[.,]\d+)?)\s*(?:x\s*)?(?:und(?:idades?)?|uds?|unidades?|u)?\s+(.+?)\s*$/i);
+        if (match) {
+          agregarLinea(match[1], match[2]);
+          return;
+        }
+
+        match = linea.match(/^\s*(.+?)\s+(?:x\s*)?(\d+(?:[.,]\d+)?)\s*(?:und(?:idades?)?|uds?|unidades?|u)?\s*$/i);
+        if (match && !/^pedido\b/i.test(linea)) {
+          agregarLinea(match[2], match[1]);
+        }
+      });
+
+      const lineas = orden.map((clave) => {
+        const item = acumulado.get(clave);
+        const cantidad = Number.isInteger(item.cantidad)
+          ? String(item.cantidad)
+          : String(Number(item.cantidad.toFixed(2)));
+        return `${cantidad} ${item.visible}`;
+      });
+
+      return {
+        lineas,
+        texto: lineas.join('\n'),
+        noReconocidos: [...new Set(noReconocidos)]
+      };
+    }
+
+    function aplicarPedidoExterno(texto) {
+      const input = document.getElementById('quickEntryInput');
+      const estado = document.getElementById('quickExternalStatus');
+      if (!input) return false;
+
+      const resultado = procesarPedidoExterno(texto);
+      if (!resultado.lineas.length) {
+        if (estado) {
+          estado.className = 'external-order-status warn';
+          estado.textContent = 'No encontré líneas con cantidad + producto. Pega solo el mensaje del pedido y vuelve a intentar.';
+        }
+        return false;
+      }
+
+      input.value = resultado.texto;
+      guardarEstadoDigitacion();
+      renderQuickEntryPreview();
+
+      if (estado) {
+        if (resultado.noReconocidos.length) {
+          estado.className = 'external-order-status warn';
+          estado.textContent = `Pedido limpiado. Revisa: ${resultado.noReconocidos.join(', ')}.`;
+        } else {
+          estado.className = 'external-order-status ok';
+          estado.textContent = `${resultado.lineas.length} producto(s) extraído(s) y corregido(s).`;
+        }
+      }
+      return true;
+    }
+
+    async function pegarPedidoExterno() {
+      const estado = document.getElementById('quickExternalStatus');
+      try {
+        if (!navigator.clipboard?.readText) throw new Error('clipboard');
+        const texto = await navigator.clipboard.readText();
+        if (!texto.trim()) throw new Error('empty');
+        aplicarPedidoExterno(texto);
+      } catch (error) {
+        document.getElementById('quickEntryInput')?.focus();
+        if (estado) {
+          estado.className = 'external-order-status warn';
+          estado.textContent = 'Pega el mensaje manualmente en el cuadro y pulsa “Limpiar y corregir”.';
+        }
+      }
+    }
+
+    function limpiarPedidoExternoActual() {
+      const input = document.getElementById('quickEntryInput');
+      if (!input) return;
+      aplicarPedidoExterno(input.value);
     }
 
     function resolverProductoDigitado(texto) {
@@ -3665,6 +3937,18 @@
     poblarHorasSelector('quickPickupTime', '18:00');
     document.getElementById('quickAdelanto').addEventListener('input', renderQuickEntryPreview);
     document.getElementById('quickEntryInput').addEventListener('input', renderQuickEntryPreview);
+    document.getElementById('quickEntryInput').addEventListener('paste', (event) => {
+      const texto = event.clipboardData?.getData('text/plain') || '';
+      const input = event.currentTarget;
+      const pareceExterno = /\n/.test(texto) || /\b(pedido|entrega|recojo|viernes|sabado|sábado|domingo|lunes|martes|miercoles|miércoles|jueves)\b/i.test(texto);
+      if (!texto.trim() || (!pareceExterno && input.value.trim())) return;
+
+      const resultado = procesarPedidoExterno(texto);
+      if (!resultado.lineas.length) return;
+
+      event.preventDefault();
+      aplicarPedidoExterno(texto);
+    });
     document.getElementById('quickExtraChocolate').addEventListener('change', renderQuickEntryPreview);
     document.getElementById('quickExtraSelva').addEventListener('change', renderQuickEntryPreview);
     document.getElementById('quickTipoComprobante').addEventListener('change', (event) => {
