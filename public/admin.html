@@ -868,6 +868,24 @@
       font-size: 0.82rem;
     }
 
+    .digitacion-preview-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      margin-bottom:10px;
+    }
+    .digitacion-preview-head span {
+      padding:4px 7px;
+      border-radius:999px;
+      background:#eaf7ee;
+      color:#087c32;
+      font-size:.65rem;
+      font-weight:900;
+      text-transform:uppercase;
+      letter-spacing:.04em;
+    }
+
     .notice {
       margin-top: 18px;
       color: var(--muted);
@@ -1186,6 +1204,93 @@
     }
     .casino-status.error { color:#b42318; }
     .casino-status.success { color:#087c32; }
+
+    .casino-loading {
+      display:flex;
+      align-items:center;
+      gap:14px;
+      margin:0 0 16px;
+      padding:14px 16px;
+      border:1px solid #cfe3d5;
+      border-radius:14px;
+      background:linear-gradient(135deg,#f4fbf6,#fff);
+      box-shadow:0 7px 20px rgba(23,60,43,.06);
+      color:#173c2b;
+      overflow:hidden;
+    }
+    .casino-loading.hidden { display:none !important; }
+    .casino-loading-visual {
+      position:relative;
+      flex:0 0 44px;
+      width:44px;
+      height:52px;
+    }
+    .casino-loading-sheet {
+      position:absolute;
+      inset:2px 6px 4px;
+      border:2px solid #173c2b;
+      border-radius:6px;
+      background:#fff;
+      box-shadow:0 3px 8px rgba(23,60,43,.12);
+      animation:casinoSheetPulse 1.25s ease-in-out infinite;
+    }
+    .casino-loading-sheet::before,
+    .casino-loading-sheet::after {
+      content:"";
+      position:absolute;
+      left:6px;
+      right:6px;
+      height:2px;
+      border-radius:999px;
+      background:#8fc9a2;
+      box-shadow:0 7px 0 #8fc9a2,0 14px 0 #8fc9a2,0 21px 0 #8fc9a2;
+    }
+    .casino-loading-sheet::before { top:8px; }
+    .casino-loading-dot {
+      position:absolute;
+      right:0;
+      bottom:0;
+      width:13px;
+      height:13px;
+      border:3px solid #fff;
+      border-radius:50%;
+      background:#0b7431;
+      animation:casinoDotBounce .85s ease-in-out infinite alternate;
+    }
+    .casino-loading-copy { min-width:0; flex:1; }
+    .casino-loading-copy strong { display:block; font-size:.9rem; font-weight:900; }
+    .casino-loading-copy span { display:block; margin-top:3px; color:var(--muted); font-size:.76rem; font-weight:700; }
+    .casino-loading-bar {
+      position:relative;
+      height:4px;
+      margin-top:9px;
+      border-radius:999px;
+      overflow:hidden;
+      background:#e1eee5;
+    }
+    .casino-loading-bar::after {
+      content:"";
+      position:absolute;
+      top:0;
+      bottom:0;
+      width:38%;
+      border-radius:999px;
+      background:#0b7431;
+      animation:casinoLoadingBar 1.1s ease-in-out infinite;
+    }
+    @keyframes casinoSheetPulse {
+      0%,100% { transform:translateY(0) rotate(0deg); }
+      50% { transform:translateY(-3px) rotate(-1deg); }
+    }
+    @keyframes casinoDotBounce {
+      from { transform:translateY(0) scale(.88); opacity:.72; }
+      to { transform:translateY(-7px) scale(1); opacity:1; }
+    }
+    @keyframes casinoLoadingBar {
+      0% { left:-38%; }
+      55% { left:54%; }
+      100% { left:100%; }
+    }
 
     .casino-days-strip {
       display:flex;
@@ -1702,7 +1807,23 @@
     /* Responsive: escritorio, tablet y teléfono. No altera la lógica del panel. */
     @media screen and (max-width: 1180px) {
       .admin-shell { padding-inline: 22px; }
-      .digitacion-panel { grid-template-columns: 1fr; }
+      #panel-digitacion .digitacion-panel {
+        grid-template-columns:minmax(0, 1.55fr) minmax(250px, .75fr);
+        align-items:start;
+        gap:12px;
+      }
+      #panel-digitacion .digitacion-preview-box {
+        position:sticky;
+        top:10px;
+        max-height:calc(100dvh - 24px);
+        overflow:hidden;
+        z-index:3;
+      }
+      #panel-digitacion .digitacion-preview-box .digitacion-summary {
+        max-height:calc(100dvh - 105px);
+        overflow:auto;
+        overscroll-behavior:contain;
+      }
       .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .general-order-actions { flex-wrap: wrap; }
       .general-order-actions .search-input { min-width: 240px; }
@@ -1802,12 +1923,47 @@
       .order-summary-line::after { display: none; }
       .payment-summary { grid-template-columns: 1fr; }
 
-      .digitacion-panel { grid-template-columns: 1fr; gap: 12px; }
-      .digitacion-box { padding: 14px; }
-      .digitacion-box .mini-grid { grid-template-columns: 1fr; }
-      .digitacion-box textarea { min-height: 135px; }
-      .digitacion-summary { max-height: none; }
-      .digitacion-summary li { align-items: flex-start; }
+      #panel-digitacion .digitacion-panel {
+        grid-template-columns:minmax(0, 1.45fr) minmax(128px, .85fr);
+        gap:8px;
+        align-items:start;
+      }
+      #panel-digitacion .digitacion-box { padding:10px; border-radius:12px; }
+      #panel-digitacion .digitacion-box:first-child { min-width:0; }
+      #panel-digitacion .digitacion-box .mini-grid { grid-template-columns:1fr; gap:7px; }
+      #panel-digitacion .digitacion-box .field { margin-bottom:9px; }
+      #panel-digitacion .digitacion-box .field label { font-size:.7rem; }
+      #panel-digitacion .digitacion-box input,
+      #panel-digitacion .digitacion-box select,
+      #panel-digitacion .digitacion-box textarea { padding:9px 8px; min-height:40px; }
+      #panel-digitacion .digitacion-box textarea { min-height:112px; }
+      #panel-digitacion .external-order-tools { gap:5px; }
+      #panel-digitacion .external-order-tools .btn { width:100%; min-height:36px; padding:7px 6px; font-size:.68rem; }
+      #panel-digitacion .external-order-status { display:none; }
+      #panel-digitacion .digitacion-preview-box {
+        position:sticky;
+        top:6px;
+        max-height:calc(100dvh - 16px);
+        padding:9px;
+      }
+      #panel-digitacion .digitacion-preview-head { margin-bottom:6px; }
+      #panel-digitacion .digitacion-preview-head h4 { font-size:.82rem; }
+      #panel-digitacion .digitacion-preview-head span { display:none; }
+      #panel-digitacion .digitacion-preview-box .digitacion-summary {
+        margin-top:5px;
+        max-height:calc(100dvh - 65px);
+        overflow:auto;
+      }
+      #panel-digitacion .digitacion-summary li {
+        align-items:flex-start;
+        flex-direction:column;
+        gap:3px;
+        padding:7px 6px;
+        font-size:.68rem;
+        line-height:1.25;
+      }
+      #panel-digitacion .digitacion-summary li strong { font-size:.72rem; }
+      #panel-digitacion .controls .btn { min-height:40px; padding:9px 8px; font-size:.75rem; }
 
       .settings-grid { grid-template-columns: 1fr; gap: 12px; }
       .pedido-editor-grid { grid-template-columns: 1fr; }
@@ -1993,8 +2149,11 @@
             </form>
           </div>
 
-          <div class="digitacion-box">
-            <h4 style="color:var(--brand); margin-bottom:12px;">Vista previa</h4>
+          <div class="digitacion-box digitacion-preview-box">
+            <div class="digitacion-preview-head">
+              <h4 style="color:var(--brand); margin:0;">Vista previa</h4>
+              <span>En vivo</span>
+            </div>
             <ul id="digitacionResumen" class="digitacion-summary"></ul>
           </div>
         </div>
@@ -2133,6 +2292,17 @@
           <div id="casinoEstado" class="casino-status">Todavía no se ha cargado un cronograma.</div>
         </div>
 
+        <div id="casinoLoading" class="casino-loading hidden no-print" role="status" aria-live="polite">
+          <div class="casino-loading-visual" aria-hidden="true">
+            <div class="casino-loading-sheet"></div>
+            <div class="casino-loading-dot"></div>
+          </div>
+          <div class="casino-loading-copy">
+            <strong>Preparando cronograma de casinos</strong>
+            <span id="casinoLoadingText">Leyendo el Excel y organizando semanas, productos y cantidades…</span>
+            <div class="casino-loading-bar" aria-hidden="true"></div>
+          </div>
+        </div>
         <div id="casinoDiasResumen" class="casino-days-strip no-print"></div>
         <div id="casinosProduccion"></div>
       </div>
@@ -2286,6 +2456,7 @@
       } catch (error) {
         alert(error.message || 'No se pudo crear el usuario.');
       } finally {
+        mostrarCargaCasino(false);
         if (boton) boton.disabled = false;
       }
     }
@@ -3350,6 +3521,14 @@
     window.__casinoSemanaIndex = 0;
     window.__casinoSemanas = [];
 
+    function mostrarCargaCasino(activa, texto = '') {
+      const panel = document.getElementById('casinoLoading');
+      const mensaje = document.getElementById('casinoLoadingText');
+      if (mensaje && texto) mensaje.textContent = texto;
+      panel?.classList.toggle('hidden', !activa);
+      panel?.setAttribute('aria-busy', activa ? 'true' : 'false');
+    }
+
     function archivoCasinoABase64(archivo) {
       return new Promise((resolve, reject) => {
         const lector = new FileReader();
@@ -3731,13 +3910,17 @@
       }
 
       if (boton) boton.disabled = true;
+      mostrarCargaCasino(true, 'Leyendo el Excel y preparando la información…');
+      document.getElementById('casinoDiasResumen').innerHTML = '';
+      document.getElementById('casinosProduccion').innerHTML = '';
       if (estado) {
         estado.className = 'casino-status';
-        estado.textContent = 'Leyendo cronograma y preparando los casinos con todos sus días…';
+        estado.textContent = 'Procesando cronograma…';
       }
 
       try {
         const archivoBase64 = await archivoCasinoABase64(archivo);
+        mostrarCargaCasino(true, 'Organizando casinos, productos, cantidades y fechas…');
         const respuesta = await fetch('/api/admin/casinos/procesar-excel', {
           method: 'POST',
           credentials: 'same-origin',
@@ -3757,6 +3940,8 @@
 
         window.__casinoProduccionData = data;
         window.__casinoSemanaIndex = 0;
+        mostrarCargaCasino(true, 'Generando las hojas semanales y la vista previa…');
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         renderizarProduccionCasinos(data);
 
         const sinReconocer = Array.isArray(data.productos_no_reconocidos) ? data.productos_no_reconocidos.length : 0;
