@@ -274,6 +274,16 @@
       flex: 1 1 320px;
     }
 
+    .load-more-orders-wrap {
+      display: flex;
+      justify-content: center;
+      padding: 10px 0 2px;
+    }
+
+    .load-more-orders-btn {
+      min-width: 180px;
+    }
+
     .search-input:focus {
       border-color: #b75e36;
       box-shadow: 0 0 0 3px rgba(183,94,54,.12);
@@ -2533,6 +2543,8 @@
     let filtroHistorialPedidos = '';
     let buscarPedidosTimer = null;
     let buscarHistorialTimer = null;
+    const DIAS_PEDIDOS_POR_CARGA = 7;
+    let diasPedidosGeneralesVisibles = DIAS_PEDIDOS_POR_CARGA;
 
     function escapeHtmlAdmin(value) {
       return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -5015,6 +5027,36 @@
       `;
     }
 
+    function fechaLocalISO(fecha = new Date()) {
+      const year = fecha.getFullYear();
+      const month = String(fecha.getMonth() + 1).padStart(2, '0');
+      const day = String(fecha.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function obtenerFechaLimitePedidosGenerales() {
+      const limite = new Date();
+      limite.setHours(12, 0, 0, 0);
+      limite.setDate(limite.getDate() + diasPedidosGeneralesVisibles);
+      return fechaLocalISO(limite);
+    }
+
+    function renderizarBotonCargarMasPedidos(hayMasPedidos) {
+      if (!hayMasPedidos) return '';
+      return `
+        <div class="load-more-orders-wrap">
+          <button type="button" class="btn btn-ghost load-more-orders-btn" onclick="cargarMasPedidosGenerales()">
+            Cargar más
+          </button>
+        </div>
+      `;
+    }
+
+    async function cargarMasPedidosGenerales() {
+      diasPedidosGeneralesVisibles += DIAS_PEDIDOS_POR_CARGA;
+      await cargarPedidosGenerales();
+    }
+
     async function cargarPedidosGenerales() {
       try {
         const res = await fetch('/api/admin/pedidos');
@@ -5024,9 +5066,18 @@
         pedidosDisponibles = new Map((data.pedidos || []).map(pedido => [pedido.id, pedido]));
         const idsActuales = new Set((data.pedidos || []).map(pedido => pedido.id));
         const terminoBusqueda = normalizarNombreProducto(filtroPedidosGenerales);
-        const pedidosFiltrados = terminoBusqueda
+        const pedidosCoincidentes = terminoBusqueda
           ? (data.pedidos || []).filter((pedido) => normalizarNombreProducto(pedido.cliente_nombre || '').includes(terminoBusqueda))
           : (data.pedidos || []);
+        const fechaLimite = obtenerFechaLimitePedidosGenerales();
+        const pedidosFiltrados = pedidosCoincidentes.filter((pedido) => {
+          const fechaPedido = String(pedido.fecha_recoge || '').trim();
+          return !fechaPedido || fechaPedido <= fechaLimite;
+        });
+        const hayMasPedidos = pedidosCoincidentes.some((pedido) => {
+          const fechaPedido = String(pedido.fecha_recoge || '').trim();
+          return Boolean(fechaPedido && fechaPedido > fechaLimite);
+        });
         const detectarNuevos = pedidosConocidos !== null && fechaPedidosConocida === fechaActual;
         const pedidosNuevos = detectarNuevos
           ? new Set([...idsActuales].filter(id => !pedidosConocidos.has(id)))
@@ -5037,8 +5088,18 @@
           return;
         }
 
-        if (!pedidosFiltrados.length) {
+        if (!pedidosCoincidentes.length) {
           contenedor.innerHTML = '<p style="color:#667085;">No hay pedidos que coincidan con la búsqueda.</p>';
+          pedidosConocidos = idsActuales;
+          fechaPedidosConocida = fechaActual;
+          return;
+        }
+
+        if (!pedidosFiltrados.length) {
+          contenedor.innerHTML = `
+            <p style="color:#667085;">No hay pedidos dentro del rango cargado.</p>
+            ${renderizarBotonCargarMasPedidos(hayMasPedidos)}
+          `;
           pedidosConocidos = idsActuales;
           fechaPedidosConocida = fechaActual;
           return;
@@ -5144,7 +5205,7 @@
               </div>
             </section>
           `;
-        }).join('');
+        }).join('') + renderizarBotonCargarMasPedidos(hayMasPedidos);
 
         pedidosConocidos = idsActuales;
         fechaPedidosConocida = fechaActual;
