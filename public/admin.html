@@ -2016,7 +2016,149 @@
       .schedule-time { align-self: flex-start; }
       .badge { font-size: .68rem; }
     }
-  </style>
+  
+    .kitchen-doc-heading {
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap:12px;
+      margin:0 0 12px;
+      padding:10px 12px;
+      border-left:5px solid var(--brand);
+      background:#f8fafc;
+    }
+    .kitchen-doc-heading span { display:block; color:var(--brand); font-size:.92rem; font-weight:900; letter-spacing:.04em; }
+    .kitchen-doc-heading small { display:block; margin-top:3px; color:var(--muted); font-size:.72rem; font-weight:700; }
+    .client-header.kitchen-urgent,
+    .qty-cell.kitchen-urgent { color:#c40000 !important; }
+    .client-header.kitchen-normal,
+    .qty-cell.kitchen-normal { color:#111 !important; }
+    .client-header.kitchen-casino,
+    .qty-cell.kitchen-casino { color:#087c32 !important; background:#f1faf3 !important; }
+    .qty-cell.kitchen-urgent { text-align:left !important; padding-left:6px !important; font-weight:900 !important; }
+    .qty-cell.kitchen-normal,
+    .qty-cell.kitchen-casino { text-align:right !important; padding-right:6px !important; font-weight:900 !important; }
+    .kitchen-casino-tag {
+      display:inline-block;
+      margin-top:4px;
+      padding:2px 5px;
+      border-radius:999px;
+      background:#087c32;
+      color:#fff;
+      font-size:6px;
+      line-height:1;
+      font-weight:900;
+      letter-spacing:.04em;
+    }
+    .badge.casino-badge {
+      background:#e7f7ec;
+      color:#087c32;
+      border:1px solid #a8d9b7;
+      font-weight:900;
+    }
+    .production-paper {
+      width:min(100%, 210mm);
+      margin:0 auto;
+      background:#fff;
+      border:1px solid #d7dde3;
+      padding:10mm 8mm;
+      color:#111;
+      font-family:Arial,Helvetica,sans-serif;
+    }
+    .production-paper-title {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-end;
+      margin-bottom:5mm;
+      padding-bottom:2.5mm;
+      border-bottom:2px solid #111;
+    }
+    .production-paper-title h4 { margin:0; font:900 18px Arial,sans-serif; color:#111; }
+    .production-paper-title span { font:700 11px Arial,sans-serif; color:#333; text-align:right; }
+    .production-layout {
+      display:grid;
+      grid-template-columns:minmax(0,1.45fr) minmax(145px,.65fr);
+      gap:5mm;
+      align-items:start;
+    }
+    .production-main-table,
+    .production-manual-table,
+    .production-casino-table {
+      width:100%;
+      border-collapse:collapse;
+      table-layout:fixed;
+      font-family:Arial,Helvetica,sans-serif;
+    }
+    .production-main-table th,
+    .production-main-table td,
+    .production-manual-table th,
+    .production-manual-table td,
+    .production-casino-table th,
+    .production-casino-table td {
+      border:1px solid #111;
+      padding:3px 5px;
+      font-size:10px;
+      line-height:1.12;
+    }
+    .production-main-table th { background:#f3f4f6; font-weight:900; }
+    .production-main-table th:nth-child(1) { width:auto; text-align:left; }
+    .production-main-table th:nth-child(2),
+    .production-main-table th:nth-child(3),
+    .production-main-table th:nth-child(4) { width:17%; }
+    .production-prod-name { font-weight:800; }
+    .production-row-urgent .production-prod-name { color:#c40000; border-left:3px solid #c40000; }
+    .production-urgent {
+      color:#c40000;
+      font-weight:900;
+      text-align:left;
+      border:2px solid #c40000 !important;
+    }
+    .production-normal { color:#111; font-weight:900; text-align:right; }
+    .production-total { color:#111; font-weight:900; text-align:right; background:#f7f7f7; }
+    .production-manual-title,
+    .production-casino-title {
+      margin:0 0 5px;
+      font:900 11px Arial,sans-serif;
+      text-transform:uppercase;
+    }
+    .production-manual-table td:last-child { width:42%; height:19px; }
+    .production-casino-section { margin-top:6mm; }
+    .production-casino-table td:nth-child(2),
+    .production-casino-table td:nth-child(3),
+    .production-casino-table td:nth-child(4) { width:16%; text-align:right; font-weight:900; }
+    .production-legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:4mm; font:700 9px Arial,sans-serif; }
+    .production-legend .red { color:#c40000; }
+    @media print {
+      body.printing-cocina.printing-embalaje #productionPaperWrapper { display:none !important; }
+      body.printing-cocina.printing-produccion #embalajeWrapper { display:none !important; }
+      body.printing-cocina.printing-produccion .kitchen-doc-heading { display:none !important; }
+      body.printing-cocina.printing-produccion #hojaProduccionCocina { display:block !important; }
+      body.printing-cocina.printing-produccion .production-paper {
+        width:210mm !important;
+        min-height:297mm !important;
+        margin:0 !important;
+        border:0 !important;
+        padding:8mm !important;
+        box-sizing:border-box !important;
+      }
+      body.printing-cocina.printing-embalaje #embalajeWrapper { display:block !important; }
+      body.printing-cocina.printing-embalaje .kitchen-doc-heading { display:none !important; }
+      body.printing-cocina.printing-embalaje .client-header.kitchen-urgent,
+      body.printing-cocina.printing-embalaje .qty-cell.kitchen-urgent {
+        color:#c40000 !important;
+        -webkit-print-color-adjust:exact;
+        print-color-adjust:exact;
+      }
+      body.printing-cocina.printing-embalaje .client-header.kitchen-casino,
+      body.printing-cocina.printing-embalaje .qty-cell.kitchen-casino {
+        color:#087c32 !important;
+        background:#f1faf3 !important;
+        -webkit-print-color-adjust:exact;
+        print-color-adjust:exact;
+      }
+    }
+</style>
 </head>
 <body>
   <div id="loginScreen" class="auth-shell">
@@ -2163,21 +2305,39 @@
     <section id="panel-cocina" class="tab-panel">
       <div class="panel">
         <div class="header-row">
-          <h3>Hoja de cocina</h3>
+          <div>
+            <h3>Embalaje y producción</h3>
+            <div id="kitchenWindowLabel" style="margin-top:5px;color:var(--muted);font-size:.8rem;font-weight:700;">Ventana diaria: 3:00 p. m. a 3:00 p. m. del día siguiente.</div>
+          </div>
           <div class="controls no-print">
-            <label><strong>Fecha:</strong></label>
+            <label><strong>Fecha de producción:</strong></label>
             <input type="date" id="fecha_filtro" />
-            <button class="btn btn-success" type="button" onclick="cargarMatriz()">Ver producción</button>
-            <button class="btn btn-warning" type="button" onclick="imprimirHojaCocina()">Imprimir</button>
+            <button class="btn btn-success" type="button" onclick="cargarMatriz()">Actualizar hojas</button>
+            <button class="btn btn-warning" type="button" onclick="imprimirHojaEmbalaje()">Imprimir embalaje</button>
+            <button class="btn btn-primary" type="button" onclick="imprimirHojaProduccion()">Imprimir producción</button>
+            <button class="btn btn-ghost" type="button" onclick="descargarExcel()">Excel embalaje</button>
           </div>
         </div>
-        <div style="margin-bottom:18px;">
-          <h4 class="kitchen-section-title">Hoja 1: Bocaditos</h4>
-          <div id="hojaProduccion" class="table-container"></div>
+
+        <div id="embalajeWrapper" class="kitchen-document-block" style="margin-bottom:26px;">
+          <div class="kitchen-doc-heading">
+            <div><span>HOJA DE EMBALAJE</span><small>Rojo = sale hoy desde las 3 p. m. · Negro = sale mañana antes de las 3 p. m. · Casinos al extremo derecho</small></div>
+          </div>
+          <div style="margin-bottom:18px;">
+            <h4 class="kitchen-section-title">Bocaditos / tortas</h4>
+            <div id="hojaProduccion" class="table-container"></div>
+          </div>
+          <div>
+            <h4 class="kitchen-section-title">Sánguches, triples y panes</h4>
+            <div id="hojaProduccionExtra" class="table-container"></div>
+          </div>
         </div>
-        <div>
-          <h4 class="kitchen-section-title">Hoja 2: Sanguches, triples y panes</h4>
-          <div id="hojaProduccionExtra" class="table-container"></div>
+
+        <div id="productionPaperWrapper" class="kitchen-document-block">
+          <div class="kitchen-doc-heading">
+            <div><span>HOJA DE PRODUCCIÓN</span><small>Urgente a la izquierda · Normal a la derecha · Total al extremo derecho</small></div>
+          </div>
+          <div id="hojaProduccionCocina"></div>
         </div>
       </div>
     </section>
@@ -3461,29 +3621,44 @@
       if (submitButton) submitButton.disabled = true;
 
       try {
-        const respuesta = await fetch('/api/pedidos', {
+        const payloadPedido = {
+          tipo_cliente: 'Cliente',
+          cliente_nombre: `${nombreCliente} ${apellidoCliente}`.trim(),
+          celular,
+          monto_total: Number(montoConExtras.toFixed(2)),
+          adelanto: Number(adelanto.toFixed(2)),
+          metodo_pago: 'Efectivo',
+          fecha_recoge: fechaRecoge,
+          hora_recoge: horaRecoge,
+          tipo_comprobante: tipoComprobante,
+          numero_documento: numeroDocumento,
+          dedicatoria: '',
+          foto_torta: fotoTorta,
+          origen: 'digitacion',
+          detalles
+        };
+
+        let respuesta = await fetch('/api/pedidos', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tipo_cliente: 'Cliente',
-            cliente_nombre: `${nombreCliente} ${apellidoCliente}`.trim(),
-            celular,
-            monto_total: Number(montoConExtras.toFixed(2)),
-            adelanto: Number(adelanto.toFixed(2)),
-            metodo_pago: 'Efectivo',
-            fecha_recoge: fechaRecoge,
-            hora_recoge: horaRecoge,
-            tipo_comprobante: tipoComprobante,
-            numero_documento: numeroDocumento,
-            dedicatoria: '',
-            foto_torta: fotoTorta,
-            origen: 'digitacion',
-            detalles
-          })
+          body: JSON.stringify(payloadPedido)
         });
 
-        const resultado = await respuesta.json().catch(() => ({}));
+        let resultado = await respuesta.json().catch(() => ({}));
+        if (respuesta.status === 409 && resultado.duplicado) {
+          const ref = resultado.coincidencia?.codigo ? ` (${resultado.coincidencia.codigo})` : '';
+          const confirmar = confirm(`Posible pedido duplicado${ref}. Coinciden teléfono, fecha, hora y productos. ¿Registrar una segunda copia de todas formas?`);
+          if (!confirmar) return;
+          payloadPedido.confirmar_duplicado = true;
+          respuesta = await fetch('/api/pedidos', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payloadPedido)
+          });
+          resultado = await respuesta.json().catch(() => ({}));
+        }
         if (respuesta.status === 401) {
           closeDashboard();
           throw new Error('Tu sesión expiró. Inicia sesión nuevamente para registrar el pedido.');
@@ -3780,19 +3955,20 @@
     }
 
     function obtenerDiasCasinoVigentes(data) {
-      const hoyIso = obtenerFechaLocalIso();
-      const desdeHoy = (Array.isArray(data?.dias) ? data.dias : [])
-        .filter((dia) => String(dia.fecha || '') >= hoyIso);
+      const lista = [...(Array.isArray(data?.dias) ? data.dias : [])]
+        .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
 
-      let ultimoDiaConPedido = -1;
-      desdeHoy.forEach((dia, indice) => {
+      let primero = -1;
+      let ultimo = -1;
+      lista.forEach((dia, indice) => {
         const tienePedidos = (Array.isArray(dia.productos) ? dia.productos : [])
           .some((producto) => Number(producto?.total || 0) > 0);
-        if (tienePedidos) ultimoDiaConPedido = indice;
+        if (tienePedidos && primero < 0) primero = indice;
+        if (tienePedidos) ultimo = indice;
       });
 
-      // Solo recorta días vacíos al final. Los días vacíos entre dos días con pedidos se conservan.
-      return ultimoDiaConPedido >= 0 ? desdeHoy.slice(0, ultimoDiaConPedido + 1) : [];
+      // El cronograma se muestra completo desde su primer día con pedidos hasta el último.
+      return primero >= 0 && ultimo >= primero ? lista.slice(primero, ultimo + 1) : [];
     }
 
     function renderizarSelectorSemanasCasino(semanas) {
@@ -3830,7 +4006,7 @@
       if (!semanas.length) {
         window.__casinoSemanaIndex = 0;
         renderizarSelectorSemanasCasino([]);
-        contenedor.innerHTML = '<div class="casino-empty-day">No hay pedidos vigentes desde hoy.</div>';
+        contenedor.innerHTML = '<div class="casino-empty-day">No hay pedidos en el cronograma importado.</div>';
         if (botonImprimir) botonImprimir.disabled = true;
         return;
       }
@@ -3877,6 +4053,31 @@
       }
 
       if (botonImprimir) botonImprimir.disabled = !cronogramas.length;
+    }
+
+    async function cargarCronogramaCasinoPersistido() {
+      const estado = document.getElementById('casinoEstado');
+      try {
+        const respuesta = await fetch('/api/admin/casinos/cronograma', { credentials:'same-origin', cache:'no-store' });
+        const data = await respuesta.json().catch(() => ({}));
+        if (!respuesta.ok) throw new Error(data.error || 'No se pudo cargar el cronograma guardado.');
+        if (!data.existe || !data.cronograma) return false;
+
+        window.__casinoProduccionData = data.cronograma;
+        if (!Number.isInteger(window.__casinoSemanaIndex)) window.__casinoSemanaIndex = 0;
+        renderizarProduccionCasinos(data.cronograma);
+        if (estado) {
+          estado.className = 'casino-status success';
+          estado.textContent = `Cronograma guardado · ${data.cronograma.fecha_inicio || ''} a ${data.cronograma.fecha_fin || ''} · cargado una sola vez en el sistema.`;
+        }
+        return true;
+      } catch (error) {
+        if (estado && !window.__casinoProduccionData) {
+          estado.className = 'casino-status error';
+          estado.textContent = error.message || 'No se pudo cargar el cronograma guardado.';
+        }
+        return false;
+      }
     }
 
     async function procesarCronogramaCasinos() {
@@ -3950,7 +4151,7 @@
           estado.className = 'casino-status success';
           const diasVigentes = obtenerDiasCasinoVigentes(data);
           const semanasDetectadas = crearSemanasCasino(diasVigentes);
-          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes.length} día(s) útiles · ${semanasDetectadas.length} semana(s) detectada(s)${sinReconocer ? ` · ${sinReconocer} nombre(s) se conservaron tal como venían en el Excel` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
+          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes.length} día(s) · ${semanasDetectadas.length} semana(s) · ${data.pedidos_importados || 0} pedido(s) Casino insertados en PG${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
         }
       } catch (error) {
         window.__casinoProduccionData = null;
@@ -4087,6 +4288,7 @@
         document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${btn.dataset.tab}`));
         localStorage.setItem(ADMIN_TAB_KEY, btn.dataset.tab);
         if (btn.dataset.tab === 'usuarios') cargarUsuariosAdmin();
+        if (btn.dataset.tab === 'casinos' && !window.__casinoProduccionData) cargarCronogramaCasinoPersistido();
       });
     });
 
@@ -4245,6 +4447,25 @@
       texto = texto.replace(/\bseptiembre\b/i, 'setiembre');
       return texto.charAt(0).toUpperCase() + texto.slice(1);
     }
+
+    function formatearFechaHoraEmision(valor) {
+      if (!valor) return 'Sin registro';
+      const fecha = new Date(valor);
+      if (Number.isNaN(fecha.getTime())) return String(valor);
+      return new Intl.DateTimeFormat('es-PE', {
+        day:'2-digit', month:'2-digit', year:'numeric',
+        hour:'2-digit', minute:'2-digit', hour12:true
+      }).format(fecha);
+    }
+
+    function fechaEmisionParaInput(valor) {
+      if (!valor) return '';
+      const fecha = new Date(valor);
+      if (Number.isNaN(fecha.getTime())) return String(valor).slice(0,16);
+      const pad = (n) => String(n).padStart(2,'0');
+      return `${fecha.getFullYear()}-${pad(fecha.getMonth()+1)}-${pad(fecha.getDate())}T${pad(fecha.getHours())}:${pad(fecha.getMinutes())}`;
+    }
+
     function alternarPedido(tarjeta, event) {
       const pedido = pedidosDisponibles.get(Number(tarjeta.dataset.pedidoId));
       if (pedido) abrirDetallePedido(pedido.id);
@@ -4279,6 +4500,8 @@
           <div><span class="label">Hora de recojo</span><div class="value">${pedido.hora_recoge || '--:--'}</div></div>
           <div><span class="label">Teléfono</span><div class="value">${pedido.celular || '-'}</div></div>
           <div><span class="label">Fecha</span><div class="value">${formatearFecha(pedido.fecha_recoge)}</div></div>
+          <div><span class="label">Fecha de emisión</span><div class="value">${formatearFechaHoraEmision(pedido.fecha_emision || pedido.fecha_registro)}</div></div>
+          ${pedido.origen === 'casino' ? '<div><span class="label">Origen</span><div class="value"><span class="badge casino-badge">CASINO · CRONOGRAMA</span></div></div>' : ''}
           <div><span class="label">Total</span><div class="value">S/. ${Number(pedido.monto_total || 0).toFixed(2)}</div></div>
           <div><span class="label">Monto pagado</span><div class="value">S/. ${Number(pedido.adelanto || 0).toFixed(2)}</div></div>
           <div><span class="label">Saldo restante</span><div class="value">S/. ${(Number(pedido.monto_total || 0) - Number(pedido.adelanto || 0)).toFixed(2)}</div></div>
@@ -4349,6 +4572,7 @@
             <div><span class="label">Teléfono</span><div class="value"><input type="tel" name="celular" value="${(pedido.celular || '').replace(/"/g, '&quot;')}" class="form-control" /></div></div>
             <div><span class="label">Fecha</span><div class="value"><input type="date" name="fecha_recoge" value="${pedido.fecha_recoge || ''}" class="form-control" /></div></div>
             <div><span class="label">Hora</span><div class="value"><input type="time" name="hora_recoge" value="${pedido.hora_recoge || '18:00'}" class="form-control" /></div></div>
+            <div><span class="label">Fecha de emisión</span><div class="value"><input type="datetime-local" name="fecha_emision" value="${fechaEmisionParaInput(pedido.fecha_emision || pedido.fecha_registro)}" class="form-control" /></div></div>
             <div><span class="label">Método de pago</span><div class="value"><input type="text" name="metodo_pago" value="${(pedido.metodo_pago || 'Efectivo').replace(/"/g, '&quot;')}" class="form-control" /></div></div>
             <div><span class="label">Comprobante</span><div class="value"><select name="tipo_comprobante" class="form-control"><option value="" ${!pedido.tipo_comprobante ? 'selected' : ''}>Sin comprobante</option><option value="boleta" ${pedido.tipo_comprobante === 'boleta' ? 'selected' : ''}>Boleta electrónica (DNI)</option><option value="factura" ${pedido.tipo_comprobante === 'factura' ? 'selected' : ''}>Factura electrónica (RUC)</option></select><input type="text" name="numero_documento" value="${(pedido.numero_documento || '').replace(/"/g, '&quot;')}" placeholder="DNI o RUC" class="form-control" style="margin-top:6px;" /></div></div>
             <div><span class="label">Monto total</span><div class="value"><input type="number" min="0" step="0.01" name="monto_total" value="${total.toFixed(2)}" class="form-control" onfocus="this.select()" data-editor-recalculate /></div></div>
@@ -4430,6 +4654,7 @@
         celular: form.elements.celular.value.trim(),
         fecha_recoge: form.elements.fecha_recoge.value,
         hora_recoge: form.elements.hora_recoge.value,
+        fecha_emision: form.elements.fecha_emision?.value || '',
         metodo_pago: form.elements.metodo_pago.value.trim() || 'Efectivo',
         tipo_comprobante: form.elements.tipo_comprobante.value,
         numero_documento: form.elements.numero_documento.value.trim(),
@@ -4445,12 +4670,24 @@
       }
 
       try {
-        const response = await fetch(`/api/admin/pedidos/${id}`, {
+        let response = await fetch(`/api/admin/pedidos/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const data = await response.json();
+        let data = await response.json().catch(() => ({}));
+        if (response.status === 409 && data.duplicado) {
+          const ref = data.coincidencia?.codigo ? ` (${data.coincidencia.codigo})` : '';
+          const confirmar = confirm(`Se encontró un pedido ${data.coincidencia?.tipo_coincidencia || 'similar'}${ref} con el mismo teléfono, fecha, hora y productos. ¿Guardar de todas formas?`);
+          if (!confirmar) return;
+          payload.confirmar_duplicado = true;
+          response = await fetch(`/api/admin/pedidos/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          data = await response.json().catch(() => ({}));
+        }
         if (!response.ok) throw new Error(data.error || 'No se pudo guardar el pedido.');
         await cargarPedidosGenerales();
         const pedidoActualizado = pedidosDisponibles.get(id);
@@ -4839,6 +5076,7 @@
                     <article data-pedido-id="${pedido.id}" class="order-card estado-${normalizarEstadoClase(pedido.estado)}${pedidosNuevos.has(pedido.id) ? ' order-card-new' : ''}" onclick="abrirDetallePedido(${pedido.id})" tabindex="0">
                       <div class="order-head">
                         <span class="badge status">${pedido.estado || 'Registrado'}</span>
+                        ${pedido.origen === 'casino' ? '<span class="badge casino-badge">CASINO</span>' : ''}
                       </div>
                       <span class="order-code">${obtenerCodigoVisible(pedido.codigo, pedido.id)}</span>
                       <ul class="order-request">${items || '<li><span class="item-name">Sin productos</span></li>'}</ul>
@@ -5156,26 +5394,65 @@
     }
   }
 
-  function imprimirHojaCocina() {
-    const fecha = document.getElementById('fecha_filtro')?.value;
-    const imprimirLuego = () => {
-      document.body.classList.add('printing-cocina');
-      window.print();
-    };
-    if (!fecha) {
-      alert('Selecciona una fecha primero.');
-      return;
+  function limpiarModoImpresionCocina() {
+    document.body.classList.remove('printing-cocina', 'printing-embalaje', 'printing-produccion');
+    document.getElementById('kitchenPrintPageStyle')?.remove();
+  }
+
+  function prepararImpresionCocina(tipo) {
+    limpiarModoImpresionCocina();
+    const estilo = document.createElement('style');
+    estilo.id = 'kitchenPrintPageStyle';
+    estilo.textContent = tipo === 'produccion'
+      ? '@media print { @page { size: A4 portrait; margin: 0; } }'
+      : '@media print { @page { size: A4 landscape; margin: 0; } }';
+    document.head.appendChild(estilo);
+    document.body.classList.add('printing-cocina', tipo === 'produccion' ? 'printing-produccion' : 'printing-embalaje');
+    window.addEventListener('afterprint', limpiarModoImpresionCocina, { once:true });
+    window.print();
+  }
+
+  async function marcarPedidosVentanaEnPreparacion() {
+    const clientes = Array.isArray(window.__datosProduccionClientes) ? window.__datosProduccionClientes : [];
+    const editables = clientes.filter((pedido) => pedido.origen !== 'casino');
+    try {
+      await Promise.all(editables.map((pedido) => fetch(`/api/admin/pedidos/${pedido.id}/estado`, {
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({estado:'En preparación'})
+      })));
+    } catch (error) {
+      console.error('No se pudo marcar preparación:', error);
     }
-    window.addEventListener('afterprint', () => {
-      document.body.classList.remove('printing-cocina');
-    }, { once: true });
-    marcarPedidosFechaEnPreparacion(fecha).finally(() => {
-      setTimeout(imprimirLuego, 150);
+  }
+
+  function imprimirHojaEmbalaje() {
+    if (!document.getElementById('fecha_filtro')?.value) return alert('Selecciona una fecha primero.');
+    marcarPedidosVentanaEnPreparacion().finally(() => setTimeout(() => prepararImpresionCocina('embalaje'), 120));
+  }
+
+  function imprimirHojaProduccion() {
+    if (!document.getElementById('fecha_filtro')?.value) return alert('Selecciona una fecha primero.');
+    prepararImpresionCocina('produccion');
+  }
+
+  function imprimirHojaCocina() {
+    imprimirHojaEmbalaje();
+  }
+
+  function ordenarClientesEmbalaje(clientes) {
+    return [...(clientes || [])].sort((a,b) => {
+      const grupo = (item) => item.origen === 'casino' ? 2 : (item.es_urgente ? 0 : 1);
+      const ga = grupo(a), gb = grupo(b);
+      if (ga !== gb) return ga - gb;
+      return String(a.fecha_recoge || '').localeCompare(String(b.fecha_recoge || ''))
+        || String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
+        || Number(a.id) - Number(b.id);
     });
   }
 
   function renderizarMatrizProducto(secciones) {
-    const clientes = window.__datosProduccionClientes || [];
+    const clientes = ordenarClientesEmbalaje(window.__datosProduccionClientes || []);
     const detalles = window.__datosProduccionDetalles || [];
 
     secciones.forEach(({ contenedorId, titulo, productosLista, extraClass = '' }) => {
@@ -5193,62 +5470,144 @@
           .map((detalle) => Number(detalle.pedido_id))
       );
 
-      const clientesSeccion = (clientes || []).filter((cliente) => idsConContenido.has(Number(cliente.id)));
+      const clientesSeccion = clientes.filter((cliente) => idsConContenido.has(Number(cliente.id)));
       if (!clientesSeccion.length || !productosNormalizados.size) {
-        contenedor.innerHTML = '<p class="no-print" style="padding:24px; color:#667085; text-align:center;">No hay productos de esta hoja para la fecha seleccionada.</p>';
+        contenedor.innerHTML = '<p class="no-print" style="padding:24px;color:#667085;text-align:center;">No hay productos de esta hoja en la ventana seleccionada.</p>';
         return;
       }
 
       const maxClientesPorPagina = 18;
       const paginas = [];
-      for (let i = 0; i < clientesSeccion.length; i += maxClientesPorPagina) {
-        paginas.push(clientesSeccion.slice(i, i + maxClientesPorPagina));
-      }
+      for (let i=0;i<clientesSeccion.length;i+=maxClientesPorPagina) paginas.push(clientesSeccion.slice(i,i+maxClientesPorPagina));
 
-      contenedor.innerHTML = paginas.map((grupoClientes, paginaIndex) => {
+      contenedor.innerHTML = paginas.map((grupoClientes,paginaIndex) => {
         const mostrarTotal = paginaIndex === 0;
-        let html = `<div class="kitchen-page${extraClass}"><table><thead><tr>`;
-        html += `<th class="prod-col">${titulo}</th>`;
+        let html = `<div class="kitchen-page${extraClass}"><table><thead><tr><th class="prod-col">${titulo}</th>`;
 
         grupoClientes.forEach((cliente) => {
-          html += `<th class="client-header"><div class="vertical-text">${(cliente.cliente_nombre || 'Cliente').toUpperCase()}</div></th>`;
+          const clase = cliente.origen === 'casino' ? 'kitchen-casino' : (cliente.es_urgente ? 'kitchen-urgent' : 'kitchen-normal');
+          const tag = cliente.origen === 'casino' ? '<span class="kitchen-casino-tag">CASINO</span>' : '';
+          html += `<th class="client-header ${clase}"><div class="vertical-text">${escapeHtmlAdmin((cliente.cliente_nombre || 'Cliente').toUpperCase())}${tag}</div></th>`;
         });
 
         if (mostrarTotal) html += '<th class="total-header"><div class="vertical-text">TOTAL</div></th>';
         html += '</tr></thead><tbody>';
 
         (productosLista || []).forEach((prod) => {
-          let filaHtml = `<tr><td class="prod-col">${prod}</td>`;
-
+          let fila = `<tr><td class="prod-col">${escapeHtmlAdmin(prod)}</td>`;
           grupoClientes.forEach((cliente) => {
-            const cantidadCliente = (detalles || [])
+            const cantidad = detalles
               .filter((detalle) =>
                 Number(detalle.pedido_id) === Number(cliente.id) &&
                 normalizarNombreProducto(obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre) === normalizarNombreProducto(prod)
               )
-              .reduce((suma, detalle) => suma + Number(detalle.cantidad || 0), 0);
-            filaHtml += cantidadCliente > 0 ? `<td class="qty-cell">${cantidadCliente}</td>` : '<td></td>';
+              .reduce((suma,detalle) => suma + Number(detalle.cantidad || 0),0);
+            const clase = cliente.origen === 'casino' ? 'kitchen-casino' : (cliente.es_urgente ? 'kitchen-urgent' : 'kitchen-normal');
+            fila += cantidad > 0 ? `<td class="qty-cell ${clase}">${cantidad}</td>` : '<td></td>';
           });
 
           if (mostrarTotal) {
-            const detallesProducto = (detalles || [])
-              .filter((detalle) => {
-                const match = obtenerProductoResolucion(detalle.producto_nombre);
-                return normalizarNombreProducto(match || detalle.producto_nombre) === normalizarNombreProducto(prod)
-                  && Number(detalle.cantidad || 0) > 0;
-              });
+            const detallesProducto = detalles.filter((detalle) =>
+              normalizarNombreProducto(obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre) === normalizarNombreProducto(prod)
+              && Number(detalle.cantidad || 0) > 0
+            );
             const resumen = obtenerResumenPaquetesDesdeCantidades(detallesProducto);
-            filaHtml += `<td class="pack-cell">${resumen ? `<div class="pack-badge">${resumen}</div>` : ''}</td>`;
+            fila += `<td class="pack-cell">${resumen ? `<div class="pack-badge">${resumen}</div>` : ''}</td>`;
           }
-
-          filaHtml += '</tr>';
-          html += filaHtml;
+          fila += '</tr>';
+          html += fila;
         });
 
         html += '</tbody></table></div>';
         return html;
       }).join('');
     });
+  }
+
+  function renderizarHojaProduccionCocina(data) {
+    const contenedor = document.getElementById('hojaProduccionCocina');
+    if (!contenedor) return;
+    const detalles = Array.isArray(data?.detalles) ? data.detalles : [];
+
+    const mapa = new Map();
+    detalles.forEach((detalle) => {
+      const nombre = obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre || 'Producto';
+      const clave = normalizarNombreProducto(nombre);
+      if (!mapa.has(clave)) mapa.set(clave,{nombre,urgente:0,normal:0,total:0,casino:0});
+      const fila = mapa.get(clave);
+      const cant = Number(detalle.cantidad || 0);
+      if (detalle.es_urgente) fila.urgente += cant;
+      else fila.normal += cant;
+      if (detalle.origen === 'casino') fila.casino += cant;
+      fila.total += cant;
+    });
+
+    const filas = [...mapa.values()]
+      .filter((item) => item.total > 0)
+      .sort((a,b) => String(a.nombre).localeCompare(String(b.nombre),'es'));
+
+    const manuales = [
+      'EMPANADA DE CARNE','EMPANADA DE POLLO','EMPANADA MIXTA','PIONONO MIL HOJAS',
+      'PASTEL ACELGA','PYE DE LIMÓN','RELÁMPAGO','PORCIÓN CHOCOLATE',
+      'STRUDEL MANZANA','PAÑUELO CHANTILLY'
+    ];
+
+    const kekesCasino = filas.filter((item) =>
+      item.casino > 0 && /\b(KEKE|QUEQUE|CARROT|BUDIN|TORTA|PYE|CREMA|TRES LECHES)\b/i.test(normalizarNombreProducto(item.nombre))
+    );
+
+    const cuerpo = filas.length ? filas.map((item) => `
+      <tr class="${item.urgente > 0 ? 'production-row-urgent' : ''}">
+        <td class="production-prod-name">${escapeHtmlAdmin(item.nombre)}</td>
+        <td class="production-urgent">${item.urgente > 0 ? item.urgente : ''}</td>
+        <td class="production-normal">${item.normal > 0 ? item.normal : ''}</td>
+        <td class="production-total">${item.total}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="4" style="text-align:center;padding:18px;">Sin producción en esta ventana.</td></tr>';
+
+    contenedor.innerHTML = `
+      <section class="production-paper">
+        <div class="production-paper-title">
+          <h4>${formatearFecha(data.fecha).toUpperCase()}</h4>
+          <span>Producción: ${escapeHtmlAdmin(data.ventana?.desde || '')}<br>hasta ${escapeHtmlAdmin(data.ventana?.hasta || '')}</span>
+        </div>
+        <div class="production-layout">
+          <div>
+            <table class="production-main-table">
+              <thead><tr><th>PRODUCTO</th><th>URGENTE</th><th>NORMAL</th><th>TOTAL</th></tr></thead>
+              <tbody>${cuerpo}</tbody>
+            </table>
+          </div>
+          <aside>
+            <h5 class="production-manual-title">Control manual</h5>
+            <table class="production-manual-table">
+              <tbody>${manuales.map((nombre) => `<tr><td>${nombre}</td><td></td></tr>`).join('')}</tbody>
+            </table>
+          </aside>
+        </div>
+
+        <div class="production-casino-section">
+          <h5 class="production-casino-title">Kekes / producción de casinos</h5>
+          <table class="production-casino-table">
+            <thead><tr><th>PRODUCTO</th><th>URGENTE</th><th>NORMAL</th><th>TOTAL</th></tr></thead>
+            <tbody>${kekesCasino.length ? kekesCasino.map((item) => `
+              <tr class="${item.urgente > 0 ? 'production-row-urgent' : ''}">
+                <td class="production-prod-name">${escapeHtmlAdmin(item.nombre)}</td>
+                <td class="production-urgent">${item.urgente || ''}</td>
+                <td class="production-normal">${item.normal || ''}</td>
+                <td class="production-total">${item.total}</td>
+              </tr>`).join('') : '<tr><td colspan="4">Sin kekes de casino para esta ventana.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="production-legend">
+          <span class="red">ROJO: sale hoy desde las 3:00 p. m.</span>
+          <span>NEGRO: sale mañana antes de las 3:00 p. m.</span>
+          <span>Los valores del control manual se completan a mano.</span>
+        </div>
+      </section>
+    `;
   }
 
   async function cargarMatriz() {
@@ -5258,32 +5617,37 @@
     try {
       const res = await fetch(`/api/admin/produccion?fecha=${fecha}`);
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo cargar la producción.');
 
       window.__datosProduccionClientes = data.clientes || [];
       window.__datosProduccionDetalles = data.detalles || [];
 
+      const etiqueta = document.getElementById('kitchenWindowLabel');
+      if (etiqueta) etiqueta.textContent = `Ventana: ${data.ventana?.desde || ''} → ${data.ventana?.hasta || ''}`;
+
       renderizarMatrizProducto([
         {
-          contenedorId: 'hojaProduccion',
-          titulo: 'BOCADITOS',
-          productosLista: filtrarProductosConPedidos(resolverProductoNombres(), data.detalles || []),
-          extraClass: ''
+          contenedorId:'hojaProduccion',
+          titulo:'BOCADITOS / TORTAS',
+          productosLista:filtrarProductosConPedidos(resolverProductoNombres(), data.detalles || []),
+          extraClass:''
         },
         {
-          contenedorId: 'hojaProduccionExtra',
-          titulo: 'SANGUCHES / TRIPLES / PANES',
-          productosLista: filtrarProductosConPedidos(obtenerProductosExtraParaProduccion(), data.detalles || []),
-          extraClass: ' kitchen-page-updated'
+          contenedorId:'hojaProduccionExtra',
+          titulo:'SÁNGUCHES / TRIPLES / PANES',
+          productosLista:filtrarProductosConPedidos(obtenerProductosExtraParaProduccion(), data.detalles || []),
+          extraClass:' kitchen-page-updated'
         }
       ]);
+      renderizarHojaProduccionCocina(data);
 
-      const paginasCocina = [...document.querySelectorAll('#panel-cocina .kitchen-page')];
+      const paginasCocina = [...document.querySelectorAll('#embalajeWrapper .kitchen-page')];
       paginasCocina.forEach((pagina) => pagina.classList.remove('last-kitchen-page'));
       paginasCocina.at(-1)?.classList.add('last-kitchen-page');
 
-      firmaProduccion = JSON.stringify({ clientes: data.clientes, detalles: data.detalles });
+      firmaProduccion = JSON.stringify({clientes:data.clientes,detalles:data.detalles,ventana:data.ventana});
     } catch (error) {
-      alert('Error al obtener los datos de producción.');
+      alert(error.message || 'Error al obtener los datos de producción.');
     }
   }
 
@@ -5301,6 +5665,7 @@
       await cargarPedidosGenerales();
       await cargarHistorialPedidos();
       await cargarMatriz();
+      await cargarCronogramaCasinoPersistido();
       await cargarUsuariosAdmin();
       const fechaInventario = document.getElementById('inventarioFecha');
       if (fechaInventario && !fechaInventario.value) fechaInventario.value = new Date().toISOString().slice(0, 10);
