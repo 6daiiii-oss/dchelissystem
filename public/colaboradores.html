@@ -317,8 +317,16 @@
       const total=detalles.reduce((s,d)=>s+d.subtotal,0), adelanto=Number(document.getElementById('colAdelanto').value||0);
       if(adelanto>total) return alert('El adelanto no puede superar el total.');
       const foto=detalles.find((detalle)=>detalle.foto_torta)?.foto_torta||'';
-      const respuesta=await fetch(api('/api/pedidos'),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({tipo_cliente:'Cliente',cliente_nombre:`${nombre} ${apellido}`,celular,monto_total:Number(total.toFixed(2)),adelanto:Number(adelanto.toFixed(2)),metodo_pago:'Efectivo',fecha_recoge:document.getElementById('colFecha').value||new Date().toISOString().slice(0,10),hora_recoge:document.getElementById('colHora').value||'18:00',tipo_comprobante:tipoComprobante,numero_documento:numeroDocumento,dedicatoria:'',foto_torta:foto,origen:'digitacion',detalles})});
-      const resultado=await respuesta.json();
+      const payload={tipo_cliente:'Cliente',cliente_nombre:`${nombre} ${apellido}`,celular,monto_total:Number(total.toFixed(2)),adelanto:Number(adelanto.toFixed(2)),metodo_pago:'Efectivo',fecha_recoge:document.getElementById('colFecha').value||new Date().toISOString().slice(0,10),hora_recoge:document.getElementById('colHora').value||'18:00',tipo_comprobante:tipoComprobante,numero_documento:numeroDocumento,dedicatoria:'',foto_torta:foto,origen:'digitacion',detalles};
+      let respuesta=await fetch(api('/api/pedidos'),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      let resultado=await respuesta.json().catch(()=>({}));
+      if(respuesta.status===409&&resultado.duplicado){
+        const ref=resultado.coincidencia?.codigo?` (${resultado.coincidencia.codigo})`:'';
+        if(!confirm(`Posible pedido duplicado${ref}. ¿Registrar de todas formas?`)) return;
+        payload.confirmar_duplicado=true;
+        respuesta=await fetch(api('/api/pedidos'),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        resultado=await respuesta.json().catch(()=>({}));
+      }
       if(!respuesta.ok) return alert(resultado.error||'No se pudo registrar el pedido.');
       alert(`Pedido ${resultado.codigo||''} registrado.`);
       document.getElementById('colDetalle').value='';
