@@ -2293,13 +2293,25 @@ async function confirmarPagoYape(e) {
   };
 
   try {
-    const response = await fetch(apiUrl('/api/pedidos'), {
+    let response = await fetch(apiUrl('/api/pedidos'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
-    const data = await response.json().catch(() => ({}));
+    let data = await response.json().catch(() => ({}));
+    if (response.status === 409 && data.duplicado) {
+      const referencia = data.coincidencia?.codigo ? ` (${data.coincidencia.codigo})` : '';
+      const confirmar = confirm(`Parece existir un pedido igual o muy similar${referencia} para el mismo teléfono, fecha y hora. ¿Deseas registrar este pedido de todas formas?`);
+      if (!confirmar) throw new Error('Registro cancelado para evitar un pedido duplicado.');
+      payload.confirmar_duplicado = true;
+      response = await fetch(apiUrl('/api/pedidos'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      data = await response.json().catch(() => ({}));
+    }
     if (!response.ok) {
       throw new Error(data.error || `No se pudo guardar el pedido (${response.status}).`);
     }
