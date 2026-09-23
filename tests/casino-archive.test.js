@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const fs = require('node:fs');
 const { unirCronogramasCasino } = require('../casino-archive');
-const { clasificarHojaProduccion } = require('../production-classification');
+const { clasificarHojaProduccion } = require('../public/production-classification');
 
 test('las semanas importadas se conservan y una fecha repetida usa el último Excel', () => {
   const vieja = { id: 1, nombre_archivo: 'Viejo.xlsx', fecha_inicio: '2026-09-14', fecha_fin: '2026-09-22', datos_json: JSON.stringify({

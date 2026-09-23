@@ -1,8 +1,14 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const vm = require('node:vm');
 const test = require('node:test');
 
 const html = fs.readFileSync(require('node:path').join(__dirname, '../public/admin.html'), 'utf8');
+const clasificacionScript = html.match(/<script src="(production-classification\.js(?:\?[^\"]*)?)"><\/script>/)?.[1];
+assert.ok(clasificacionScript, 'La hoja carga el clasificador desde public');
+const clasificacion = {};
+vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, '../public', clasificacionScript.split('?')[0]), 'utf8'), clasificacion);
+assert.equal(typeof clasificacion.clasificarHojaProduccion, 'function');
 function functionSource(start, end) {
   const first = html.indexOf(`function ${start}(`);
   const last = html.indexOf(end, first);
@@ -26,7 +32,7 @@ test('la producción se divide en dos hojas, conserva totales y señala el casin
     (value) => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(),
     (value) => String(value),
     () => 'MARTES 22 DE SETIEMBRE',
-    require('../production-classification').clasificarHojaProduccion
+    clasificacion.clasificarHojaProduccion
   );
   const detalles = Array.from({ length: 40 }, (_, i) => ({ producto_nombre: `Bocadito ${String(i).padStart(2, '0')}`, cantidad: 25, pedido_id: 1, origen: 'pg' }));
   detalles.push({ producto_nombre: 'Keke vainilla', cantidad: 6, pedido_id: 2, origen: 'casino' });
@@ -41,6 +47,7 @@ test('la producción se divide en dos hojas, conserva totales y señala el casin
 
 test('embalaje separa productos y clientes en bloques legibles', () => {
   const contenedor = { innerHTML: '' };
+  let resoluciones = 0;
   const clientes = Array.from({ length: 13 }, (_, i) => ({ id:i+1, cliente_nombre:`Cliente ${i+1}`, origen:'pg' }));
   const productos = Array.from({ length: 40 }, (_, i) => `Bocadito ${i}`);
   const detalles = clientes.flatMap((cliente) => productos.map((producto_nombre) => ({
@@ -50,9 +57,10 @@ test('embalaje separa productos y clientes en bloques legibles', () => {
     'obtenerProductoResolucion', 'escapeHtmlAdmin', 'obtenerResumenPaquetesDesdeCantidades',
     `${functionSource('renderizarMatrizProducto', '  function renderizarHojaProduccionCocina(')}; return renderizarMatrizProducto;`)(
     { getElementById: () => contenedor }, { __datosProduccionClientes:clientes, __datosProduccionDetalles:detalles },
-    (value) => value, (value) => String(value).toUpperCase(), () => null, (value) => String(value), resumen
+    (value) => value, (value) => String(value).toUpperCase(), () => { resoluciones += 1; return null; }, (value) => String(value), resumen
   );
   render([{ contenedorId:'hojaProduccion', titulo:'BOCADITOS / TORTAS', productosLista:productos }]);
   assert.equal((contenedor.innerHTML.match(/class="kitchen-page"/g) || []).length, 4);
   assert.match(contenedor.innerHTML, /<div class="pack-badge">13x25<\/div>/);
+  assert.equal(resoluciones, productos.length, 'cada nombre se resuelve una sola vez aunque haya muchos pedidos');
 });

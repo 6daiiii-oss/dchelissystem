@@ -7,7 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="digitacion-config.js"></script>
-<script src="production-classification.js"></script>
+<script src="production-classification.js?v=2"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -2306,7 +2306,7 @@
           <div class="controls no-print">
             <label><strong>Fecha de producción:</strong></label>
             <input type="date" id="fecha_filtro" />
-            <button class="btn btn-success" type="button" onclick="cargarMatriz()">Actualizar hojas</button>
+            <button id="actualizarCocinaBtn" class="btn btn-success" type="button" onclick="cargarMatriz()">Actualizar hojas</button>
             <button class="btn btn-warning" type="button" onclick="imprimirHojaEmbalaje()">Imprimir embalaje</button>
             <button class="btn btn-ghost" type="button" onclick="descargarExcel()">Excel embalaje</button>
           </div>
@@ -2525,6 +2525,7 @@
     let pedidosConocidos = null;
     let fechaPedidosConocida = '';
     let firmaProduccion = '';
+    let cargaMatrizEnCurso = false;
     let actualizacionEnCurso = false;
     let audioContext = null;
     let pedidosDisponibles = new Map();
@@ -5381,10 +5382,15 @@
 
     function filtrarProductosConPedidos(lista, detalles) {
       if (!detalles.length) return lista;
-      return lista.filter((producto) => detalles.some((detalle) => {
-        const resuelto = obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre;
-        return normalizarNombreProducto(resuelto) === normalizarNombreProducto(producto);
-      }));
+      const resueltos = new Map();
+      const presentes = new Set();
+      detalles.forEach((detalle) => {
+        if (Number(detalle.cantidad || 0) <= 0) return;
+        const nombre = detalle.producto_nombre;
+        if (!resueltos.has(nombre)) resueltos.set(nombre, obtenerProductoResolucion(nombre) || nombre);
+        presentes.add(normalizarNombreProducto(resueltos.get(nombre)));
+      });
+      return lista.filter((producto) => presentes.has(normalizarNombreProducto(producto)));
     }
 
   function obtenerProductoResolucion(nombre) {
@@ -5505,15 +5511,30 @@
   function renderizarMatrizProducto(secciones) {
     const clientes = ordenarClientesEmbalaje(window.__datosProduccionClientes || []);
     const detalles = window.__datosProduccionDetalles || [];
+    const indice = new Map();
+    const nombresResueltos = new Map();
+
+    detalles.forEach((detalle) => {
+      const cantidad = Number(detalle.cantidad || 0);
+      if (!(cantidad > 0)) return;
+      const original = detalle.producto_nombre;
+      if (!nombresResueltos.has(original)) {
+        nombresResueltos.set(original, obtenerProductoResolucion(original) || original);
+      }
+      const clave = normalizarNombreProducto(nombresResueltos.get(original));
+      if (!indice.has(clave)) indice.set(clave, { clientes: new Set(), cantidades: new Map(), detalles: [] });
+      const producto = indice.get(clave);
+      const pedidoId = Number(detalle.pedido_id);
+      producto.clientes.add(pedidoId);
+      producto.cantidades.set(pedidoId, (producto.cantidades.get(pedidoId) || 0) + cantidad);
+      producto.detalles.push(detalle);
+    });
 
     secciones.forEach(({ contenedorId, titulo, productosLista, extraClass = '' }) => {
       const contenedor = document.getElementById(contenedorId);
       if (!contenedor) return;
 
-      const productosActivos = (productosLista || []).filter((producto) => detalles.some((detalle) =>
-        Number(detalle.cantidad || 0) > 0 &&
-        normalizarNombreProducto(obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre) === normalizarNombreProducto(producto)
-      ));
+      const productosActivos = (productosLista || []).filter((producto) => indice.has(normalizarNombreProducto(producto)));
       if (!productosActivos.length) {
         contenedor.innerHTML = '<p class="no-print" style="padding:24px;color:#667085;text-align:center;">No hay productos de esta hoja en la ventana seleccionada.</p>';
         return;
@@ -5525,10 +5546,8 @@
       for (let p = 0; p < productosActivos.length; p += maxProductosPorPagina) {
         const productosBloque = productosActivos.slice(p, p + maxProductosPorPagina);
         const claves = new Set(productosBloque.map((producto) => normalizarNombreProducto(producto)));
-        const idsBloque = new Set(detalles.filter((detalle) =>
-          Number(detalle.cantidad || 0) > 0 &&
-          claves.has(normalizarNombreProducto(obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre))
-        ).map((detalle) => Number(detalle.pedido_id)));
+        const idsBloque = new Set();
+        claves.forEach((clave) => indice.get(clave)?.clientes.forEach((id) => idsBloque.add(id)));
         const clientesBloque = clientes.filter((cliente) => idsBloque.has(Number(cliente.id)));
         for (let i = 0; i < clientesBloque.length; i += maxClientesPorPagina) {
           paginas.push({ grupoClientes: clientesBloque.slice(i, i + maxClientesPorPagina), productosBloque, mostrarTotal: i === 0 });
@@ -5549,23 +5568,15 @@
 
         productosBloque.forEach((prod) => {
           let fila = `<tr><td class="prod-col">${escapeHtmlAdmin(prod)}</td>`;
+          const producto = indice.get(normalizarNombreProducto(prod));
           grupoClientes.forEach((cliente) => {
-            const cantidad = detalles
-              .filter((detalle) =>
-                Number(detalle.pedido_id) === Number(cliente.id) &&
-                normalizarNombreProducto(obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre) === normalizarNombreProducto(prod)
-              )
-              .reduce((suma,detalle) => suma + Number(detalle.cantidad || 0),0);
+            const cantidad = producto?.cantidades.get(Number(cliente.id)) || 0;
             const clase = cliente.origen === 'casino' ? 'kitchen-casino' : (cliente.es_urgente ? 'kitchen-urgent' : 'kitchen-normal');
             fila += cantidad > 0 ? `<td class="qty-cell ${clase}">${cantidad}</td>` : '<td></td>';
           });
 
           if (mostrarTotal) {
-            const detallesProducto = detalles.filter((detalle) =>
-              normalizarNombreProducto(obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre) === normalizarNombreProducto(prod)
-              && Number(detalle.cantidad || 0) > 0
-            );
-            const resumen = obtenerResumenPaquetesDesdeCantidades(detallesProducto);
+            const resumen = obtenerResumenPaquetesDesdeCantidades(producto?.detalles || []);
             fila += `<td class="pack-cell">${resumen ? `<div class="pack-badge">${resumen}</div>` : ''}</td>`;
           }
           fila += '</tr>';
@@ -5621,8 +5632,12 @@
   }
 
   async function cargarMatriz() {
+    if (cargaMatrizEnCurso) return;
     const fecha = document.getElementById('fecha_filtro').value;
     if (!fecha) return alert('Selecciona una fecha');
+    cargaMatrizEnCurso = true;
+    const boton = document.getElementById('actualizarCocinaBtn');
+    if (boton) { boton.disabled = true; boton.textContent = 'Actualizando…'; }
 
     try {
       const res = await fetch(`/api/admin/produccion?fecha=${fecha}`);
@@ -5637,6 +5652,8 @@
       const etiqueta = document.getElementById('kitchenWindowLabel');
       if (etiqueta) etiqueta.textContent = `Ventana: ${data.ventana?.desde || ''} → ${data.ventana?.hasta || ''}`;
 
+      renderizarHojaProduccionCocina(data);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       renderizarMatrizProducto([
         {
           contenedorId:'hojaProduccion',
@@ -5651,8 +5668,6 @@
           extraClass:' kitchen-page-updated'
         }
       ]);
-      renderizarHojaProduccionCocina(data);
-
       const paginasCocina = [...document.querySelectorAll('#embalajeWrapper .kitchen-page')];
       paginasCocina.forEach((pagina) => pagina.classList.remove('last-kitchen-page'));
       paginasCocina.at(-1)?.classList.add('last-kitchen-page');
@@ -5660,6 +5675,9 @@
       firmaProduccion = nuevaFirmaProduccion;
     } catch (error) {
       alert(error.message || 'Error al obtener los datos de producción.');
+    } finally {
+      cargaMatrizEnCurso = false;
+      if (boton) { boton.disabled = false; boton.textContent = 'Actualizar hojas'; }
     }
   }
 
