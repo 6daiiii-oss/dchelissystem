@@ -7,6 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="digitacion-config.js"></script>
+<script src="production-classification.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -1351,6 +1352,8 @@
       color:#fff;
       box-shadow:0 4px 12px rgba(23,60,43,.18);
     }
+    .casino-archive-weeks { display:flex; flex-wrap:wrap; gap:7px; padding:7px 0 15px; }
+    .casino-archive-weeks[hidden] { display:none; }
     .casino-day-page {
       margin:0 0 24px;
       padding:18px;
@@ -2311,7 +2314,7 @@
 
         <div id="embalajeWrapper" class="kitchen-document-block" style="margin-bottom:26px;">
           <div class="kitchen-doc-heading">
-            <div><span>HOJA DE EMBALAJE</span><small>Rojo = sale hoy desde las 3 p. m. · Negro = sale mañana antes de las 3 p. m. · Casinos al extremo derecho</small></div>
+            <div><span>HOJA DE EMBALAJE</span></div>
           </div>
           <div style="margin-bottom:18px;">
             <h4 class="kitchen-section-title">Bocaditos / tortas</h4>
@@ -2325,7 +2328,7 @@
 
         <div id="productionPaperWrapper" class="kitchen-document-block">
           <div class="kitchen-doc-heading">
-            <div><span>HOJA DE PRODUCCIÓN</span><small>Totales por producto · kekes y tortas de casino a la derecha</small></div>
+            <div><span>HOJA DE PRODUCCIÓN</span></div>
           </div>
           <div id="hojaProduccionCocina"></div>
           <div class="no-print" style="display:flex; justify-content:flex-end; margin-top:14px;">
@@ -2460,6 +2463,7 @@
           </div>
         </div>
         <div id="casinoDiasResumen" class="casino-days-strip no-print"></div>
+        <div id="casinoArchivoSemanas" class="casino-archive-weeks no-print" hidden></div>
         <div id="casinosProduccion"></div>
       </div>
     </section>
@@ -3712,8 +3716,9 @@
 
 
     window.__casinoProduccionData = null;
-    window.__casinoSemanaIndex = 0;
+    window.__casinoSemanaIndex = -1;
     window.__casinoSemanas = [];
+    window.__casinoArchivoAbierto = false;
 
     function mostrarCargaCasino(activa, texto = '') {
       const panel = document.getElementById('casinoLoading');
@@ -3849,12 +3854,6 @@
         grupo.dias.push(dia);
       });
 
-      // Si al final quedan solo 1 o 2 días del cronograma, se agregan a la última semana completa.
-      if (grupos.length > 1 && grupos[grupos.length - 1].dias.length <= 2) {
-        const sobrante = grupos.pop();
-        grupos[grupos.length - 1].dias.push(...sobrante.dias);
-      }
-
       return grupos.map((grupo, indice) => {
         const inicio = grupo.dias[0]?.fecha || grupo.lunes;
         const fin = grupo.dias[grupo.dias.length - 1]?.fecha || inicio;
@@ -3864,6 +3863,11 @@
           dias: grupo.dias,
           inicio,
           fin,
+          finSemana: (() => {
+            const domingo = fechaCasinoADate(grupo.lunes);
+            domingo.setDate(domingo.getDate() + 6);
+            return isoDateCasino(domingo);
+          })(),
           rango: `${formatearFechaCasino(inicio)} – ${formatearFechaCasino(fin)}`
         };
       });
@@ -3992,9 +3996,13 @@
 
     function renderizarSelectorSemanasCasino(semanas) {
       const contenedor = document.getElementById('casinoDiasResumen');
+      const archivo = document.getElementById('casinoArchivoSemanas');
       if (!contenedor) return;
-
-      contenedor.innerHTML = semanas.map((semana) => `
+      const hoy = obtenerFechaLocalIso();
+      const activas = semanas.filter((semana) => semana.finSemana >= hoy);
+      const anteriores = semanas.filter((semana) => semana.finSemana < hoy).reverse();
+      if (!activas.length && anteriores.length) window.__casinoArchivoAbierto = true;
+      const botonSemana = (semana) => `
         <button
           type="button"
           class="casino-week-btn${semana.indice === window.__casinoSemanaIndex ? ' active' : ''}"
@@ -4002,7 +4010,20 @@
         >
           Semana ${semana.numero} · ${escapeHtmlAdmin(semana.rango)}
         </button>
-      `).join('');
+      `;
+      contenedor.innerHTML = activas.map(botonSemana).join('') + (anteriores.length ? `
+        <button type="button" class="casino-week-btn" onclick="alternarArchivoCasino()" aria-expanded="${window.__casinoArchivoAbierto}">
+          Archivo · ${anteriores.length} semana(s) ${window.__casinoArchivoAbierto ? '▴' : '▾'}
+        </button>` : '');
+      if (archivo) {
+        archivo.hidden = !window.__casinoArchivoAbierto || !anteriores.length;
+        archivo.innerHTML = archivo.hidden ? '' : anteriores.map(botonSemana).join('');
+      }
+    }
+
+    function alternarArchivoCasino() {
+      window.__casinoArchivoAbierto = !window.__casinoArchivoAbierto;
+      renderizarSelectorSemanasCasino(window.__casinoSemanas || []);
     }
 
     function seleccionarSemanaCasino(indice) {
@@ -4031,7 +4052,8 @@
       }
 
       if (window.__casinoSemanaIndex < 0 || window.__casinoSemanaIndex >= semanas.length) {
-        window.__casinoSemanaIndex = 0;
+        const primeraVigente = semanas.findIndex((semana) => semana.finSemana >= obtenerFechaLocalIso());
+        window.__casinoSemanaIndex = primeraVigente < 0 ? semanas.length - 1 : primeraVigente;
       }
 
       const semana = semanas[window.__casinoSemanaIndex];
@@ -4083,11 +4105,11 @@
         if (!data.existe || !data.cronograma) return false;
 
         window.__casinoProduccionData = data.cronograma;
-        if (!Number.isInteger(window.__casinoSemanaIndex)) window.__casinoSemanaIndex = 0;
+        if (!Number.isInteger(window.__casinoSemanaIndex)) window.__casinoSemanaIndex = -1;
         renderizarProduccionCasinos(data.cronograma);
         if (estado) {
           estado.className = 'casino-status success';
-          estado.textContent = `Cronograma guardado · ${data.cronograma.fecha_inicio || ''} a ${data.cronograma.fecha_fin || ''} · cargado una sola vez en el sistema.`;
+          estado.textContent = `Cronogramas guardados · ${data.cronograma.fecha_inicio || ''} a ${data.cronograma.fecha_fin || ''}.`;
         }
         return true;
       } catch (error) {
@@ -4159,10 +4181,11 @@
         if (!respuesta.ok) throw new Error(data.error || 'No se pudo procesar el cronograma.');
 
         window.__casinoProduccionData = data;
-        window.__casinoSemanaIndex = 0;
+        window.__casinoSemanaIndex = -1;
         mostrarCargaCasino(true, 'Generando las hojas semanales y la vista previa…');
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         renderizarProduccionCasinos(data);
+        await cargarCronogramaCasinoPersistido();
         await refrescarVistasTrasCambioPedido();
 
         const sinReconocer = Array.isArray(data.productos_no_reconocidos) ? data.productos_no_reconocidos.length : 0;
@@ -5559,38 +5582,16 @@
     const contenedor = document.getElementById('hojaProduccionCocina');
     if (!contenedor) return;
     const detalles = Array.isArray(data?.detalles) ? data.detalles : [];
-    const clientes = new Map((data.clientes || []).map((cliente) => [Number(cliente.id), cliente]));
-    const productos = new Map();
-    const casinos = new Map();
-    const esKekeOTorta = (nombre) => /\b(KEKE|QUEQUE|CARROT|BUDIN|TORTA|TORTITA|PIE|PYE|CREMA|TRES LECHES)\b/i
-      .test(normalizarNombreProducto(nombre));
-
-    detalles.forEach((detalle) => {
-      const cantidad = Number(detalle.cantidad || 0);
-      if (cantidad <= 0) return;
-      const nombre = obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre || 'Producto';
-      const clave = normalizarNombreProducto(nombre);
-      if (!productos.has(clave)) productos.set(clave, { nombre, total:0 });
-      productos.get(clave).total += cantidad;
-
-      if (detalle.origen === 'casino' && esKekeOTorta(nombre)) {
-        const casino = clientes.get(Number(detalle.pedido_id))?.cliente_nombre || 'Casino';
-        const claveCasino = `${clave}::${normalizarNombreProducto(casino)}`;
-        if (!casinos.has(claveCasino)) casinos.set(claveCasino, { nombre, casino, total:0 });
-        casinos.get(claveCasino).total += cantidad;
-      }
-    });
-
-    const filas = [...productos.values()].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'));
-    const kekesCasino = [...casinos.values()].sort((a,b) =>
-      a.nombre.localeCompare(b.nombre, 'es') || a.casino.localeCompare(b.casino, 'es'));
-    const porPagina = filas.length > 34 ? Math.ceil(filas.length / 2) : 34;
-    const numeroPaginas = Math.max(1, Math.ceil(filas.length / porPagina));
-    const kekesPorPagina = Math.max(25, Math.ceil(kekesCasino.length / numeroPaginas));
+    const { filas, especiales } = clasificarHojaProduccion(
+      detalles, data.clientes || [], obtenerProductoResolucion, normalizarNombreProducto
+    );
+    const numeroPaginas = Math.max(1, Math.ceil(filas.length / 34), Math.ceil(especiales.length / 25));
+    const porPagina = Math.ceil(filas.length / numeroPaginas);
+    const especialesPorPagina = Math.ceil(especiales.length / numeroPaginas);
 
     contenedor.innerHTML = Array.from({length: numeroPaginas}, (_, pagina) => {
       const bloque = filas.slice(pagina * porPagina, (pagina + 1) * porPagina);
-      const kekes = kekesCasino.slice(pagina * kekesPorPagina, (pagina + 1) * kekesPorPagina);
+      const kekes = especiales.slice(pagina * especialesPorPagina, (pagina + 1) * especialesPorPagina);
       return `
         <section class="production-paper${bloque.length > 36 ? ' production-compact' : ''}">
           <div class="production-paper-title">
@@ -5607,9 +5608,9 @@
             <aside>
               <div class="production-blank-space"></div>
               ${kekes.length ? `<div class="production-casino-section">
-                <h5 class="production-casino-title">Kekes y tortas · casinos</h5>
+                <h5 class="production-casino-title">Kekes y tortas</h5>
                 <div class="production-casino-list">${kekes.map((item) => `
-                  <div class="production-casino-line"><strong>${item.total}</strong><span>${escapeHtmlAdmin(item.nombre.toUpperCase())} (${escapeHtmlAdmin(item.casino.toUpperCase())})</span></div>
+                  <div class="production-casino-line"><strong>${item.total}</strong><span>${escapeHtmlAdmin(item.nombre.toUpperCase())}${item.cliente ? ` (${escapeHtmlAdmin(item.cliente.toUpperCase())})` : ''}</span></div>
                 `).join('')}</div>
               </div>` : ''}
             </aside>

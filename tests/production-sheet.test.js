@@ -20,12 +20,13 @@ test('las cantidades de pedidos independientes no se combinan ni se fraccionan s
 test('la producción se divide en dos hojas, conserva totales y señala el casino', () => {
   const contenedor = { innerHTML: '' };
   const render = new Function('document', 'obtenerProductoResolucion', 'normalizarNombreProducto', 'escapeHtmlAdmin', 'formatearFecha',
-    `${functionSource('renderizarHojaProduccionCocina', '  async function cargarMatriz(')}; return renderizarHojaProduccionCocina;`)(
+    'clasificarHojaProduccion', `${functionSource('renderizarHojaProduccionCocina', '  async function cargarMatriz(')}; return renderizarHojaProduccionCocina;`)(
     { getElementById: () => contenedor },
     () => null,
     (value) => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(),
     (value) => String(value),
-    () => 'MARTES 22 DE SETIEMBRE'
+    () => 'MARTES 22 DE SETIEMBRE',
+    require('../production-classification').clasificarHojaProduccion
   );
   const detalles = Array.from({ length: 40 }, (_, i) => ({ producto_nombre: `Bocadito ${String(i).padStart(2, '0')}`, cantidad: 25, pedido_id: 1, origen: 'pg' }));
   detalles.push({ producto_nombre: 'Keke vainilla', cantidad: 6, pedido_id: 2, origen: 'casino' });
@@ -33,7 +34,8 @@ test('la producción se divide en dos hojas, conserva totales y señala el casin
   assert.equal((contenedor.innerHTML.match(/class="production-paper(?: production-compact)?"/g) || []).length, 2);
   assert.match(contenedor.innerHTML, /<th>PRODUCTO<\/th><th>TOTAL<\/th>/);
   assert.match(contenedor.innerHTML, /<td class="production-total">25<\/td>/);
-  assert.match(contenedor.innerHTML, /KEKE VAINILLA \(CASINO VICTORIA\)/);
+  assert.match(contenedor.innerHTML, /KEKE VAINILLA/);
+  assert.doesNotMatch(contenedor.innerHTML, /KEKE VAINILLA<\/td>/);
   assert.doesNotMatch(contenedor.innerHTML, /Control manual/);
 });
 

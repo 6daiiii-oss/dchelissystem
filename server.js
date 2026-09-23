@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const db = require('./db');
 const { extraerPedidosCasino } = require('./casino-production');
+const { unirCronogramasCasino } = require('./casino-archive');
 
 const app = express();
 
@@ -1207,26 +1208,16 @@ app.put('/api/admin/usuarios/:id', requireAdminAuth, async (req, res) => {
 
 app.get('/api/admin/casinos/cronograma', requireAdminAuth, async (req, res) => {
   try {
-    const row = await dbGetAsync(`
+    const rows = await dbAllAsync(`
       SELECT id, nombre_archivo, fecha_inicio, fecha_fin, datos_json, creado_en
       FROM casino_cronogramas
       ORDER BY id DESC
-      LIMIT 1
     `);
-    if (!row) return res.json({ existe: false, cronograma: null });
-
-    let datos = {};
-    try { datos = JSON.parse(row.datos_json || '{}'); } catch { datos = {}; }
+    // Las fechas repetidas conservan la importación más reciente.
+    const cronograma = unirCronogramasCasino(rows);
     return res.json({
-      existe: true,
-      cronograma: {
-        id: row.id,
-        nombre_archivo: row.nombre_archivo,
-        fecha_inicio: row.fecha_inicio,
-        fecha_fin: row.fecha_fin,
-        creado_en: row.creado_en,
-        ...datos
-      }
+      existe: Boolean(cronograma),
+      cronograma
     });
   } catch (error) {
     return res.status(500).json({ error: 'No se pudo cargar el cronograma de casinos.' });
