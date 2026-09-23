@@ -1588,43 +1588,57 @@ setInterval(eliminarPedidosRegistradosAntiguos, 60 * 60 * 1000);
 
 // Endpoint: Obtener Pedidos Generales
 app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
+  const desde = req.query.desde;
+  const hasta = req.query.hasta;
+  if ((desde && !hasta) || (!desde && hasta) ||
+      (desde && (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || desde > hasta))) {
+    return res.status(400).json({ error: 'Rango de fechas inválido.' });
+  }
+  const rango = desde && hasta ? ' AND fecha_recoge >= ? AND fecha_recoge <= ?' : '';
+  const parametros = rango ? [desde, hasta] : [];
   db.all(`
         SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
           fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, registrado_en, despachado_por
     FROM pedidos
-    WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')
+    WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')${rango}
     ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
-  `, [], (err, pedidos) => {
+  `, parametros, (err, pedidos) => {
     if (err) return res.status(500).json({ error: err.message });
 
-    const pedidosFinales = pedidos.map((pedido) => ({
-      ...pedido,
-      estado: normalizarEstadoPedido(pedido.estado),
-      detalles: []
-    }));
+    const responder = (hayMas) => {
+      const pedidosFinales = pedidos.map((pedido) => ({
+        ...pedido,
+        estado: normalizarEstadoPedido(pedido.estado),
+        detalles: []
+      }));
+      if (!pedidosFinales.length) return res.json({ pedidos: [], hayMas });
 
-    let index = 0;
-    const cargarDetalles = () => {
-      if (index >= pedidosFinales.length) return res.json({ pedidos: pedidosFinales });
-
-      const pedido = pedidosFinales[index];
+      const pedidosPorId = new Map(pedidosFinales.map((pedido) => [pedido.id, pedido]));
+      const placeholders = pedidosFinales.map(() => '?').join(', ');
       db.all(`
-        SELECT producto_nombre, cantidad, subtotal, paquetes, foto_torta
+        SELECT pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta
         FROM detalles_pedido
-        WHERE pedido_id = ?
-        ORDER BY id ASC
-      `, [pedido.id], (errDetalle, detalles) => {
+        WHERE pedido_id IN (${placeholders})
+        ORDER BY pedido_id ASC, id ASC
+      `, pedidosFinales.map((pedido) => pedido.id), (errDetalle, detalles) => {
         if (errDetalle) return res.status(500).json({ error: errDetalle.message });
-        pedido.detalles = (detalles || []).map((item) => ({
-          ...item,
-          paquetes: item.paquetes ? JSON.parse(item.paquetes) : {}
-        }));
-        index += 1;
-        cargarDetalles();
+        for (const { pedido_id, ...item } of detalles || []) {
+          pedidosPorId.get(pedido_id).detalles.push({
+            ...item,
+            paquetes: item.paquetes ? JSON.parse(item.paquetes) : {}
+          });
+        }
+        res.json({ pedidos: pedidosFinales, hayMas });
       });
     };
 
-    cargarDetalles();
+    if (!rango) return responder(false);
+    db.get(`SELECT 1 AS existe FROM pedidos
+      WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')
+        AND fecha_recoge > ? LIMIT 1`, [hasta], (errorMas, siguiente) => {
+      if (errorMas) return res.status(500).json({ error: errorMas.message });
+      responder(Boolean(siguiente));
+    });
   });
 });
 

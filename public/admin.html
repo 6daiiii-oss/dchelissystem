@@ -274,16 +274,6 @@
       flex: 1 1 320px;
     }
 
-    .load-more-orders-wrap {
-      display: flex;
-      justify-content: center;
-      padding: 10px 0 2px;
-    }
-
-    .load-more-orders-btn {
-      min-width: 180px;
-    }
-
     .search-input:focus {
       border-color: #b75e36;
       box-shadow: 0 0 0 3px rgba(183,94,54,.12);
@@ -337,6 +327,7 @@
 
     #pedidosGeneral.cards-grid,
     #pedidosHistorial.cards-grid { display: block; }
+    #cargarMasPedidos[hidden] { display: none; }
     #pedidosGeneral .date-group .cards-grid,
     #pedidosHistorial .date-group .cards-grid {
       grid-template-columns: repeat(3, minmax(320px, 1fr));
@@ -2220,10 +2211,13 @@
           <h3>Pedidos generales</h3>
           <div class="general-order-actions no-print">
             <input id="buscarPedidosGenerales" class="search-input" type="search" placeholder="Buscar por nombre del cliente" autocomplete="off" />
-            <button class="btn btn-warning" type="button" onclick="imprimirTresBoletas()">Imprimir todos los pedidos</button>
+            <button class="btn btn-warning" type="button" onclick="imprimirTodosPedidos()">Imprimir todos los pedidos</button>
           </div>
         </div>
         <div id="pedidosGeneral" class="cards-grid"></div>
+        <div class="no-print" style="text-align:center; margin-top:18px;">
+          <button id="cargarMasPedidos" class="btn btn-ghost" type="button" hidden>Cargar más</button>
+        </div>
       </div>
     </section>
 
@@ -2543,8 +2537,24 @@
     let filtroHistorialPedidos = '';
     let buscarPedidosTimer = null;
     let buscarHistorialTimer = null;
-    const DIAS_PEDIDOS_POR_CARGA = 7;
-    let diasPedidosGeneralesVisibles = DIAS_PEDIDOS_POR_CARGA;
+    let ultimoDiaPedidosGenerales = '';
+    let diaBasePedidosGenerales = '';
+    let semanasAdicionalesPedidosGenerales = 0;
+    let numeroSolicitudPedidosGenerales = 0;
+
+    function fechaHoyPeru() {
+      const partes = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
+      }).formatToParts(new Date());
+      const valor = (tipo) => partes.find((parte) => parte.type === tipo).value;
+      return `${valor('year')}-${valor('month')}-${valor('day')}`;
+    }
+
+    function sumarDiasFecha(fecha, dias) {
+      const resultado = new Date(`${fecha}T12:00:00Z`);
+      resultado.setUTCDate(resultado.getUTCDate() + dias);
+      return resultado.toISOString().slice(0, 10);
+    }
 
     function escapeHtmlAdmin(value) {
       return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -4311,6 +4321,22 @@
       buscarPedidosTimer = setTimeout(() => cargarPedidosGenerales(), 250);
     });
 
+    document.getElementById('cargarMasPedidos')?.addEventListener('click', async (event) => {
+      const boton = event.currentTarget;
+      if (boton.disabled) return;
+      boton.disabled = true;
+      const limiteAnterior = ultimoDiaPedidosGenerales;
+      semanasAdicionalesPedidosGenerales += 1;
+      ultimoDiaPedidosGenerales = sumarDiasFecha(diaBasePedidosGenerales, 7 + 7 * semanasAdicionalesPedidosGenerales);
+      pedidosConocidos = null;
+      const cargado = await cargarPedidosGenerales();
+      if (!cargado) {
+        semanasAdicionalesPedidosGenerales -= 1;
+        ultimoDiaPedidosGenerales = limiteAnterior;
+      }
+      boton.disabled = false;
+    });
+
     document.getElementById('buscarHistorialPedidos')?.addEventListener('input', (event) => {
       filtroHistorialPedidos = event.target.value || '';
       clearTimeout(buscarHistorialTimer);
@@ -4906,8 +4932,21 @@
       }
     }
 
-    function imprimirTresBoletas(pedidoId = null) {
-      const pedidos = Array.from(pedidosDisponibles.values())
+    async function imprimirTodosPedidos() {
+      const ventana = window.open('', '_blank');
+      try {
+        const respuesta = await fetch('/api/admin/pedidos');
+        if (!respuesta.ok) throw new Error('Error al cargar pedidos');
+        const data = await respuesta.json();
+        imprimirTresBoletas(null, data.pedidos || [], ventana);
+      } catch (error) {
+        ventana?.close();
+        alert('No se pudieron cargar los pedidos para imprimir.');
+      }
+    }
+
+    function imprimirTresBoletas(pedidoId = null, pedidosExternos = null, ventana = null) {
+      const pedidos = (pedidosExternos || Array.from(pedidosDisponibles.values()))
         .sort((a, b) => String(a.fecha_recoge || '').localeCompare(String(b.fecha_recoge || ''))
           || String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
           || Number(a.id) - Number(b.id));
@@ -4916,6 +4955,7 @@
         : pedidos.filter((pedido) => Number(pedido.id) === Number(pedidoId));
 
       if (!pedidosParaImprimir.length || !window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
+        ventana?.close();
         alert('No se pudo preparar la impresión.');
         return;
       }
@@ -4999,7 +5039,8 @@
       });
 
       pdf.autoPrint();
-      const printWindow = window.open(pdf.output('bloburl'), '_blank');
+      const printWindow = ventana || window.open(pdf.output('bloburl'), '_blank');
+      if (ventana) ventana.location.href = pdf.output('bloburl');
       if (!printWindow) {
         alert('El navegador bloqueó la ventana de impresión. Permite ventanas emergentes para este panel.');
       }
@@ -5027,82 +5068,44 @@
       `;
     }
 
-    function fechaLocalISO(fecha = new Date()) {
-      const year = fecha.getFullYear();
-      const month = String(fecha.getMonth() + 1).padStart(2, '0');
-      const day = String(fecha.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-
-    function obtenerFechaLimitePedidosGenerales() {
-      const limite = new Date();
-      limite.setHours(12, 0, 0, 0);
-      limite.setDate(limite.getDate() + diasPedidosGeneralesVisibles);
-      return fechaLocalISO(limite);
-    }
-
-    function renderizarBotonCargarMasPedidos(hayMasPedidos) {
-      if (!hayMasPedidos) return '';
-      return `
-        <div class="load-more-orders-wrap">
-          <button type="button" class="btn btn-ghost load-more-orders-btn" onclick="cargarMasPedidosGenerales()">
-            Cargar más
-          </button>
-        </div>
-      `;
-    }
-
-    async function cargarMasPedidosGenerales() {
-      diasPedidosGeneralesVisibles += DIAS_PEDIDOS_POR_CARGA;
-      await cargarPedidosGenerales();
-    }
-
     async function cargarPedidosGenerales() {
+      const solicitud = ++numeroSolicitudPedidosGenerales;
       try {
-        const res = await fetch('/api/admin/pedidos');
+        const hoy = fechaHoyPeru();
+        if (diaBasePedidosGenerales !== hoy) {
+          diaBasePedidosGenerales = hoy;
+          ultimoDiaPedidosGenerales = sumarDiasFecha(hoy, 7 + 7 * semanasAdicionalesPedidosGenerales);
+        }
+        const res = await fetch(`/api/admin/pedidos?desde=${hoy}&hasta=${ultimoDiaPedidosGenerales}`);
+        if (!res.ok) throw new Error('No se pudieron cargar los pedidos');
         const data = await res.json();
+        if (solicitud !== numeroSolicitudPedidosGenerales) return true;
         const contenedor = document.getElementById('pedidosGeneral');
+        document.getElementById('cargarMasPedidos').hidden = !data.hayMas;
         const fechaActual = document.getElementById('fecha_filtro').value;
         pedidosDisponibles = new Map((data.pedidos || []).map(pedido => [pedido.id, pedido]));
         const idsActuales = new Set((data.pedidos || []).map(pedido => pedido.id));
         const terminoBusqueda = normalizarNombreProducto(filtroPedidosGenerales);
-        const pedidosCoincidentes = terminoBusqueda
+        const pedidosFiltrados = terminoBusqueda
           ? (data.pedidos || []).filter((pedido) => normalizarNombreProducto(pedido.cliente_nombre || '').includes(terminoBusqueda))
           : (data.pedidos || []);
-        const fechaLimite = obtenerFechaLimitePedidosGenerales();
-        const pedidosFiltrados = pedidosCoincidentes.filter((pedido) => {
-          const fechaPedido = String(pedido.fecha_recoge || '').trim();
-          return !fechaPedido || fechaPedido <= fechaLimite;
-        });
-        const hayMasPedidos = pedidosCoincidentes.some((pedido) => {
-          const fechaPedido = String(pedido.fecha_recoge || '').trim();
-          return Boolean(fechaPedido && fechaPedido > fechaLimite);
-        });
         const detectarNuevos = pedidosConocidos !== null && fechaPedidosConocida === fechaActual;
         const pedidosNuevos = detectarNuevos
           ? new Set([...idsActuales].filter(id => !pedidosConocidos.has(id)))
           : new Set();
 
         if (!data.pedidos || data.pedidos.length === 0) {
-          contenedor.innerHTML = '<p style="color:#667085;">No hay pedidos registrados.</p>';
-          return;
-        }
-
-        if (!pedidosCoincidentes.length) {
-          contenedor.innerHTML = '<p style="color:#667085;">No hay pedidos que coincidan con la búsqueda.</p>';
+          contenedor.innerHTML = '<p style="color:#667085;">No hay pedidos en este período.</p>';
           pedidosConocidos = idsActuales;
           fechaPedidosConocida = fechaActual;
-          return;
+          return true;
         }
 
         if (!pedidosFiltrados.length) {
-          contenedor.innerHTML = `
-            <p style="color:#667085;">No hay pedidos dentro del rango cargado.</p>
-            ${renderizarBotonCargarMasPedidos(hayMasPedidos)}
-          `;
+          contenedor.innerHTML = '<p style="color:#667085;">No hay pedidos que coincidan con la búsqueda.</p>';
           pedidosConocidos = idsActuales;
           fechaPedidosConocida = fechaActual;
-          return;
+          return true;
         }
 
         const grupos = pedidosFiltrados.reduce((acc, pedido) => {
@@ -5205,7 +5208,7 @@
               </div>
             </section>
           `;
-        }).join('') + renderizarBotonCargarMasPedidos(hayMasPedidos);
+        }).join('');
 
         pedidosConocidos = idsActuales;
         fechaPedidosConocida = fechaActual;
@@ -5262,8 +5265,13 @@
           });
         });
 
+        return true;
+
       } catch (error) {
-        document.getElementById('pedidosGeneral').innerHTML = '<p style="color:#b42318;">Error al cargar los pedidos.</p>';
+        if (solicitud === numeroSolicitudPedidosGenerales) {
+          document.getElementById('pedidosGeneral').innerHTML = '<p style="color:#b42318;">Error al cargar los pedidos.</p>';
+        }
+        return false;
       }
     }
 
