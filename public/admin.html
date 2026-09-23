@@ -328,6 +328,9 @@
     #pedidosGeneral.cards-grid,
     #pedidosHistorial.cards-grid { display: block; }
     #cargarMasPedidos[hidden] { display: none; }
+    #cargarMasHistorial[hidden] { display: none; }
+    .date-group { content-visibility: auto; contain-intrinsic-size: auto 450px; }
+    @media print { .date-group { content-visibility: visible; contain-intrinsic-size: none; } }
     #pedidosGeneral .date-group .cards-grid,
     #pedidosHistorial .date-group .cards-grid {
       grid-template-columns: repeat(3, minmax(320px, 1fr));
@@ -2385,6 +2388,9 @@
           <input id="buscarHistorialPedidos" class="search-input no-print" type="search" placeholder="Buscar por nombre del cliente" autocomplete="off" />
         </div>
         <div id="pedidosHistorial" class="cards-grid"></div>
+        <div class="no-print" style="text-align:center; margin-top:18px;">
+          <button id="cargarMasHistorial" class="btn btn-ghost" type="button" hidden>Cargar más historial</button>
+        </div>
       </div>
     </section>
 
@@ -2539,8 +2545,14 @@
     let buscarHistorialTimer = null;
     let ultimoDiaPedidosGenerales = '';
     let diaBasePedidosGenerales = '';
-    let semanasAdicionalesPedidosGenerales = 0;
+    let bloquesAdicionalesPedidosGenerales = 0;
     let numeroSolicitudPedidosGenerales = 0;
+    let firmaPedidosGenerales = '';
+    let firmaHistorialPedidos = '';
+    let pedidosHistorialCargados = [];
+    let numeroSolicitudHistorial = 0;
+    let numeroSolicitudDetalle = 0;
+    const panelesCargados = new Set();
 
     function fechaHoyPeru() {
       const partes = new Intl.DateTimeFormat('en-US', {
@@ -3702,8 +3714,7 @@
         if (fotosTorta) fotosTorta.innerHTML = '';
         document.getElementById('quickRestante').value = 'S/. 0.00';
         renderQuickEntryPreview();
-        await cargarPedidosGenerales();
-        await cargarMatriz();
+        await refrescarVistasTrasCambioPedido();
         alert(`Pedido ${resultado.codigo || 'registrado'} generado correctamente.`);
       } catch (error) {
         alert(error.message || 'No se pudo registrar el pedido rápido.');
@@ -4166,7 +4177,7 @@
         mostrarCargaCasino(true, 'Generando las hojas semanales y la vista previa…');
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         renderizarProduccionCasinos(data);
-        await Promise.all([cargarPedidosGenerales(), cargarMatriz()]);
+        await refrescarVistasTrasCambioPedido();
 
         const sinReconocer = Array.isArray(data.productos_no_reconocidos) ? data.productos_no_reconocidos.length : 0;
         const advertencias = Array.isArray(data.advertencias) ? data.advertencias.length : 0;
@@ -4310,15 +4321,44 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
         document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${btn.dataset.tab}`));
         localStorage.setItem(ADMIN_TAB_KEY, btn.dataset.tab);
-        if (btn.dataset.tab === 'usuarios') cargarUsuariosAdmin();
-        if (btn.dataset.tab === 'casinos' && !window.__casinoProduccionData) cargarCronogramaCasinoPersistido();
+        if (adminStarted) cargarPanelActivo(btn.dataset.tab);
       });
     });
+
+    async function cargarPanelActivo(tab) {
+      if (tab === 'general') return cargarPedidosGenerales();
+      if (tab === 'historial' && !panelesCargados.has(tab)) return cargarHistorialPedidos();
+      if ((tab === 'digitacion' || tab === 'cocina') && !panelesCargados.has('catalogo')) {
+        await cargarCatalogoRapido();
+        panelesCargados.add('catalogo');
+      }
+      if (tab === 'cocina') return cargarMatriz();
+      if (tab === 'usuarios') return cargarUsuariosAdmin();
+      if (tab === 'casinos' && !window.__casinoProduccionData) return cargarCronogramaCasinoPersistido();
+      if (tab === 'digitacion' && !panelesCargados.has(tab)) {
+        renderQuickEntryPreview();
+        panelesCargados.add(tab);
+      }
+      if (tab === 'inventario' && !panelesCargados.has(tab)) {
+        await cargarInventarioAdmin();
+        await generarCompraDia();
+        panelesCargados.add(tab);
+      }
+    }
+
+    async function refrescarVistasTrasCambioPedido() {
+      panelesCargados.delete('historial');
+      firmaProduccion = '';
+      const tab = document.querySelector('.tab-btn.active')?.dataset.tab;
+      if (tab === 'general') await cargarPedidosGenerales();
+      if (tab === 'historial') await cargarHistorialPedidos();
+      if (tab === 'cocina') await cargarMatriz();
+    }
 
     document.getElementById('buscarPedidosGenerales')?.addEventListener('input', (event) => {
       filtroPedidosGenerales = event.target.value || '';
       clearTimeout(buscarPedidosTimer);
-      buscarPedidosTimer = setTimeout(() => cargarPedidosGenerales(), 250);
+      buscarPedidosTimer = setTimeout(() => cargarPedidosGenerales(), 350);
     });
 
     document.getElementById('cargarMasPedidos')?.addEventListener('click', async (event) => {
@@ -4326,12 +4366,12 @@
       if (boton.disabled) return;
       boton.disabled = true;
       const limiteAnterior = ultimoDiaPedidosGenerales;
-      semanasAdicionalesPedidosGenerales += 1;
-      ultimoDiaPedidosGenerales = sumarDiasFecha(diaBasePedidosGenerales, 7 + 7 * semanasAdicionalesPedidosGenerales);
+      bloquesAdicionalesPedidosGenerales += 1;
+      ultimoDiaPedidosGenerales = sumarDiasFecha(diaBasePedidosGenerales, 3 + 3 * bloquesAdicionalesPedidosGenerales);
       pedidosConocidos = null;
       const cargado = await cargarPedidosGenerales();
       if (!cargado) {
-        semanasAdicionalesPedidosGenerales -= 1;
+        bloquesAdicionalesPedidosGenerales -= 1;
         ultimoDiaPedidosGenerales = limiteAnterior;
       }
       boton.disabled = false;
@@ -4339,8 +4379,17 @@
 
     document.getElementById('buscarHistorialPedidos')?.addEventListener('input', (event) => {
       filtroHistorialPedidos = event.target.value || '';
+      pedidosHistorialCargados = [];
       clearTimeout(buscarHistorialTimer);
-      buscarHistorialTimer = setTimeout(() => cargarHistorialPedidos(), 250);
+      buscarHistorialTimer = setTimeout(() => cargarHistorialPedidos(), 350);
+    });
+
+    document.getElementById('cargarMasHistorial')?.addEventListener('click', async (event) => {
+      const boton = event.currentTarget;
+      if (boton.disabled) return;
+      boton.disabled = true;
+      await cargarHistorialPedidos(true);
+      boton.disabled = false;
     });
 
     function poblarHorasSelector(selectorId, valorPorDefecto = '18:00') {
@@ -4522,7 +4571,8 @@
       }
     }
 
-    function abrirDetallePedido(id) {
+    async function abrirDetallePedido(id) {
+      const solicitud = ++numeroSolicitudDetalle;
       const pedidoActivo = pedidosDisponibles.get(Number(id));
       const pedidoArchivado = pedidosHistorialDisponibles.get(Number(id));
       const pedido = pedidoActivo || pedidoArchivado;
@@ -4533,6 +4583,27 @@
       if (!contenido || !codigo) return;
 
       codigo.textContent = pedido.codigo || `PED-${pedido.id}`;
+      const modal = document.getElementById('pedidoDetalleModal');
+      modal.classList.add('active');
+      const tieneFotos = pedido.tiene_foto_torta || (pedido.detalles || []).some((item) => item.tiene_foto_torta);
+      if (tieneFotos && !pedido.fotos_cargadas) {
+        contenido.textContent = 'Cargando detalle del pedido…';
+        try {
+          const respuesta = await fetch(`/api/admin/pedidos/${pedido.id}/fotos`);
+          if (!respuesta.ok) throw new Error('No se pudieron cargar las fotos');
+          const fotos = await respuesta.json();
+          if (solicitud !== numeroSolicitudDetalle || !modal.classList.contains('active')) return;
+          if (fotos.fotos_detalles.length !== (pedido.detalles || []).length) throw new Error('El pedido cambió. Vuelve a abrirlo.');
+          pedido.foto_torta = fotos.foto_torta;
+          pedido.detalles.forEach((item, indice) => { item.foto_torta = fotos.fotos_detalles[indice]; });
+          pedido.fotos_cargadas = true;
+        } catch (error) {
+          if (solicitud === numeroSolicitudDetalle) {
+            contenido.innerHTML = `<p>No se pudo cargar el pedido completo.</p><button type="button" class="btn btn-ghost" onclick="abrirDetallePedido(${pedido.id})">Reintentar</button>`;
+          }
+          return;
+        }
+      }
       contenido.innerHTML = `
         <div class="pedido-modal-info">
           <div><span class="label">Nombre</span><div class="value">${pedido.cliente_nombre || 'Sin nombre'}</div></div>
@@ -4569,7 +4640,6 @@
           </div>
         `}
       `;
-      document.getElementById('pedidoDetalleModal').classList.add('active');
     }
 
     function crearFilaItemPedido(item = {}, index = 0) {
@@ -4755,7 +4825,7 @@
       const tarjeta = document.querySelector(`[data-pedido-id="${id}"]`);
       if (tarjeta) tarjeta.className = `order-card estado-${normalizarEstadoClase(estado)}`;
       document.getElementById('pedidoDetalleModal').classList.remove('active');
-      await Promise.all([cargarPedidosGenerales(), cargarHistorialPedidos()]);
+      await refrescarVistasTrasCambioPedido();
     }
 
     async function eliminarPedidoDesdeDetalle(id) {
@@ -4766,8 +4836,7 @@
         return;
       }
       document.getElementById('pedidoDetalleModal').classList.remove('active');
-      await Promise.all([cargarPedidosGenerales(), cargarHistorialPedidos()]);
-      await cargarMatriz();
+      await refrescarVistasTrasCambioPedido();
     }
 
     async function descargarBoletaAdmin(id) {
@@ -4935,7 +5004,7 @@
     async function imprimirTodosPedidos() {
       const ventana = window.open('', '_blank');
       try {
-        const respuesta = await fetch('/api/admin/pedidos');
+        const respuesta = await fetch('/api/admin/pedidos?resumen=1');
         if (!respuesta.ok) throw new Error('Error al cargar pedidos');
         const data = await respuesta.json();
         imprimirTresBoletas(null, data.pedidos || [], ventana);
@@ -5074,12 +5143,15 @@
         const hoy = fechaHoyPeru();
         if (diaBasePedidosGenerales !== hoy) {
           diaBasePedidosGenerales = hoy;
-          ultimoDiaPedidosGenerales = sumarDiasFecha(hoy, 7 + 7 * semanasAdicionalesPedidosGenerales);
+          ultimoDiaPedidosGenerales = sumarDiasFecha(hoy, 3 + 3 * bloquesAdicionalesPedidosGenerales);
         }
-        const res = await fetch(`/api/admin/pedidos?desde=${hoy}&hasta=${ultimoDiaPedidosGenerales}`);
+        const res = await fetch(`/api/admin/pedidos?desde=${hoy}&hasta=${ultimoDiaPedidosGenerales}&resumen=1`);
         if (!res.ok) throw new Error('No se pudieron cargar los pedidos');
         const data = await res.json();
         if (solicitud !== numeroSolicitudPedidosGenerales) return true;
+        const firma = JSON.stringify([hoy, ultimoDiaPedidosGenerales, filtroPedidosGenerales, data.hayMas, data.pedidos]);
+        if (firma === firmaPedidosGenerales) return true;
+        firmaPedidosGenerales = firma;
         const contenedor = document.getElementById('pedidosGeneral');
         document.getElementById('cargarMasPedidos').hidden = !data.hayMas;
         const fechaActual = document.getElementById('fecha_filtro').value;
@@ -5129,7 +5201,6 @@
               <h4 class="date-group-title">${formatearFecha(fecha)}</h4>
               <div class="cards-grid">
                 ${pedidos.map((pedido) => {
-                  const total = Number(pedido.monto_total || 0);
                   const items = (pedido.detalles || []).map(item => `
                     <li>
                       <span class="item-name">${item.producto_nombre}</span>
@@ -5152,56 +5223,6 @@
                         <strong class="schedule-time">${pedido.hora_recoge || '--:--'}</strong>
                       </div>
                       ${renderizarResumenPago(pedido)}
-                      <div class="order-details">
-                      <div class="order-info">
-                        <div>
-                          <span class="label">Cliente</span>
-                          <div class="value">${pedido.cliente_nombre || 'Sin nombre'}</div>
-                        </div>
-                        <div>
-                          <span class="label">Teléfono</span>
-                          <div class="value">${pedido.celular || '-'}</div>
-                        </div>
-                        <div>
-                          <span class="label">Fecha / Hora</span>
-                            <div class="value">${formatearFecha(pedido.fecha_recoge)}</div>
-                        </div>
-                        <div>
-                          <span class="label">Pago</span>
-                          <div class="value">${pedido.metodo_pago || 'Yape'}</div>
-                        </div>
-                        <div>
-                          <span class="label">Total</span>
-                          <div class="value">S/. ${total.toFixed(2)}</div>
-                        </div>
-                        <div>
-                          <span class="label">Adelanto</span>
-                          <div class="value">S/. ${(Number(pedido.adelanto || 0)).toFixed(2)}</div>
-                        </div>
-                        <div>
-                          <span class="label">Restante</span>
-                          <div class="value">S/. ${(total - Number(pedido.adelanto || 0)).toFixed(2)}</div>
-                        </div>
-                        <div>
-                          <span class="label">Comprobante</span>
-                          <div class="value">${pedido.tipo_comprobante ? `${pedido.tipo_comprobante === 'factura' ? 'Factura - RUC' : 'Boleta - DNI'} ${pedido.numero_documento || ''}` : 'Sin comprobante'}</div>
-                        </div>
-                      </div>
-                      <div class="order-actions">
-                        <label>Estado del pedido</label>
-                        <select class="status-select" data-id="${pedido.id}">
-                          ${['Pendiente de verificación de pago', 'Pendiente de pago', 'Registrado', 'En preparación', 'Listo para despacho', 'Despachado (D\'chelis)'].map((estado) => `
-                            <option value="${estado}" ${((pedido.estado || 'Registrado') === estado) ? 'selected' : ''}>${estado}</option>
-                          `).join('')}
-                        </select>
-                      </div>
-                      <div style="margin-top: 10px;">
-                        <button type="button" class="btn btn-ghost" style="width:100%; margin-bottom:8px;" data-boleta-id="${pedido.id}">Descargar orden de pedido</button>
-                        <button type="button" class="btn btn-warning" style="width:100%; margin-bottom:8px;" data-print-order-id="${pedido.id}">Imprimir orden de pedido</button>
-                        <button type="button" class="delete-order-btn" data-delete-id="${pedido.id}">Eliminar pedido</button>
-                      </div>
-                      <ul class="items-list">${items || '<li><span class="item-name">Sin productos</span></li>'}</ul>
-                      </div>
                     </article>
                   `;
                 }).join('')}
@@ -5214,76 +5235,39 @@
         fechaPedidosConocida = fechaActual;
         if (pedidosNuevos.size > 0) reproducirSonidoPedidoNuevo();
 
-        document.querySelectorAll('.status-select').forEach((select) => {
-          select.addEventListener('change', async (event) => {
-            const id = event.target.dataset.id;
-            const estado = event.target.value;
-            try {
-              const response = await fetch(`/api/admin/pedidos/${id}/estado`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ estado })
-              });
-
-              if (!response.ok) throw new Error('No se pudo actualizar el estado');
-              await Promise.all([cargarPedidosGenerales(), cargarHistorialPedidos()]);
-            } catch (error) {
-              alert('No se pudo actualizar el estado del pedido.');
-              event.target.value = event.target.dataset.previous || 'Registrado';
-            }
-          });
-        });
-
-        document.querySelectorAll('.delete-order-btn').forEach((button) => {
-          button.addEventListener('click', async () => {
-            const id = button.dataset.deleteId;
-            const confirmacion = confirm('¿Deseas eliminar este pedido del cliente?');
-            if (!confirmacion) return;
-
-            try {
-              const response = await fetch(`/api/admin/pedidos/${id}`, { method: 'DELETE' });
-              if (!response.ok) throw new Error('No se pudo eliminar');
-              await cargarPedidosGenerales();
-              await cargarMatriz();
-            } catch (error) {
-              alert('No se pudo eliminar el pedido.');
-            }
-          });
-        });
-
-        document.querySelectorAll('[data-boleta-id]').forEach((button) => {
-          button.addEventListener('click', (event) => {
-            event.stopPropagation();
-            descargarBoletaAdmin(button.dataset.boletaId);
-          });
-        });
-
-        document.querySelectorAll('[data-print-order-id]').forEach((button) => {
-          button.addEventListener('click', (event) => {
-            event.stopPropagation();
-            imprimirOrdenPedido(button.dataset.printOrderId);
-          });
-        });
-
         return true;
 
       } catch (error) {
         if (solicitud === numeroSolicitudPedidosGenerales) {
-          document.getElementById('pedidosGeneral').innerHTML = '<p style="color:#b42318;">Error al cargar los pedidos.</p>';
+          const contenedor = document.getElementById('pedidosGeneral');
+          if (!contenedor.children.length) contenedor.innerHTML = '<p style="color:#b42318;">Error al cargar los pedidos.</p>';
         }
         return false;
       }
     }
 
-    async function cargarHistorialPedidos() {
+    async function cargarHistorialPedidos(cargarMas = false) {
+      const solicitud = ++numeroSolicitudHistorial;
       try {
-        const res = await fetch('/api/admin/historial-pedidos');
+        const offset = cargarMas ? pedidosHistorialCargados.length : 0;
+        const buscar = encodeURIComponent(filtroHistorialPedidos.trim());
+        const res = await fetch(`/api/admin/historial-pedidos?offset=${offset}&buscar=${buscar}&resumen=1`);
+        if (!res.ok) throw new Error('No se pudo cargar el historial');
         const data = await res.json();
+        if (solicitud !== numeroSolicitudHistorial) return;
         const contenedor = document.getElementById('pedidosHistorial');
         if (!contenedor) return;
 
-        const pedidos = data.pedidos || [];
+        pedidosHistorialCargados = cargarMas
+          ? [...pedidosHistorialCargados, ...(data.pedidos || [])]
+          : (data.pedidos || []);
+        panelesCargados.add('historial');
+        document.getElementById('cargarMasHistorial').hidden = !data.hayMas;
+        const pedidos = pedidosHistorialCargados;
         pedidosHistorialDisponibles = new Map(pedidos.map((pedido) => [pedido.id, pedido]));
+        const firma = JSON.stringify([filtroHistorialPedidos, data.hayMas, pedidos]);
+        if (firma === firmaHistorialPedidos) return;
+        firmaHistorialPedidos = firma;
         const terminoBusqueda = normalizarNombreProducto(filtroHistorialPedidos);
         const pedidosFiltrados = terminoBusqueda
           ? pedidos.filter((pedido) => normalizarNombreProducto(pedido.cliente_nombre || '').includes(terminoBusqueda))
@@ -5341,7 +5325,9 @@
           `;
         }).join('');
       } catch (error) {
-        document.getElementById('pedidosHistorial')?.replaceChildren();
+        if (solicitud === numeroSolicitudHistorial && !cargarMas) {
+          document.getElementById('pedidosHistorial').textContent = 'No se pudo cargar el historial.';
+        }
         console.error('No se pudo cargar el historial:', error);
       }
     }
@@ -5450,7 +5436,7 @@
   async function marcarPedidosFechaEnPreparacion(fecha) {
     if (!fecha) return;
     try {
-      const response = await fetch('/api/admin/pedidos');
+      const response = await fetch(`/api/admin/pedidos?desde=${fecha}&hasta=${fecha}&resumen=1`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'No se pudo cargar pedidos');
       const pedidos = (data.pedidos || []).filter((pedido) => pedido.fecha_recoge === fecha);
@@ -5691,6 +5677,8 @@
 
       window.__datosProduccionClientes = data.clientes || [];
       window.__datosProduccionDetalles = data.detalles || [];
+      const nuevaFirmaProduccion = JSON.stringify({clientes:data.clientes,detalles:data.detalles,ventana:data.ventana});
+      if (firmaProduccion === nuevaFirmaProduccion) return;
 
       const etiqueta = document.getElementById('kitchenWindowLabel');
       if (etiqueta) etiqueta.textContent = `Ventana: ${data.ventana?.desde || ''} → ${data.ventana?.hasta || ''}`;
@@ -5715,7 +5703,7 @@
       paginasCocina.forEach((pagina) => pagina.classList.remove('last-kitchen-page'));
       paginasCocina.at(-1)?.classList.add('last-kitchen-page');
 
-      firmaProduccion = JSON.stringify({clientes:data.clientes,detalles:data.detalles,ventana:data.ventana});
+      firmaProduccion = nuevaFirmaProduccion;
     } catch (error) {
       alert(error.message || 'Error al obtener los datos de producción.');
     }
@@ -5729,27 +5717,27 @@
 
     async function iniciarAdmin() {
       cargarEstadoDigitacion();
-      renderQuickEntryPreview();
-      await cargarCatalogoRapido();
-      await cargarInventarioAdmin();
-      await cargarPedidosGenerales();
-      await cargarHistorialPedidos();
-      await cargarMatriz();
-      await cargarCronogramaCasinoPersistido();
-      await cargarUsuariosAdmin();
       const fechaInventario = document.getElementById('inventarioFecha');
       if (fechaInventario && !fechaInventario.value) fechaInventario.value = new Date().toISOString().slice(0, 10);
-      await generarCompraDia();
+      const tabActual = document.querySelector('.tab-btn.active')?.dataset.tab || 'general';
+      await cargarPanelActivo(tabActual);
 
+      let ciclos = 0;
       setInterval(async () => {
         if (document.hidden || actualizacionEnCurso) return;
+        if (document.getElementById('pedidoDetalleModal').classList.contains('active')) return;
+        const tab = document.querySelector('.tab-btn.active')?.dataset.tab;
+        if (!['general', 'historial', 'cocina'].includes(tab)) return;
         actualizacionEnCurso = true;
         try {
-          await Promise.all([cargarPedidosGenerales(), cargarHistorialPedidos(), cargarMatriz()]);
+          ciclos += 1;
+          if (tab === 'general') await cargarPedidosGenerales();
+          if (tab === 'historial' && ciclos % 3 === 0 && pedidosHistorialCargados.length <= 50) await cargarHistorialPedidos();
+          if (tab === 'cocina' && ciclos % 3 === 0) await cargarMatriz();
         } finally {
           actualizacionEnCurso = false;
         }
-      }, 5000);
+      }, 10000);
     }
 
     cargarEstadoDigitacion();

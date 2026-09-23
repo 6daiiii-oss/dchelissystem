@@ -1588,6 +1588,7 @@ setInterval(eliminarPedidosRegistradosAntiguos, 60 * 60 * 1000);
 
 // Endpoint: Obtener Pedidos Generales
 app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
+  const resumen = req.query.resumen === '1';
   const desde = req.query.desde;
   const hasta = req.query.hasta;
   if ((desde && !hasta) || (!desde && hasta) ||
@@ -1598,7 +1599,7 @@ app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
   const parametros = rango ? [desde, hasta] : [];
   db.all(`
         SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-          fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, registrado_en, despachado_por
+          fecha_recoge, hora_recoge, dedicatoria, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, registrado_en, despachado_por
     FROM pedidos
     WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')${rango}
     ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
@@ -1616,7 +1617,7 @@ app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
       const pedidosPorId = new Map(pedidosFinales.map((pedido) => [pedido.id, pedido]));
       const placeholders = pedidosFinales.map(() => '?').join(', ');
       db.all(`
-        SELECT pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta
+        SELECT pedido_id, producto_nombre, cantidad, subtotal, paquetes, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}
         FROM detalles_pedido
         WHERE pedido_id IN (${placeholders})
         ORDER BY pedido_id ASC, id ASC
@@ -1644,44 +1645,66 @@ app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
 
 // Endpoint: Obtener Historial de Pedidos
 app.get('/api/admin/historial-pedidos', requireAdminAuth, (req, res) => {
+  const resumen = req.query.resumen === '1';
+  const limite = 50;
+  const offset = Number(req.query.offset || 0);
+  if (!Number.isInteger(offset) || offset < 0 || offset > 100000) {
+    return res.status(400).json({ error: 'Posición inválida.' });
+  }
+  const buscar = String(req.query.buscar || '').trim().slice(0, 100)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const condicionBusqueda = buscar ? `
+      AND translate(lower(cliente_nombre), 'áéíóúüñ', 'aeiouun') LIKE ?` : '';
+  const parametros = buscar ? [`%${buscar}%`, limite + 1, offset] : [limite + 1, offset];
   db.all(`
     SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-      fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, registrado_en, despachado_por
+      fecha_recoge, hora_recoge, dedicatoria, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, registrado_en, despachado_por
     FROM pedidos
     WHERE COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
       AND COALESCE(registrado_en, fecha_registro) >= (CURRENT_TIMESTAMP - INTERVAL '1 year')
+      ${condicionBusqueda}
     ORDER BY fecha_recoge DESC, hora_recoge DESC, id DESC
-  `, [], (err, pedidos) => {
+    LIMIT ? OFFSET ?
+  `, parametros, (err, pedidos) => {
     if (err) return res.status(500).json({ error: err.message });
-
-    const pedidosFinales = (pedidos || []).map((pedido) => ({
+    const hayMas = pedidos.length > limite;
+    const pedidosFinales = pedidos.slice(0, limite).map((pedido) => ({
       ...pedido,
       estado: normalizarEstadoPedido(pedido.estado),
       detalles: []
     }));
+    if (!pedidosFinales.length) return res.json({ pedidos: [], hayMas });
 
-    let index = 0;
-    const cargarDetalles = () => {
-      if (index >= pedidosFinales.length) return res.json({ pedidos: pedidosFinales });
-
-      const pedido = pedidosFinales[index];
+    const pedidosPorId = new Map(pedidosFinales.map((pedido) => [pedido.id, pedido]));
+    const placeholders = pedidosFinales.map(() => '?').join(', ');
       db.all(`
-        SELECT producto_nombre, cantidad, subtotal, paquetes, foto_torta
+        SELECT pedido_id, producto_nombre, cantidad, subtotal, paquetes, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}
         FROM detalles_pedido
-        WHERE pedido_id = ?
-        ORDER BY id ASC
-      `, [pedido.id], (errDetalle, detalles) => {
+        WHERE pedido_id IN (${placeholders})
+        ORDER BY pedido_id ASC, id ASC
+      `, pedidosFinales.map((pedido) => pedido.id), (errDetalle, detalles) => {
         if (errDetalle) return res.status(500).json({ error: errDetalle.message });
-        pedido.detalles = (detalles || []).map((item) => ({
-          ...item,
-          paquetes: item.paquetes ? JSON.parse(item.paquetes) : {}
-        }));
-        index += 1;
-        cargarDetalles();
+        for (const { pedido_id, ...item } of detalles || []) {
+          pedidosPorId.get(pedido_id).detalles.push({
+            ...item,
+            paquetes: item.paquetes ? JSON.parse(item.paquetes) : {}
+          });
+        }
+        res.json({ pedidos: pedidosFinales, hayMas });
       });
-    };
+  });
+});
 
-    cargarDetalles();
+app.get('/api/admin/pedidos/:id/fotos', requireAdminAuth, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Pedido inválido.' });
+  db.get('SELECT foto_torta FROM pedidos WHERE id = ?', [id], (error, pedido) => {
+    if (error) return res.status(500).json({ error: error.message });
+    if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado.' });
+    db.all('SELECT foto_torta FROM detalles_pedido WHERE pedido_id = ? ORDER BY id ASC', [id], (errorDetalles, detalles) => {
+      if (errorDetalles) return res.status(500).json({ error: errorDetalles.message });
+      res.json({ foto_torta: pedido.foto_torta || '', fotos_detalles: detalles.map((item) => item.foto_torta || '') });
+    });
   });
 });
 
