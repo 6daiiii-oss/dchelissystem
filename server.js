@@ -6,6 +6,7 @@ const ExcelJS = require('exceljs');
 const db = require('./db');
 const { extraerPedidosCasino } = require('./casino-production');
 const { unirCronogramasCasino } = require('./casino-archive');
+const { resolverPetipanNombre } = require('./public/production-classification');
 
 const app = express();
 
@@ -616,6 +617,8 @@ function productoEsCocina(nombre) {
 }
 
 function resolverNombreCocina(nombre) {
+  const petipan = resolverPetipanNombre(nombre);
+  if (petipan) return petipan;
   const valor = normalizarProducto(nombre);
   if (!valor) return null;
 
@@ -699,6 +702,8 @@ const CASINO_PETIPAN_VARIANTES = Object.fromEntries(Object.entries({
 }).map(([clave, valor]) => [normalizarProducto(clave), valor]));
 
 function resolverVariantePetipanCasino(nombre) {
+  const variante = resolverPetipanNombre(nombre);
+  if (variante) return variante;
   const limpio = String(nombre || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
   const clave = normalizarProducto(limpio);
   if (!clave || !/^PETIPAN(?:\s|$)/.test(clave)) return null;

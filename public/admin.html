@@ -7,7 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="digitacion-config.js"></script>
-<script src="production-classification.js?v=2"></script>
+<script src="production-classification.js?v=3"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -2101,6 +2101,7 @@
     .production-main-table th { background:#f3f4f6; text-align:left; font-weight:900; }
     .production-main-table th:first-child { width:78%; }
     .production-main-table th:last-child { width:22%; text-align:right; }
+    .production-main-table .production-group-row th { width:auto; padding:5px; background:#e7eaed; text-align:left; font-size:10px; letter-spacing:.04em; }
     .production-prod-name { font-weight:800; overflow-wrap:anywhere; }
     .production-total { font-weight:900; text-align:right; white-space:nowrap; }
     .production-blank-space { min-height:44mm; }
@@ -3012,6 +3013,8 @@
     // "Alfajorcito de Chocolate" caía en "ALFAJOR" (alias corto "ALFAJORCITO")
     // antes de llegar a revisar "ALFAJOR CHOCOLATE".
     function resolverNombreCocina(nombre) {
+      const petipan = resolverPetipanNombre(nombre);
+      if (petipan) return petipan;
       const valor = normalizarNombreProducto(nombre);
       if (!valor) return null;
 
@@ -5393,7 +5396,28 @@
       return lista.filter((producto) => presentes.has(normalizarNombreProducto(producto)));
     }
 
+    function obtenerListasEmbalaje(detalles) {
+      const bocaditos = filtrarProductosConPedidos(resolverProductoNombres(), detalles);
+      const extras = filtrarProductosConPedidos(obtenerProductosExtraParaProduccion(), detalles);
+      const conocidos = new Set([...bocaditos, ...extras].map(normalizarNombreProducto));
+      const resueltos = new Map();
+      for (const detalle of detalles) {
+        if (!(Number(detalle.cantidad || 0) > 0)) continue;
+        const original = detalle.producto_nombre;
+        if (!resueltos.has(original)) resueltos.set(original, obtenerProductoResolucion(original) || original);
+        const nombre = resueltos.get(original);
+        const clave = normalizarNombreProducto(nombre);
+        if (!clave || conocidos.has(clave)) continue;
+        conocidos.add(clave);
+        const grupo = grupoProductoProduccion(nombre, normalizarNombreProducto);
+        (grupo === 'Bocaditos' ? bocaditos : extras).push(nombre);
+      }
+      return { bocaditos, extras };
+    }
+
   function obtenerProductoResolucion(nombre) {
+    const petipan = resolverPetipanNombre(nombre);
+    if (petipan) return petipan;
     const clave = normalizarNombreProducto(nombre);
     const extras = obtenerProductosExtraParaProduccion();
 
@@ -5596,7 +5620,7 @@
     const { filas, especiales } = clasificarHojaProduccion(
       detalles, data.clientes || [], obtenerProductoResolucion, normalizarNombreProducto
     );
-    const numeroPaginas = Math.max(1, Math.ceil(filas.length / 34), Math.ceil(especiales.length / 25));
+    const numeroPaginas = Math.max(1, Math.ceil(filas.length / 30), Math.ceil(especiales.length / 25));
     const porPagina = Math.ceil(filas.length / numeroPaginas);
     const especialesPorPagina = Math.ceil(especiales.length / numeroPaginas);
 
@@ -5612,7 +5636,8 @@
           <div class="production-layout">
             <table class="production-main-table">
               <thead><tr><th>PRODUCTO</th><th>TOTAL</th></tr></thead>
-              <tbody>${bloque.length ? bloque.map((item) => `
+              <tbody>${bloque.length ? bloque.map((item, indice) => `
+                ${indice === 0 || bloque[indice - 1].grupo !== item.grupo ? `<tr class="production-group-row"><th colspan="2">${escapeHtmlAdmin(item.grupo.toUpperCase())}</th></tr>` : ''}
                 <tr><td class="production-prod-name">${escapeHtmlAdmin(item.nombre.toUpperCase())}</td><td class="production-total">${item.total}</td></tr>
               `).join('') : '<tr><td colspan="2">Sin producción en esta ventana.</td></tr>'}</tbody>
             </table>
@@ -5654,17 +5679,18 @@
 
       renderizarHojaProduccionCocina(data);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const listasEmbalaje = obtenerListasEmbalaje(data.detalles || []);
       renderizarMatrizProducto([
         {
           contenedorId:'hojaProduccion',
           titulo:'BOCADITOS / TORTAS',
-          productosLista:filtrarProductosConPedidos(resolverProductoNombres(), data.detalles || []),
+          productosLista:listasEmbalaje.bocaditos,
           extraClass:''
         },
         {
           contenedorId:'hojaProduccionExtra',
           titulo:'SÁNGUCHES / TRIPLES / PANES',
-          productosLista:filtrarProductosConPedidos(obtenerProductosExtraParaProduccion(), data.detalles || []),
+          productosLista:listasEmbalaje.extras,
           extraClass:' kitchen-page-updated'
         }
       ]);

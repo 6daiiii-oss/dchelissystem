@@ -61,3 +61,16 @@ test('un pedido del lunes permanece visible hasta que termina su semana', () => 
   assert.equal(semanas[0].finSemana >= '2026-09-23', true);
   assert.equal(semanas[0].finSemana < '2026-09-28', true);
 });
+
+test('los cronogramas ya guardados agrupan petit pan mini con petipan sin juntar los rellenos', () => {
+  const cronograma = unirCronogramasCasino([{ id: 7, datos_json: JSON.stringify({ dias: [{
+    fecha: '2026-09-24', casinos: ['Casino A'], productos: [
+      { nombre: 'Petit pan mini', grupo: 'principal', total: 10, por_casino: { 'Casino A': 10 } },
+      { nombre: 'Petipan', grupo: 'extra', total: 5, por_casino: { 'Casino A': 5 } },
+      { nombre: 'Petipan de pollo', grupo: 'extra', total: 3, por_casino: { 'Casino A': 3 } }
+    ]
+  }] }) }]);
+  assert.deepEqual(cronograma.dias[0].productos.map((p) => [p.nombre, p.grupo, p.total, p.por_casino['Casino A']]), [
+    ['Petipan', 'extra', 15, 15], ['Petipan de Pollo', 'extra', 3, 3]
+  ]);
+});
