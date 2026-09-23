@@ -19,8 +19,20 @@ function resolverPetipanNombre(nombre) {
   return `Petipan ${originalRelleno}`;
 }
 
+function resolverCiabattaNombre(nombre) {
+  const original = String(nombre || '').trim();
+  const clave = original.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  if (!/\bCIABATTA\b/.test(clave)) return null;
+  if (/\bCIABATTA\b.*\bHOT\s*DOG\b/.test(clave)) return 'Ciabatta con hotdog';
+  // Evitar que una coincidencia parcial del catálogo elimine un relleno distinto.
+  if (/^(?:MINI CIABATTA|CIABATTA|PAN CIABATTA MINI)$/.test(clave)) return 'Mini Ciabatta';
+  return original;
+}
+
 function grupoProductoProduccion(nombre, normalizar) {
   const clave = normalizar(nombre);
+  if (/\bEMPANADA\b.*\bBODA\b/.test(clave)) return 'Bocaditos';
+  if (/\bCIABATTA\b/.test(clave) && !/^(?:SANDWICH|SANGUCHE|TRIPLE)\b/.test(clave)) return 'Panes';
   if (/^(?:PETIPAN|PETIT PAN|PETITPAN|PETI PAN)(?:\s|$)/.test(clave)) {
     return /^(?:PETIPAN|PETIT PAN|PETITPAN|PETI PAN)(?:\s+MINI)?$/.test(clave) ? 'Panes' : 'Sándwiches y triples';
   }
@@ -33,6 +45,26 @@ function grupoProductoProduccion(nombre, normalizar) {
   return 'Bocaditos';
 }
 
+function tipoItemCocina(nombre, cantidad, normalizar) {
+  const clave = normalizar(nombre);
+  const esKeke = /\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave);
+  const esPastel = /\b(TORTA|TORTITAS?|PIE|PYE|MOUSSE|CREMA|TRES LECHES)\b/.test(clave);
+  const esTorta = esPastel && (/^TORTA\b/.test(clave) || Number(cantidad) < 10);
+  return { esKeke, esTorta, esPastel, grupo: grupoProductoProduccion(nombre, normalizar) };
+}
+
+function filtrarItemsEmbalaje(detalles, resolver, normalizar) {
+  const nombres = new Map();
+  return (detalles || []).filter((detalle) => {
+    const cantidad = Number(detalle.cantidad || 0);
+    if (!(cantidad > 0)) return false;
+    const original = detalle.producto_nombre;
+    if (!nombres.has(original)) nombres.set(original, resolver(original) || original);
+    const tipo = tipoItemCocina(nombres.get(original), cantidad, normalizar);
+    return !tipo.esKeke && !tipo.esTorta;
+  });
+}
+
 function clasificarHojaProduccion(detalles, clientes, resolver, normalizar) {
   const nombres = new Map((clientes || []).map((cliente) => [Number(cliente.id), cliente.cliente_nombre || 'Cliente']));
   const principales = new Map();
@@ -41,14 +73,11 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar) {
   for (const detalle of detalles || []) {
     const cantidad = Number(detalle.cantidad || 0);
     if (!Number.isFinite(cantidad) || cantidad <= 0) continue;
-    const nombre = String(resolverPetipanNombre(detalle.producto_nombre) || resolver(detalle.producto_nombre) || detalle.producto_nombre || 'Producto')
+    const nombre = String(resolverPetipanNombre(detalle.producto_nombre) || resolverCiabattaNombre(detalle.producto_nombre)
+      || resolver(detalle.producto_nombre) || detalle.producto_nombre || 'Producto')
       .replace(/^(?:KEKES\s+)+(?=KEKE\b)/i, '').trim();
     const clave = normalizar(nombre);
-    const esKeke = /\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave);
-    const esPastel = /\b(TORTA|TORTITAS?|PIE|PYE|MOUSSE|CREMA|TRES LECHES)\b/.test(clave);
-    // En estos productos el nombre describe el sabor; la cantidad indica
-    // si se trata de torta individual o bocaditos del mismo sabor.
-    const esTorta = esPastel && cantidad < 10;
+    const { esKeke, esPastel, esTorta, grupo } = tipoItemCocina(nombre, cantidad, normalizar);
 
     if (esKeke || esTorta) {
       const cliente = nombres.get(Number(detalle.pedido_id)) || 'Cliente';
@@ -59,7 +88,7 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar) {
     } else {
       const etiqueta = esPastel ? `${nombre} (BOCADITOS)` : nombre;
       const llave = `principal:${clave}`;
-      if (!principales.has(llave)) principales.set(llave, { nombre: etiqueta, grupo: grupoProductoProduccion(nombre, normalizar), total: 0 });
+      if (!principales.has(llave)) principales.set(llave, { nombre: etiqueta, grupo, total: 0 });
       principales.get(llave).total += cantidad;
     }
   }
@@ -73,4 +102,7 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar) {
   };
 }
 
-if (typeof module !== 'undefined') module.exports = { clasificarHojaProduccion, resolverPetipanNombre, grupoProductoProduccion };
+if (typeof module !== 'undefined') module.exports = {
+  clasificarHojaProduccion, resolverPetipanNombre, resolverCiabattaNombre,
+  grupoProductoProduccion, tipoItemCocina, filtrarItemsEmbalaje
+};

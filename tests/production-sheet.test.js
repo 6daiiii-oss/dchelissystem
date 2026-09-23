@@ -59,7 +59,7 @@ test('embalaje agrupa productos en el mínimo de páginas sin perder cantidades'
     { getElementById: () => contenedor }, { __datosProduccionClientes:clientes, __datosProduccionDetalles:detalles },
     (value) => value, (value) => String(value).toUpperCase(), () => { resoluciones += 1; return null; }, (value) => String(value), resumen
   );
-  render([{ contenedorId:'hojaProduccion', titulo:'BOCADITOS / TORTAS', productosLista:productos }]);
+  render([{ titulo:'BOCADITOS', productosLista:productos }]);
   assert.equal((contenedor.innerHTML.match(/class="kitchen-page"/g) || []).length, 2);
   assert.match(contenedor.innerHTML, /<div class="pack-badge">13x25<\/div>/);
   assert.equal(resoluciones, productos.length, 'cada nombre se resuelve una sola vez aunque haya muchos pedidos');
@@ -80,12 +80,13 @@ test('embalaje imprime bocaditos y sándwiches juntos si caben, conservando el t
     (value) => value, (value) => String(value).toUpperCase(), () => null, (value) => String(value), resumen
   );
   render([
-    { titulo:'BOCADITOS / TORTAS', productosLista:bocaditos },
-    { titulo:'SÁNGUCHES / TRIPLES / PANES', productosLista:sandwiches }
+    { titulo:'BOCADITOS', productosLista:bocaditos },
+    { titulo:'SÁNGUCHES / TRIPLES', productosLista:sandwiches }
   ]);
   assert.equal((contenedor.innerHTML.match(/class="kitchen-page"/g) || []).length, 1);
-  assert.match(contenedor.innerHTML, /BOCADITOS \/ TORTAS/);
-  assert.match(contenedor.innerHTML, /SÁNGUCHES \/ TRIPLES \/ PANES/);
+  assert.match(contenedor.innerHTML, /BOCADITOS/);
+  assert.match(contenedor.innerHTML, /SÁNGUCHES \/ TRIPLES/);
+  assert.doesNotMatch(contenedor.innerHTML, /TORTAS/);
   assert.match(contenedor.innerHTML, /<div class="pack-badge">14x25<\/div>/);
 });
 
@@ -105,7 +106,35 @@ test('cuando los clientes superan el ancho de A4, no se omite ninguno ni se repi
   assert.equal((contenedor.innerHTML.match(/class="pack-badge"/g) || []).length, 1);
 });
 
-test('producción reserva una hoja para bocaditos y panes y otra para sándwiches', () => {
+test('embalaje imprime los panes en una página aparte aunque quepan con bocaditos', () => {
+  const contenedor = { innerHTML: '' };
+  const clientes = [{ id:1, cliente_nombre:'Casino', origen:'casino' }];
+  const detalles = [
+    { pedido_id:1, producto_nombre:'Empanada de boda', cantidad:25 },
+    { pedido_id:1, producto_nombre:'Ciabatta con hotdog', cantidad:15 },
+    { pedido_id:1, producto_nombre:'Sandwich de Asado', cantidad:10 }
+  ];
+  const render = new Function('document', 'window', 'ordenarClientesEmbalaje', 'normalizarNombreProducto',
+    'obtenerProductoResolucion', 'escapeHtmlAdmin', 'obtenerResumenPaquetesDesdeCantidades',
+    `${functionSource('renderizarMatrizProducto', '  function renderizarHojaProduccionCocina(')}; return renderizarMatrizProducto;`)(
+    { getElementById: () => contenedor }, { __datosProduccionClientes:clientes, __datosProduccionDetalles:detalles },
+    (value) => value, (value) => String(value).toUpperCase(), () => null, (value) => String(value), resumen
+  );
+  render([
+    { titulo:'BOCADITOS', productosLista:['Empanada de boda'] },
+    { titulo:'SÁNGUCHES / TRIPLES', productosLista:['Sandwich de Asado'] },
+    { titulo:'PANES', productosLista:['Ciabatta con hotdog'] }
+  ]);
+  const paginas = contenedor.innerHTML.match(/<div class="kitchen-page">[\s\S]*?<\/table><\/div>/g) || [];
+  assert.equal(paginas.length, 2);
+  assert.match(paginas[0], /EMPANADA DE BODA/i);
+  assert.match(paginas[0], /SANDWICH DE ASADO/i);
+  assert.doesNotMatch(paginas[0], /CIABATTA/i);
+  assert.match(paginas[1], /CIABATTA CON HOTDOG/i);
+  assert.doesNotMatch(paginas[1], /EMPANADA DE BODA|SANDWICH DE ASADO/i);
+});
+
+test('producción reserva hojas distintas para bocaditos, sándwiches y panes', () => {
   const contenedor = { innerHTML: '' };
   const render = new Function('document', 'obtenerProductoResolucion', 'normalizarNombreProducto', 'escapeHtmlAdmin', 'formatearFecha',
     'clasificarHojaProduccion', `${functionSource('renderizarHojaProduccionCocina', '  async function cargarMatriz(')}; return renderizarHojaProduccionCocina;`)(
@@ -120,9 +149,11 @@ test('producción reserva una hoja para bocaditos y panes y otra para sándwiche
     { pedido_id:1, producto_nombre:'Triple pollo', cantidad:15 }
   ] });
   const paginas = contenedor.innerHTML.match(/<section class="production-paper[\s\S]*?<\/section>/g) || [];
-  assert.equal(paginas.length, 2);
-  assert.match(paginas[0], /ALFAJOR[\s\S]*?PETIPAN<\/td>/);
-  assert.doesNotMatch(paginas[0], /TRIPLE POLLO|PETIPAN DE POLLO/);
+  assert.equal(paginas.length, 3);
+  assert.match(paginas[0], /ALFAJOR/);
+  assert.doesNotMatch(paginas[0], /PETIPAN|TRIPLE POLLO/);
   assert.match(paginas[1], /PETIPAN DE POLLO C\/PIÑA[\s\S]*?TRIPLE POLLO/);
   assert.doesNotMatch(paginas[1], /ALFAJOR/);
+  assert.match(paginas[2], /PETIPAN<\/td>/);
+  assert.doesNotMatch(paginas[2], /TRIPLE POLLO|ALFAJOR/);
 });

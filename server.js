@@ -6,7 +6,7 @@ const ExcelJS = require('exceljs');
 const db = require('./db');
 const { extraerPedidosCasino } = require('./casino-production');
 const { unirCronogramasCasino } = require('./casino-archive');
-const { resolverPetipanNombre } = require('./public/production-classification');
+const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion } = require('./public/production-classification');
 
 const app = express();
 
@@ -619,6 +619,8 @@ function productoEsCocina(nombre) {
 function resolverNombreCocina(nombre) {
   const petipan = resolverPetipanNombre(nombre);
   if (petipan) return petipan;
+  const ciabatta = resolverCiabattaNombre(nombre);
+  if (ciabatta) return ciabatta;
   const valor = normalizarProducto(nombre);
   if (!valor) return null;
 
@@ -2338,60 +2340,67 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
     detalles.push(...casinos.detalles);
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Embalaje');
-    worksheet.getCell('A1').value = `HOJA DE EMBALAJE · ${fecha} 15:00 → ${fechaSiguiente} 15:00`;
-    worksheet.getCell('A1').font = { bold: true, size: 12 };
+    const visibles = filtrarItemsEmbalaje(detalles, (nombre) => nombre, normalizarProducto);
+    const grupos = [
+      { nombre: 'Embalaje', filtro: (nombre) => grupoProductoProduccion(nombre, normalizarProducto) !== 'Panes' },
+      { nombre: 'Panes', filtro: (nombre) => grupoProductoProduccion(nombre, normalizarProducto) === 'Panes' }
+    ];
 
-    clientes.forEach((cli, idx) => {
-      const colNum = idx + 2;
-      const cell = worksheet.getCell(2, colNum);
-      cell.value = `${String(cli.cliente_nombre || '').toUpperCase()}${cli.origen === 'casino' ? ' · CASINO' : ''}`;
-      cell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
-      cell.font = {
-        bold: true,
-        color: { argb: cli.es_urgente ? 'FFCC0000' : (cli.origen === 'casino' ? 'FF0B7431' : 'FF111111') }
-      };
-    });
+    for (const grupo of grupos) {
+      const datosGrupo = visibles.filter((det) => grupo.filtro(det.producto_nombre));
+      if (grupo.nombre === 'Panes' && !datosGrupo.length) continue;
+      const idClientes = new Set(datosGrupo.map((det) => Number(det.pedido_id)));
+      const clientesGrupo = clientes.filter((cli) => idClientes.has(Number(cli.id)));
+      const porProducto = new Map();
+      for (const det of datosGrupo) {
+        const clave = normalizarProducto(det.producto_nombre);
+        if (!porProducto.has(clave)) porProducto.set(clave, { nombre: det.producto_nombre, porCliente: new Map() });
+        const fila = porProducto.get(clave);
+        const id = Number(det.pedido_id);
+        fila.porCliente.set(id, (fila.porCliente.get(id) || 0) + Number(det.cantidad || 0));
+      }
+      const productosGrupo = [...porProducto.values()].sort((a, b) => {
+        const rango = (nombre) => grupoProductoProduccion(nombre, normalizarProducto) === 'Bocaditos' ? 0 : 1;
+        return rango(a.nombre) - rango(b.nombre) || a.nombre.localeCompare(b.nombre, 'es');
+      });
+      const worksheet = workbook.addWorksheet(grupo.nombre, {
+        pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+      });
+      worksheet.getCell('A1').value = `${grupo.nombre.toUpperCase()} · ${fecha} 15:00 → ${fechaSiguiente} 15:00`;
+      worksheet.getCell('A1').font = { bold: true, size: 12 };
 
-    const productosDinamicos = [...new Set([
-      ...PRODUCTOS_COCINA,
-      ...PRODUCTOS_COCINA_EXTRA,
-      ...detalles.map((d) => d.producto_nombre).filter(Boolean)
-    ])];
-
-    const colTotalIdx = Math.max(clientes.length + 2, 19);
-    worksheet.getCell(2, colTotalIdx).value = 'TOTAL';
-    worksheet.getCell(2, colTotalIdx).font = { bold: true };
-
-    productosDinamicos.forEach((prodNombre, pIdx) => {
-      const rowNum = pIdx + 3;
-      worksheet.getCell(rowNum, 1).value = prodNombre;
-      worksheet.getCell(rowNum, 1).font = { bold: true };
-
-      clientes.forEach((cli, cIdx) => {
-        const cantidad = detalles
-          .filter((d) => Number(d.pedido_id) === Number(cli.id) && normalizarProducto(d.producto_nombre) === normalizarProducto(prodNombre))
-          .reduce((sum, d) => sum + Number(d.cantidad || 0), 0);
-        if (cantidad > 0) {
-          const cell = worksheet.getCell(rowNum, cIdx + 2);
-          cell.value = cantidad;
-          cell.font = {
-            bold: true,
-            color: { argb: cli.es_urgente ? 'FFCC0000' : (cli.origen === 'casino' ? 'FF0B7431' : 'FF111111') }
-          };
-        }
+      clientesGrupo.forEach((cli, idx) => {
+        const cell = worksheet.getCell(2, idx + 2);
+        cell.value = `${String(cli.cliente_nombre || '').toUpperCase()}${cli.origen === 'casino' ? ' · CASINO' : ''}`;
+        cell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
+        cell.font = { bold: true, color: { argb: cli.es_urgente ? 'FFCC0000' : (cli.origen === 'casino' ? 'FF0B7431' : 'FF111111') } };
       });
 
-      const desde = worksheet.getColumn(2).letter;
-      const hasta = worksheet.getColumn(Math.max(2, colTotalIdx - 1)).letter;
-      worksheet.getCell(rowNum, colTotalIdx).value = { formula: `SUM(${desde}${rowNum}:${hasta}${rowNum})` };
-      worksheet.getCell(rowNum, colTotalIdx).font = { bold: true };
-    });
-
-    worksheet.getColumn(1).width = 30;
-    for (let i = 2; i <= colTotalIdx; i += 1) worksheet.getColumn(i).width = i === colTotalIdx ? 10 : 8;
-    worksheet.getRow(2).height = 115;
-    worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
+      const colTotalIdx = Math.max(clientesGrupo.length + 2, 3);
+      worksheet.getCell(2, colTotalIdx).value = 'TOTAL';
+      worksheet.getCell(2, colTotalIdx).font = { bold: true };
+      productosGrupo.forEach((producto, pIdx) => {
+        const rowNum = pIdx + 3;
+        worksheet.getCell(rowNum, 1).value = producto.nombre;
+        worksheet.getCell(rowNum, 1).font = { bold: true };
+        clientesGrupo.forEach((cli, cIdx) => {
+          const cantidad = producto.porCliente.get(Number(cli.id)) || 0;
+          if (cantidad > 0) {
+            const cell = worksheet.getCell(rowNum, cIdx + 2);
+            cell.value = cantidad;
+            cell.font = { bold: true, color: { argb: cli.es_urgente ? 'FFCC0000' : (cli.origen === 'casino' ? 'FF0B7431' : 'FF111111') } };
+          }
+        });
+        const desde = worksheet.getColumn(2).letter;
+        const hasta = worksheet.getColumn(colTotalIdx - 1).letter;
+        worksheet.getCell(rowNum, colTotalIdx).value = { formula: `SUM(${desde}${rowNum}:${hasta}${rowNum})` };
+        worksheet.getCell(rowNum, colTotalIdx).font = { bold: true };
+      });
+      worksheet.getColumn(1).width = 30;
+      for (let i = 2; i <= colTotalIdx; i += 1) worksheet.getColumn(i).width = i === colTotalIdx ? 10 : 8;
+      worksheet.getRow(2).height = 115;
+      worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
+    }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="Embalaje_${fecha}.xlsx"`);

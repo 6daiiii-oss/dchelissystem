@@ -7,7 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="digitacion-config.js"></script>
-<script src="production-classification.js?v=3"></script>
+<script src="production-classification.js?v=4"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -3017,6 +3017,8 @@
     function resolverNombreCocina(nombre) {
       const petipan = resolverPetipanNombre(nombre);
       if (petipan) return petipan;
+      const ciabatta = resolverCiabattaNombre(nombre);
+      if (ciabatta) return ciabatta;
       const valor = normalizarNombreProducto(nombre);
       if (!valor) return null;
 
@@ -5385,23 +5387,12 @@
       return PRODUCTOS_COCINA_ORDEN_CANONICOS.slice();
     }
 
-    function filtrarProductosConPedidos(lista, detalles) {
-      if (!detalles.length) return lista;
-      const resueltos = new Map();
-      const presentes = new Set();
-      detalles.forEach((detalle) => {
-        if (Number(detalle.cantidad || 0) <= 0) return;
-        const nombre = detalle.producto_nombre;
-        if (!resueltos.has(nombre)) resueltos.set(nombre, obtenerProductoResolucion(nombre) || nombre);
-        presentes.add(normalizarNombreProducto(resueltos.get(nombre)));
-      });
-      return lista.filter((producto) => presentes.has(normalizarNombreProducto(producto)));
+    function filtrarDetallesEmbalaje(detalles) {
+      return filtrarItemsEmbalaje(detalles, obtenerProductoResolucion, normalizarNombreProducto);
     }
 
     function obtenerListasEmbalaje(detalles) {
-      const bocaditos = filtrarProductosConPedidos(resolverProductoNombres(), detalles);
-      const extras = filtrarProductosConPedidos(obtenerProductosExtraParaProduccion(), detalles);
-      const conocidos = new Set([...bocaditos, ...extras].map(normalizarNombreProducto));
+      const activos = new Map();
       const resueltos = new Map();
       for (const detalle of detalles) {
         if (!(Number(detalle.cantidad || 0) > 0)) continue;
@@ -5409,17 +5400,28 @@
         if (!resueltos.has(original)) resueltos.set(original, obtenerProductoResolucion(original) || original);
         const nombre = resueltos.get(original);
         const clave = normalizarNombreProducto(nombre);
-        if (!clave || conocidos.has(clave)) continue;
-        conocidos.add(clave);
-        const grupo = grupoProductoProduccion(nombre, normalizarNombreProducto);
-        (grupo === 'Bocaditos' ? bocaditos : extras).push(nombre);
+        if (clave && !activos.has(clave)) activos.set(clave, { nombre, grupo: grupoProductoProduccion(nombre, normalizarNombreProducto) });
       }
-      return { bocaditos, extras };
+      const listas = { bocaditos:[], sandwiches:[], panes:[] };
+      const agregar = (clave) => {
+        const item = activos.get(clave);
+        if (!item) return;
+        activos.delete(clave);
+        const destino = item.grupo === 'Panes' ? listas.panes : item.grupo === 'Sándwiches y triples' ? listas.sandwiches : listas.bocaditos;
+        destino.push(item.nombre);
+      };
+      for (const nombre of [...resolverProductoNombres(), ...obtenerProductosExtraParaProduccion()]) {
+        agregar(normalizarNombreProducto(nombre));
+      }
+      for (const clave of [...activos.keys()]) agregar(clave);
+      return listas;
     }
 
   function obtenerProductoResolucion(nombre) {
     const petipan = resolverPetipanNombre(nombre);
     if (petipan) return petipan;
+    const ciabatta = resolverCiabattaNombre(nombre);
+    if (ciabatta) return ciabatta;
     const clave = normalizarNombreProducto(nombre);
     const extras = obtenerProductosExtraParaProduccion();
 
@@ -5534,11 +5536,11 @@
     });
   }
 
-  function renderizarMatrizProducto(secciones) {
+  function renderizarMatrizProducto(secciones, detallesEmbalaje = window.__datosProduccionDetalles || []) {
     const contenedor = document.getElementById('hojaProduccion');
     if (!contenedor) return;
     const clientes = ordenarClientesEmbalaje(window.__datosProduccionClientes || []);
-    const detalles = window.__datosProduccionDetalles || [];
+    const detalles = detallesEmbalaje;
     const indice = new Map();
     const nombresResueltos = new Map();
 
@@ -5575,6 +5577,11 @@
     let bloque = [];
     let altura = 0;
     for (const fila of productosActivos) {
+      if (fila.titulo === 'PANES' && bloque.length && bloque[0].titulo !== 'PANES') {
+        bloques.push(bloque);
+        bloque = [];
+        altura = 0;
+      }
       const tituloNuevo = !bloque.length || bloque.at(-1).titulo !== fila.titulo;
       const altoFila = Math.max(18,
         Math.ceil(fila.nombre.length / 28) * 11 + 6,
@@ -5657,9 +5664,10 @@
         });
       }
     };
-    agregarGrupo('Bocaditos y panes', filas.filter((item) => item.grupo !== 'Sándwiches y triples'), especiales);
+    agregarGrupo('Bocaditos', filas.filter((item) => item.grupo === 'Bocaditos'), especiales);
     agregarGrupo('Sándwiches y triples', filas.filter((item) => item.grupo === 'Sándwiches y triples'), []);
-    if (!paginas.length) paginas.push({ titulo:'Bocaditos y panes', bloque:[], kekes:[] });
+    agregarGrupo('Panes', filas.filter((item) => item.grupo === 'Panes'), []);
+    if (!paginas.length) paginas.push({ titulo:'Bocaditos', bloque:[], kekes:[] });
 
     contenedor.innerHTML = paginas.map(({ titulo, bloque, kekes }, pagina) => {
       return `
@@ -5714,17 +5722,22 @@
 
       renderizarHojaProduccionCocina(data);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const listasEmbalaje = obtenerListasEmbalaje(data.detalles || []);
+      const detallesEmbalaje = filtrarDetallesEmbalaje(data.detalles || []);
+      const listasEmbalaje = obtenerListasEmbalaje(detallesEmbalaje);
       renderizarMatrizProducto([
         {
-          titulo:'BOCADITOS / TORTAS',
+          titulo:'BOCADITOS',
           productosLista:listasEmbalaje.bocaditos
         },
         {
-          titulo:'SÁNGUCHES / TRIPLES / PANES',
-          productosLista:listasEmbalaje.extras
+          titulo:'SÁNGUCHES / TRIPLES',
+          productosLista:listasEmbalaje.sandwiches
+        },
+        {
+          titulo:'PANES',
+          productosLista:listasEmbalaje.panes
         }
-      ]);
+      ], detallesEmbalaje);
       const paginasCocina = [...document.querySelectorAll('#embalajeWrapper .kitchen-page')];
       paginasCocina.forEach((pagina) => pagina.classList.remove('last-kitchen-page'));
       paginasCocina.at(-1)?.classList.add('last-kitchen-page');
