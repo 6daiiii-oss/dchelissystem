@@ -1718,6 +1718,7 @@ app.get('/api/colaboradores/salidas', requireStaffAuth, (req, res) => {
     FROM pedidos p
     LEFT JOIN detalles_pedido d ON d.pedido_id = p.id
     WHERE p.fecha_recoge = ?
+      AND COALESCE(p.origen, 'pg') <> 'casino'
       AND COALESCE(p.estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Pendiente de pago', 'Despachado (D''chelis)')
     ORDER BY p.hora_recoge ASC, p.id ASC, d.id ASC
   `, [fecha], (err, rows) => {

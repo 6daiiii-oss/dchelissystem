@@ -780,6 +780,9 @@
       text-overflow: ellipsis;
     }
 
+    .pack-cell { max-height:none; overflow:visible; text-overflow:clip; }
+    .pack-badge { display:block; white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; }
+
     .pack-total {
       display: none;
       font-size: 0.76rem;
@@ -1108,6 +1111,15 @@
       }
       .pack-total { display: none; }
       .qty-cell { font-size: 7.2px; }
+      body.printing-cocina.printing-embalaje .pack-cell {
+        width:190px !important; min-width:190px !important; max-width:190px !important;
+        height:auto !important; max-height:none !important; overflow:visible !important;
+      }
+      body.printing-cocina.printing-embalaje .pack-badge {
+        font-size:8px; line-height:1.3; white-space:normal !important; overflow:visible !important;
+      }
+      body.printing-cocina.printing-embalaje th.prod-col,
+      body.printing-cocina.printing-embalaje td.prod-col { font-size:8.5px; }
     }
 
 
@@ -2080,59 +2092,24 @@
     }
     .production-paper-title h4 { margin:0; font:900 18px Arial,sans-serif; color:#111; }
     .production-paper-title span { font:700 11px Arial,sans-serif; color:#333; text-align:right; }
-    .production-layout {
-      display:grid;
-      grid-template-columns:minmax(0,1.45fr) minmax(145px,.65fr);
-      gap:5mm;
-      align-items:start;
-    }
-    .production-main-table,
-    .production-manual-table,
-    .production-casino-table {
-      width:100%;
-      border-collapse:collapse;
-      table-layout:fixed;
-      font-family:Arial,Helvetica,sans-serif;
-    }
-    .production-main-table th,
-    .production-main-table td,
-    .production-manual-table th,
-    .production-manual-table td,
-    .production-casino-table th,
-    .production-casino-table td {
-      border:1px solid #111;
-      padding:3px 5px;
-      font-size:10px;
-      line-height:1.12;
-    }
-    .production-main-table th { background:#f3f4f6; font-weight:900; }
-    .production-main-table th:nth-child(1) { width:auto; text-align:left; }
-    .production-main-table th:nth-child(2),
-    .production-main-table th:nth-child(3),
-    .production-main-table th:nth-child(4) { width:17%; }
-    .production-prod-name { font-weight:800; }
-    .production-row-urgent .production-prod-name { color:#c40000; border-left:3px solid #c40000; }
-    .production-urgent {
-      color:#c40000;
-      font-weight:900;
-      text-align:left;
-      border:2px solid #c40000 !important;
-    }
-    .production-normal { color:#111; font-weight:900; text-align:right; }
-    .production-total { color:#111; font-weight:900; text-align:right; background:#f7f7f7; }
-    .production-manual-title,
-    .production-casino-title {
-      margin:0 0 5px;
-      font:900 11px Arial,sans-serif;
-      text-transform:uppercase;
-    }
-    .production-manual-table td:last-child { width:42%; height:19px; }
-    .production-casino-section { margin-top:6mm; }
-    .production-casino-table td:nth-child(2),
-    .production-casino-table td:nth-child(3),
-    .production-casino-table td:nth-child(4) { width:16%; text-align:right; font-weight:900; }
-    .production-legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:4mm; font:700 9px Arial,sans-serif; }
-    .production-legend .red { color:#c40000; }
+    .production-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:6mm; align-items:start; }
+    .production-main-table { width:100%; border-collapse:collapse; table-layout:fixed; font-family:Arial,Helvetica,sans-serif; }
+    .production-main-table th, .production-main-table td { border:1px solid #333; padding:3px 5px; font-size:11px; line-height:1.18; }
+    .production-main-table th { background:#f3f4f6; text-align:left; font-weight:900; }
+    .production-main-table th:first-child { width:78%; }
+    .production-main-table th:last-child { width:22%; text-align:right; }
+    .production-prod-name { font-weight:800; overflow-wrap:anywhere; }
+    .production-total { font-weight:900; text-align:right; white-space:nowrap; }
+    .production-blank-space { min-height:44mm; }
+    .production-casino-section { margin-top:3mm; }
+    .production-casino-title { margin:0 0 3mm; font:900 11px Arial,sans-serif; text-transform:uppercase; }
+    .production-casino-list { display:grid; gap:0; }
+    .production-casino-line { display:flex; gap:4px; align-items:baseline; padding:2px 0; border-bottom:1px solid #ddd; font:800 10px/1.22 Arial,sans-serif; }
+    .production-casino-line strong { flex:none; min-width:14px; }
+    .production-casino-line span { overflow-wrap:anywhere; }
+    .production-compact .production-main-table td { padding:2px 4px; font-size:9px; line-height:1.08; }
+    .production-paper + .production-paper { margin-top:16px; }
+    @media screen and (max-width:700px) { .production-layout { grid-template-columns:1fr; } .production-blank-space { min-height:12mm; } }
     @media print {
       body.printing-cocina.printing-embalaje #productionPaperWrapper { display:none !important; }
       body.printing-cocina.printing-produccion #embalajeWrapper { display:none !important; }
@@ -2140,11 +2117,18 @@
       body.printing-cocina.printing-produccion #hojaProduccionCocina { display:block !important; }
       body.printing-cocina.printing-produccion .production-paper {
         width:210mm !important;
-        min-height:297mm !important;
+        min-height:0 !important;
         margin:0 !important;
         border:0 !important;
         padding:8mm !important;
         box-sizing:border-box !important;
+        page-break-after:always;
+        break-after:page;
+        page-break-inside:avoid;
+      }
+      body.printing-cocina.printing-produccion .production-paper:last-child {
+        page-break-after:auto;
+        break-after:auto;
       }
       body.printing-cocina.printing-embalaje #embalajeWrapper { display:block !important; }
       body.printing-cocina.printing-embalaje .kitchen-doc-heading { display:none !important; }
@@ -2321,7 +2305,6 @@
             <input type="date" id="fecha_filtro" />
             <button class="btn btn-success" type="button" onclick="cargarMatriz()">Actualizar hojas</button>
             <button class="btn btn-warning" type="button" onclick="imprimirHojaEmbalaje()">Imprimir embalaje</button>
-            <button class="btn btn-primary" type="button" onclick="imprimirHojaProduccion()">Imprimir producción</button>
             <button class="btn btn-ghost" type="button" onclick="descargarExcel()">Excel embalaje</button>
           </div>
         </div>
@@ -2342,9 +2325,12 @@
 
         <div id="productionPaperWrapper" class="kitchen-document-block">
           <div class="kitchen-doc-heading">
-            <div><span>HOJA DE PRODUCCIÓN</span><small>Urgente a la izquierda · Normal a la derecha · Total al extremo derecho</small></div>
+            <div><span>HOJA DE PRODUCCIÓN</span><small>Totales por producto · kekes y tortas de casino a la derecha</small></div>
           </div>
           <div id="hojaProduccionCocina"></div>
+          <div class="no-print" style="display:flex; justify-content:flex-end; margin-top:14px;">
+            <button class="btn btn-primary" type="button" onclick="imprimirHojaProduccion()">Imprimir producción</button>
+          </div>
         </div>
       </div>
     </section>
@@ -4474,39 +4460,25 @@
 
     function obtenerResumenPaquetesDesdeCantidades(cantidades) {
       const lista = Array.isArray(cantidades) ? cantidades : [cantidades];
-      const porPedido = {};
+      const grupos = new Map();
+      const agregar = (tamano, veces = 1) => {
+        const unidades = Math.round(Number(tamano));
+        const cantidad = Math.round(Number(veces));
+        if (unidades > 0 && cantidad > 0) grupos.set(unidades, (grupos.get(unidades) || 0) + cantidad);
+      };
 
-      lista.forEach((detalle, indice) => {
-        if (detalle && typeof detalle === 'object') {
-          const pedidoId = detalle.pedido_id ?? detalle.id ?? `linea-${indice}`;
-          const cantidad = Math.max(0, Math.round(Number(detalle.cantidad || 0)));
-          if (cantidad > 0) porPedido[pedidoId] = (porPedido[pedidoId] || 0) + cantidad;
-          return;
+      lista.forEach((detalle) => {
+        const cantidad = Math.round(Number(detalle && typeof detalle === 'object' ? detalle.cantidad : detalle));
+        if (!Number.isFinite(cantidad) || cantidad <= 0) return;
+        if (cantidad >= 100 && cantidad % 50 === 0) {
+          agregar(50, cantidad / 50);
+        } else {
+          agregar(cantidad);
         }
-        const cantidad = Math.max(0, Math.round(Number(detalle || 0)));
-        if (cantidad > 0) porPedido[`linea-${indice}`] = cantidad;
       });
 
-      let total25 = 0;
-      let total50 = 0;
-      let sobrantes = 0;
-
-      Object.values(porPedido).forEach((unidadesOriginales) => {
-        let unidades = unidadesOriginales;
-        const cajas50 = Math.floor(unidades / 50);
-        total50 += cajas50;
-        unidades %= 50;
-        const cajas25 = Math.floor(unidades / 25);
-        total25 += cajas25;
-        unidades %= 25;
-        sobrantes += unidades;
-      });
-
-      const resumen = [];
-      if (total25) resumen.push(`${total25}x25`);
-      if (total50) resumen.push(`${total50}x50`);
-      if (sobrantes) resumen.push(`${sobrantes}u`);
-      return resumen.join(' / ');
+      return [...grupos].sort((a, b) => a[0] - b[0])
+        .map(([tamano, veces]) => `${veces}x${tamano}`).join(' / ');
     }
 
     function obtenerTextoItem(item) {
@@ -5515,29 +5487,32 @@
       const contenedor = document.getElementById(contenedorId);
       if (!contenedor) return;
 
-      const productosNormalizados = new Set((productosLista || []).map((producto) => normalizarNombreProducto(producto)));
-      const idsConContenido = new Set(
-        (detalles || [])
-          .filter((detalle) => {
-            if (Number(detalle.cantidad || 0) <= 0) return false;
-            const producto = obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre;
-            return productosNormalizados.has(normalizarNombreProducto(producto));
-          })
-          .map((detalle) => Number(detalle.pedido_id))
-      );
-
-      const clientesSeccion = clientes.filter((cliente) => idsConContenido.has(Number(cliente.id)));
-      if (!clientesSeccion.length || !productosNormalizados.size) {
+      const productosActivos = (productosLista || []).filter((producto) => detalles.some((detalle) =>
+        Number(detalle.cantidad || 0) > 0 &&
+        normalizarNombreProducto(obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre) === normalizarNombreProducto(producto)
+      ));
+      if (!productosActivos.length) {
         contenedor.innerHTML = '<p class="no-print" style="padding:24px;color:#667085;text-align:center;">No hay productos de esta hoja en la ventana seleccionada.</p>';
         return;
       }
 
-      const maxClientesPorPagina = 18;
+      const maxClientesPorPagina = 10;
+      const maxProductosPorPagina = 24;
       const paginas = [];
-      for (let i=0;i<clientesSeccion.length;i+=maxClientesPorPagina) paginas.push(clientesSeccion.slice(i,i+maxClientesPorPagina));
+      for (let p = 0; p < productosActivos.length; p += maxProductosPorPagina) {
+        const productosBloque = productosActivos.slice(p, p + maxProductosPorPagina);
+        const claves = new Set(productosBloque.map((producto) => normalizarNombreProducto(producto)));
+        const idsBloque = new Set(detalles.filter((detalle) =>
+          Number(detalle.cantidad || 0) > 0 &&
+          claves.has(normalizarNombreProducto(obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre))
+        ).map((detalle) => Number(detalle.pedido_id)));
+        const clientesBloque = clientes.filter((cliente) => idsBloque.has(Number(cliente.id)));
+        for (let i = 0; i < clientesBloque.length; i += maxClientesPorPagina) {
+          paginas.push({ grupoClientes: clientesBloque.slice(i, i + maxClientesPorPagina), productosBloque, mostrarTotal: i === 0 });
+        }
+      }
 
-      contenedor.innerHTML = paginas.map((grupoClientes,paginaIndex) => {
-        const mostrarTotal = paginaIndex === 0;
+      contenedor.innerHTML = paginas.map(({ grupoClientes, productosBloque, mostrarTotal }) => {
         let html = `<div class="kitchen-page${extraClass}"><table><thead><tr><th class="prod-col">${titulo}</th>`;
 
         grupoClientes.forEach((cliente) => {
@@ -5549,7 +5524,7 @@
         if (mostrarTotal) html += '<th class="total-header"><div class="vertical-text">TOTAL</div></th>';
         html += '</tr></thead><tbody>';
 
-        (productosLista || []).forEach((prod) => {
+        productosBloque.forEach((prod) => {
           let fila = `<tr><td class="prod-col">${escapeHtmlAdmin(prod)}</td>`;
           grupoClientes.forEach((cliente) => {
             const cantidad = detalles
@@ -5584,86 +5559,64 @@
     const contenedor = document.getElementById('hojaProduccionCocina');
     if (!contenedor) return;
     const detalles = Array.isArray(data?.detalles) ? data.detalles : [];
+    const clientes = new Map((data.clientes || []).map((cliente) => [Number(cliente.id), cliente]));
+    const productos = new Map();
+    const casinos = new Map();
+    const esKekeOTorta = (nombre) => /\b(KEKE|QUEQUE|CARROT|BUDIN|TORTA|TORTITA|PIE|PYE|CREMA|TRES LECHES)\b/i
+      .test(normalizarNombreProducto(nombre));
 
-    const mapa = new Map();
     detalles.forEach((detalle) => {
+      const cantidad = Number(detalle.cantidad || 0);
+      if (cantidad <= 0) return;
       const nombre = obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre || 'Producto';
       const clave = normalizarNombreProducto(nombre);
-      if (!mapa.has(clave)) mapa.set(clave,{nombre,urgente:0,normal:0,total:0,casino:0});
-      const fila = mapa.get(clave);
-      const cant = Number(detalle.cantidad || 0);
-      if (detalle.es_urgente) fila.urgente += cant;
-      else fila.normal += cant;
-      if (detalle.origen === 'casino') fila.casino += cant;
-      fila.total += cant;
+      if (!productos.has(clave)) productos.set(clave, { nombre, total:0 });
+      productos.get(clave).total += cantidad;
+
+      if (detalle.origen === 'casino' && esKekeOTorta(nombre)) {
+        const casino = clientes.get(Number(detalle.pedido_id))?.cliente_nombre || 'Casino';
+        const claveCasino = `${clave}::${normalizarNombreProducto(casino)}`;
+        if (!casinos.has(claveCasino)) casinos.set(claveCasino, { nombre, casino, total:0 });
+        casinos.get(claveCasino).total += cantidad;
+      }
     });
 
-    const filas = [...mapa.values()]
-      .filter((item) => item.total > 0)
-      .sort((a,b) => String(a.nombre).localeCompare(String(b.nombre),'es'));
+    const filas = [...productos.values()].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'));
+    const kekesCasino = [...casinos.values()].sort((a,b) =>
+      a.nombre.localeCompare(b.nombre, 'es') || a.casino.localeCompare(b.casino, 'es'));
+    const porPagina = filas.length > 34 ? Math.ceil(filas.length / 2) : 34;
+    const numeroPaginas = Math.max(1, Math.ceil(filas.length / porPagina));
+    const kekesPorPagina = Math.max(25, Math.ceil(kekesCasino.length / numeroPaginas));
 
-    const manuales = [
-      'EMPANADA DE CARNE','EMPANADA DE POLLO','EMPANADA MIXTA','PIONONO MIL HOJAS',
-      'PASTEL ACELGA','PYE DE LIMÓN','RELÁMPAGO','PORCIÓN CHOCOLATE',
-      'STRUDEL MANZANA','PAÑUELO CHANTILLY'
-    ];
-
-    const kekesCasino = filas.filter((item) =>
-      item.casino > 0 && /\b(KEKE|QUEQUE|CARROT|BUDIN|TORTA|PYE|CREMA|TRES LECHES)\b/i.test(normalizarNombreProducto(item.nombre))
-    );
-
-    const cuerpo = filas.length ? filas.map((item) => `
-      <tr class="${item.urgente > 0 ? 'production-row-urgent' : ''}">
-        <td class="production-prod-name">${escapeHtmlAdmin(item.nombre)}</td>
-        <td class="production-urgent">${item.urgente > 0 ? item.urgente : ''}</td>
-        <td class="production-normal">${item.normal > 0 ? item.normal : ''}</td>
-        <td class="production-total">${item.total}</td>
-      </tr>
-    `).join('') : '<tr><td colspan="4" style="text-align:center;padding:18px;">Sin producción en esta ventana.</td></tr>';
-
-    contenedor.innerHTML = `
-      <section class="production-paper">
-        <div class="production-paper-title">
-          <h4>${formatearFecha(data.fecha).toUpperCase()}</h4>
-          <span>Producción: ${escapeHtmlAdmin(data.ventana?.desde || '')}<br>hasta ${escapeHtmlAdmin(data.ventana?.hasta || '')}</span>
-        </div>
-        <div class="production-layout">
-          <div>
-            <table class="production-main-table">
-              <thead><tr><th>PRODUCTO</th><th>URGENTE</th><th>NORMAL</th><th>TOTAL</th></tr></thead>
-              <tbody>${cuerpo}</tbody>
-            </table>
+    contenedor.innerHTML = Array.from({length: numeroPaginas}, (_, pagina) => {
+      const bloque = filas.slice(pagina * porPagina, (pagina + 1) * porPagina);
+      const kekes = kekesCasino.slice(pagina * kekesPorPagina, (pagina + 1) * kekesPorPagina);
+      return `
+        <section class="production-paper${bloque.length > 36 ? ' production-compact' : ''}">
+          <div class="production-paper-title">
+            <h4>${formatearFecha(data.fecha).toUpperCase()}${pagina ? ' · CONTINUACIÓN' : ''}</h4>
+            <span>Producción ${pagina + 1}/${numeroPaginas}</span>
           </div>
-          <aside>
-            <h5 class="production-manual-title">Control manual</h5>
-            <table class="production-manual-table">
-              <tbody>${manuales.map((nombre) => `<tr><td>${nombre}</td><td></td></tr>`).join('')}</tbody>
+          <div class="production-layout">
+            <table class="production-main-table">
+              <thead><tr><th>PRODUCTO</th><th>TOTAL</th></tr></thead>
+              <tbody>${bloque.length ? bloque.map((item) => `
+                <tr><td class="production-prod-name">${escapeHtmlAdmin(item.nombre.toUpperCase())}</td><td class="production-total">${item.total}</td></tr>
+              `).join('') : '<tr><td colspan="2">Sin producción en esta ventana.</td></tr>'}</tbody>
             </table>
-          </aside>
-        </div>
-
-        <div class="production-casino-section">
-          <h5 class="production-casino-title">Kekes / producción de casinos</h5>
-          <table class="production-casino-table">
-            <thead><tr><th>PRODUCTO</th><th>URGENTE</th><th>NORMAL</th><th>TOTAL</th></tr></thead>
-            <tbody>${kekesCasino.length ? kekesCasino.map((item) => `
-              <tr class="${item.urgente > 0 ? 'production-row-urgent' : ''}">
-                <td class="production-prod-name">${escapeHtmlAdmin(item.nombre)}</td>
-                <td class="production-urgent">${item.urgente || ''}</td>
-                <td class="production-normal">${item.normal || ''}</td>
-                <td class="production-total">${item.total}</td>
-              </tr>`).join('') : '<tr><td colspan="4">Sin kekes de casino para esta ventana.</td></tr>'}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="production-legend">
-          <span class="red">ROJO: sale hoy desde las 3:00 p. m.</span>
-          <span>NEGRO: sale mañana antes de las 3:00 p. m.</span>
-          <span>Los valores del control manual se completan a mano.</span>
-        </div>
-      </section>
-    `;
+            <aside>
+              <div class="production-blank-space"></div>
+              ${kekes.length ? `<div class="production-casino-section">
+                <h5 class="production-casino-title">Kekes y tortas · casinos</h5>
+                <div class="production-casino-list">${kekes.map((item) => `
+                  <div class="production-casino-line"><strong>${item.total}</strong><span>${escapeHtmlAdmin(item.nombre.toUpperCase())} (${escapeHtmlAdmin(item.casino.toUpperCase())})</span></div>
+                `).join('')}</div>
+              </div>` : ''}
+            </aside>
+          </div>
+        </section>
+      `;
+    }).join('');
   }
 
   async function cargarMatriz() {
