@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const db = require('./db');
+const { extraerPedidosCasino } = require('./casino-production');
 
 const app = express();
 
@@ -41,6 +42,29 @@ function dbRunAsync(sql, params = []) {
       resolve({ lastID: this.lastID, changes: this.changes || 0 });
     });
   });
+}
+
+function resolverProductoProduccion(nombre) {
+  return resolverNombreCocina(nombre)
+    || PRODUCTOS_COCINA_EXTRA.find((producto) => normalizarProducto(producto) === normalizarProducto(nombre))
+    || nombre;
+}
+
+async function cargarCasinosProduccion(fecha) {
+  const cronogramas = await dbAllAsync(`
+    SELECT id, datos_json FROM casino_cronogramas
+    WHERE fecha_inicio <= ? AND fecha_fin >= ?
+    ORDER BY id DESC
+  `, [fecha, fecha]);
+  for (const row of cronogramas) {
+    let datos;
+    try { datos = JSON.parse(row.datos_json); } catch { continue; }
+    if (!Array.isArray(datos?.dias) || !datos.dias.some((dia) => dia.fecha === fecha)) continue;
+    const resultado = extraerPedidosCasino(datos, fecha, resolverProductoProduccion);
+    resultado.clientes.forEach((cliente) => { cliente.cronograma_casino_id = row.id; });
+    return resultado;
+  }
+  return { clientes: [], detalles: [] };
 }
 
 function encodeBase64Url(value) {
@@ -1229,7 +1253,7 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
     const existente = await dbGetAsync(`SELECT id, nombre_archivo, fecha_inicio, fecha_fin FROM casino_cronogramas WHERE huella = ? LIMIT 1`, [huella]);
     if (existente) {
       return res.status(409).json({
-        error: 'Este cronograma ya fue importado anteriormente. No se volverán a crear los pedidos de casino.',
+        error: 'Este cronograma ya fue importado anteriormente.',
         cronograma_existente: existente
       });
     }
@@ -1248,44 +1272,6 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
       [huella, nombreArchivo || 'Cronograma.xlsx', fechaInicio, fechaFin, JSON.stringify(resultado)]
     );
 
-    let pedidosImportados = 0;
-    let detallesImportados = 0;
-
-    for (const casino of resultado.casinos || []) {
-      for (const dia of resultado.dias || []) {
-        const detalles = (dia.productos || [])
-          .map((producto) => ({
-            producto_nombre: producto.nombre,
-            cantidad: Number(producto?.por_casino?.[casino] || 0),
-            subtotal: 0,
-            paquetes: {}
-          }))
-          .filter((item) => item.cantidad > 0);
-
-        if (!detalles.length) continue;
-
-        const codigo = `CAS-${String(dia.fecha || '').replace(/-/g, '')}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-        const pedido = await dbRunAsync(
-          `INSERT INTO pedidos (
-            codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-            fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento,
-            nro_operacion, estado, fecha_emision, origen, cronograma_casino_id
-          ) VALUES (?, 'Casino', ?, ?, 0, 0, 'Cronograma Casino', ?, '12:00', '', '', '', '', '', 'Registrado', CURRENT_TIMESTAMP, 'casino', ?)`,
-          [codigo, casino, `CASINO-${normalizarProducto(casino).replace(/\s+/g, '-').slice(0, 30)}`, dia.fecha, cronograma.lastID]
-        );
-
-        for (const det of detalles) {
-          await dbRunAsync(
-            `INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta)
-             VALUES (?, ?, ?, 0, '{}', '')`,
-            [pedido.lastID, det.producto_nombre, det.cantidad]
-          );
-          detallesImportados += 1;
-        }
-        pedidosImportados += 1;
-      }
-    }
-
     await dbRunAsync('COMMIT');
     transaccion = false;
 
@@ -1293,8 +1279,6 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
       ok: true,
       nombre_archivo: nombreArchivo || 'Cronograma.xlsx',
       cronograma_id: cronograma.lastID,
-      pedidos_importados: pedidosImportados,
-      detalles_importados: detallesImportados,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
       ...resultado
@@ -1445,6 +1429,10 @@ app.get('/api/pedidos/estado/:codigo', (req, res) => {
 // Endpoint para registrar un nuevo pedido y asegurar su visualización en producción
 app.post('/api/pedidos', protectDigitacionOrigin, async (req, res) => {
   const { tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, origen, detalles } = req.body;
+
+  if (String(origen || '').toLowerCase() === 'casino') {
+    return res.status(400).json({ error: 'Los pedidos de casino se cargan desde el cronograma de Casinos.' });
+  }
 
   if (!validarComprobante(tipo_comprobante, numero_documento)) {
     return res.status(400).json({ error: 'La boleta requiere DNI de 8 dígitos y la factura requiere RUC de 11 dígitos.' });
@@ -1601,7 +1589,8 @@ app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
         SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
           fecha_recoge, hora_recoge, dedicatoria, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, registrado_en, despachado_por
     FROM pedidos
-    WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')${rango}
+    WHERE COALESCE(origen, 'pg') <> 'casino'
+      AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')${rango}
     ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
   `, parametros, (err, pedidos) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -1635,7 +1624,8 @@ app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
 
     if (!rango) return responder(false);
     db.get(`SELECT 1 AS existe FROM pedidos
-      WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')
+      WHERE COALESCE(origen, 'pg') <> 'casino'
+        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')
         AND fecha_recoge > ? LIMIT 1`, [hasta], (errorMas, siguiente) => {
       if (errorMas) return res.status(500).json({ error: errorMas.message });
       responder(Boolean(siguiente));
@@ -1660,7 +1650,8 @@ app.get('/api/admin/historial-pedidos', requireAdminAuth, (req, res) => {
     SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
       fecha_recoge, hora_recoge, dedicatoria, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, registrado_en, despachado_por
     FROM pedidos
-    WHERE COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
+    WHERE COALESCE(origen, 'pg') <> 'casino'
+      AND COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
       AND COALESCE(registrado_en, fecha_registro) >= (CURRENT_TIMESTAMP - INTERVAL '1 year')
       ${condicionBusqueda}
     ORDER BY fecha_recoge DESC, hora_recoge DESC, id DESC
@@ -2137,9 +2128,9 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         (fecha_recoge = ? AND hora_recoge < '15:00')
       )
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
+        AND COALESCE(origen, 'pg') <> 'casino'
       ORDER BY
-        CASE WHEN COALESCE(origen, 'pg') = 'casino' THEN 2
-             WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN 0
+        CASE WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN 0
              ELSE 1 END,
         fecha_recoge ASC, hora_recoge ASC, id ASC
     `, [fecha, fecha, fechaSiguiente, fecha]);
@@ -2159,9 +2150,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       );
 
       detalles = (rows || []).map((det) => {
-        const resuelto = resolverNombreCocina(det.producto_nombre)
-          || PRODUCTOS_COCINA_EXTRA.find((producto) => normalizarProducto(producto) === normalizarProducto(det.producto_nombre))
-          || det.producto_nombre;
+        const resuelto = resolverProductoProduccion(det.producto_nombre);
         return {
           pedido_id: det.pedido_id,
           origen: det.origen || 'pg',
@@ -2177,6 +2166,10 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         };
       });
     }
+
+    const casinos = await cargarCasinosProduccion(fechaSiguiente);
+    clientes.push(...casinos.clientes);
+    detalles.push(...casinos.detalles);
 
     return res.json({
       fecha,
@@ -2314,6 +2307,7 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
     const fecha = String(req.query.fecha || '').trim();
     if (!fecha) return res.status(400).send('Fecha requerida');
     const fechaSiguiente = sumarDiasIso(fecha, 1);
+    if (!fechaSiguiente) return res.status(400).send('Fecha inválida');
 
     const clientes = await dbAllAsync(`
       SELECT id, cliente_nombre, origen, fecha_recoge, hora_recoge,
@@ -2321,9 +2315,9 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
       FROM pedidos
       WHERE ((fecha_recoge = ? AND hora_recoge >= '15:00') OR (fecha_recoge = ? AND hora_recoge < '15:00'))
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
+        AND COALESCE(origen, 'pg') <> 'casino'
       ORDER BY
-        CASE WHEN COALESCE(origen, 'pg') = 'casino' THEN 2
-             WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN 0
+        CASE WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN 0
              ELSE 1 END,
         fecha_recoge, hora_recoge, id
     `, [fecha, fecha, fechaSiguiente, fecha]);
@@ -2339,9 +2333,13 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
       );
       detalles = detalles.map((det) => ({
         ...det,
-        producto_nombre: resolverNombreCocina(det.producto_nombre) || det.producto_nombre
+        producto_nombre: resolverProductoProduccion(det.producto_nombre)
       }));
     }
+
+    const casinos = await cargarCasinosProduccion(fechaSiguiente);
+    clientes.push(...casinos.clientes);
+    detalles.push(...casinos.detalles);
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Embalaje');

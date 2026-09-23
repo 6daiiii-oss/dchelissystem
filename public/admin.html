@@ -4171,7 +4171,7 @@
           estado.className = 'casino-status success';
           const diasVigentes = obtenerDiasCasinoVigentes(data);
           const semanasDetectadas = crearSemanasCasino(diasVigentes);
-          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes.length} día(s) · ${semanasDetectadas.length} semana(s) · ${data.pedidos_importados || 0} pedido(s) Casino insertados en PG${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
+          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes.length} día(s) · ${semanasDetectadas.length} semana(s) · disponible directamente en Cocina y Embalaje${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
         }
       } catch (error) {
         window.__casinoProduccionData = null;

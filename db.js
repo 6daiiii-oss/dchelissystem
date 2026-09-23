@@ -212,6 +212,9 @@ async function initializeDatabase() {
     producto_nombre TEXT NOT NULL, cantidad INTEGER NOT NULL, subtotal DOUBLE PRECISION NOT NULL, paquetes TEXT DEFAULT '{}',
     foto_torta TEXT DEFAULT '')`);
   await pool.query(`ALTER TABLE detalles_pedido ADD COLUMN IF NOT EXISTS foto_torta TEXT DEFAULT ''`);
+  // El cronograma guardado en Casinos es la fuente única para producción y embalaje.
+  // La eliminación de pedidos también elimina sus detalles mediante ON DELETE CASCADE.
+  await pool.query(`DELETE FROM pedidos WHERE origen = 'casino'`);
 
   const source = fs.readFileSync(path.join(__dirname, 'db-seed-source.js'), 'utf8');
   const productos = extractVariable(source, 'productosIniciales');
