@@ -1120,7 +1120,15 @@
         font-size:8px; line-height:1.3; white-space:normal !important; overflow:visible !important;
       }
       body.printing-cocina.printing-embalaje th.prod-col,
-      body.printing-cocina.printing-embalaje td.prod-col { font-size:8.5px; }
+      body.printing-cocina.printing-embalaje td.prod-col {
+        width:145px; min-width:145px; max-width:145px; font-size:8.5px;
+      }
+      body.printing-cocina.printing-embalaje td.prod-col {
+        height:auto; max-height:none; overflow:visible;
+        white-space:normal; text-overflow:clip; overflow-wrap:anywhere;
+      }
+      body.printing-cocina.printing-embalaje .total-header { width:190px !important; min-width:190px !important; max-width:190px !important; }
+      body.printing-cocina.printing-embalaje .embalaje-group-row th { height:18px; font-size:8px; }
     }
 
 
@@ -2102,6 +2110,7 @@
     .production-main-table th:first-child { width:78%; }
     .production-main-table th:last-child { width:22%; text-align:right; }
     .production-main-table .production-group-row th { width:auto; padding:5px; background:#e7eaed; text-align:left; font-size:10px; letter-spacing:.04em; }
+    .kitchen-page .embalaje-group-row th { background:#e7eaed; text-align:left; padding:5px 7px; font-weight:900; letter-spacing:.04em; }
     .production-prod-name { font-weight:800; overflow-wrap:anywhere; }
     .production-total { font-weight:900; text-align:right; white-space:nowrap; }
     .production-blank-space { min-height:44mm; }
@@ -2317,14 +2326,7 @@
           <div class="kitchen-doc-heading">
             <div><span>HOJA DE EMBALAJE</span></div>
           </div>
-          <div style="margin-bottom:18px;">
-            <h4 class="kitchen-section-title">Bocaditos / tortas</h4>
-            <div id="hojaProduccion" class="table-container"></div>
-          </div>
-          <div>
-            <h4 class="kitchen-section-title">Sánguches, triples y panes</h4>
-            <div id="hojaProduccionExtra" class="table-container"></div>
-          </div>
+          <div id="hojaProduccion" class="table-container"></div>
         </div>
 
         <div id="productionPaperWrapper" class="kitchen-document-block">
@@ -5533,6 +5535,8 @@
   }
 
   function renderizarMatrizProducto(secciones) {
+    const contenedor = document.getElementById('hojaProduccion');
+    if (!contenedor) return;
     const clientes = ordenarClientesEmbalaje(window.__datosProduccionClientes || []);
     const detalles = window.__datosProduccionDetalles || [];
     const indice = new Map();
@@ -5554,32 +5558,51 @@
       producto.detalles.push(detalle);
     });
 
-    secciones.forEach(({ contenedorId, titulo, productosLista, extraClass = '' }) => {
-      const contenedor = document.getElementById(contenedorId);
-      if (!contenedor) return;
+    const productosActivos = secciones.flatMap(({ titulo, productosLista }) =>
+      (productosLista || []).filter((nombre) => indice.has(normalizarNombreProducto(nombre))).map((nombre) => {
+        const producto = indice.get(normalizarNombreProducto(nombre));
+        return { nombre, titulo, producto, resumen: obtenerResumenPaquetesDesdeCantidades(producto.detalles) };
+      })
+    );
+    if (!productosActivos.length) {
+      contenedor.innerHTML = '<p class="no-print" style="padding:24px;color:#667085;text-align:center;">No hay productos en la ventana seleccionada.</p>';
+      return;
+    }
 
-      const productosActivos = (productosLista || []).filter((producto) => indice.has(normalizarNombreProducto(producto)));
-      if (!productosActivos.length) {
-        contenedor.innerHTML = '<p class="no-print" style="padding:24px;color:#667085;text-align:center;">No hay productos de esta hoja en la ventana seleccionada.</p>';
-        return;
+    // A4 horizontal: se aprovecha el ancho para 14 clientes y se corta por
+    // altura estimada de nombres y totales, no cada 24 productos sin contexto.
+    const bloques = [];
+    let bloque = [];
+    let altura = 0;
+    for (const fila of productosActivos) {
+      const tituloNuevo = !bloque.length || bloque.at(-1).titulo !== fila.titulo;
+      const altoFila = Math.max(18,
+        Math.ceil(fila.nombre.length / 28) * 11 + 6,
+        Math.ceil(fila.resumen.length / 38) * 11 + 8);
+      const alto = altoFila + (tituloNuevo ? 18 : 0);
+      if (bloque.length && altura + alto > 665) {
+        bloques.push(bloque);
+        bloque = [];
+        altura = 0;
       }
+      const encabezado = !bloque.length || bloque.at(-1).titulo !== fila.titulo;
+      bloque.push(fila);
+      altura += altoFila + (encabezado ? 18 : 0);
+    }
+    if (bloque.length) bloques.push(bloque);
 
-      const maxClientesPorPagina = 10;
-      const maxProductosPorPagina = 24;
-      const paginas = [];
-      for (let p = 0; p < productosActivos.length; p += maxProductosPorPagina) {
-        const productosBloque = productosActivos.slice(p, p + maxProductosPorPagina);
-        const claves = new Set(productosBloque.map((producto) => normalizarNombreProducto(producto)));
-        const idsBloque = new Set();
-        claves.forEach((clave) => indice.get(clave)?.clientes.forEach((id) => idsBloque.add(id)));
-        const clientesBloque = clientes.filter((cliente) => idsBloque.has(Number(cliente.id)));
-        for (let i = 0; i < clientesBloque.length; i += maxClientesPorPagina) {
-          paginas.push({ grupoClientes: clientesBloque.slice(i, i + maxClientesPorPagina), productosBloque, mostrarTotal: i === 0 });
-        }
+    const paginas = [];
+    for (const productosBloque of bloques) {
+      const idsBloque = new Set();
+      productosBloque.forEach(({ producto }) => producto.clientes.forEach((id) => idsBloque.add(id)));
+      const clientesBloque = clientes.filter((cliente) => idsBloque.has(Number(cliente.id)));
+      for (let i = 0; i < clientesBloque.length; i += 14) {
+        paginas.push({ grupoClientes: clientesBloque.slice(i, i + 14), productosBloque, mostrarTotal: i === 0 });
       }
+    }
 
-      contenedor.innerHTML = paginas.map(({ grupoClientes, productosBloque, mostrarTotal }) => {
-        let html = `<div class="kitchen-page${extraClass}"><table><thead><tr><th class="prod-col">${titulo}</th>`;
+    contenedor.innerHTML = paginas.map(({ grupoClientes, productosBloque, mostrarTotal }) => {
+        let html = '<div class="kitchen-page"><table><thead><tr><th class="prod-col">PRODUCTO</th>';
 
         grupoClientes.forEach((cliente) => {
           const clase = cliente.origen === 'casino' ? 'kitchen-casino' : (cliente.es_urgente ? 'kitchen-urgent' : 'kitchen-normal');
@@ -5590,17 +5613,18 @@
         if (mostrarTotal) html += '<th class="total-header"><div class="vertical-text">TOTAL</div></th>';
         html += '</tr></thead><tbody>';
 
-        productosBloque.forEach((prod) => {
-          let fila = `<tr><td class="prod-col">${escapeHtmlAdmin(prod)}</td>`;
-          const producto = indice.get(normalizarNombreProducto(prod));
+        productosBloque.forEach(({ nombre, titulo, producto, resumen }, indiceFila) => {
+          if (!indiceFila || productosBloque[indiceFila - 1].titulo !== titulo) {
+            html += `<tr class="embalaje-group-row"><th colspan="${grupoClientes.length + (mostrarTotal ? 2 : 1)}">${escapeHtmlAdmin(titulo)}</th></tr>`;
+          }
+          let fila = `<tr><td class="prod-col">${escapeHtmlAdmin(nombre)}</td>`;
           grupoClientes.forEach((cliente) => {
-            const cantidad = producto?.cantidades.get(Number(cliente.id)) || 0;
+            const cantidad = producto.cantidades.get(Number(cliente.id)) || 0;
             const clase = cliente.origen === 'casino' ? 'kitchen-casino' : (cliente.es_urgente ? 'kitchen-urgent' : 'kitchen-normal');
             fila += cantidad > 0 ? `<td class="qty-cell ${clase}">${cantidad}</td>` : '<td></td>';
           });
 
           if (mostrarTotal) {
-            const resumen = obtenerResumenPaquetesDesdeCantidades(producto?.detalles || []);
             fila += `<td class="pack-cell">${resumen ? `<div class="pack-badge">${resumen}</div>` : ''}</td>`;
           }
           fila += '</tr>';
@@ -5609,8 +5633,7 @@
 
         html += '</tbody></table></div>';
         return html;
-      }).join('');
-    });
+    }).join('');
   }
 
   function renderizarHojaProduccionCocina(data) {
@@ -5620,18 +5643,30 @@
     const { filas, especiales } = clasificarHojaProduccion(
       detalles, data.clientes || [], obtenerProductoResolucion, normalizarNombreProducto
     );
-    const numeroPaginas = Math.max(1, Math.ceil(filas.length / 30), Math.ceil(especiales.length / 25));
-    const porPagina = Math.ceil(filas.length / numeroPaginas);
-    const especialesPorPagina = Math.ceil(especiales.length / numeroPaginas);
+    const paginas = [];
+    const agregarGrupo = (titulo, productos, acompanantes) => {
+      if (!productos.length && !acompanantes.length) return;
+      const cantidadPaginas = Math.max(1, Math.ceil(productos.length / 30), Math.ceil(acompanantes.length / 25));
+      const porPagina = Math.ceil(productos.length / cantidadPaginas);
+      const acompanantesPorPagina = Math.ceil(acompanantes.length / cantidadPaginas);
+      for (let i = 0; i < cantidadPaginas; i += 1) {
+        paginas.push({
+          titulo,
+          bloque: productos.slice(i * porPagina, (i + 1) * porPagina),
+          kekes: acompanantes.slice(i * acompanantesPorPagina, (i + 1) * acompanantesPorPagina)
+        });
+      }
+    };
+    agregarGrupo('Bocaditos y panes', filas.filter((item) => item.grupo !== 'Sándwiches y triples'), especiales);
+    agregarGrupo('Sándwiches y triples', filas.filter((item) => item.grupo === 'Sándwiches y triples'), []);
+    if (!paginas.length) paginas.push({ titulo:'Bocaditos y panes', bloque:[], kekes:[] });
 
-    contenedor.innerHTML = Array.from({length: numeroPaginas}, (_, pagina) => {
-      const bloque = filas.slice(pagina * porPagina, (pagina + 1) * porPagina);
-      const kekes = especiales.slice(pagina * especialesPorPagina, (pagina + 1) * especialesPorPagina);
+    contenedor.innerHTML = paginas.map(({ titulo, bloque, kekes }, pagina) => {
       return `
         <section class="production-paper${bloque.length > 36 ? ' production-compact' : ''}">
           <div class="production-paper-title">
-            <h4>${formatearFecha(data.fecha).toUpperCase()}${pagina ? ' · CONTINUACIÓN' : ''}</h4>
-            <span>Producción ${pagina + 1}/${numeroPaginas}</span>
+            <h4>${formatearFecha(data.fecha).toUpperCase()}${pagina && paginas[pagina - 1].titulo === titulo ? ' · CONTINUACIÓN' : ''}</h4>
+            <span>${escapeHtmlAdmin(titulo)} · ${pagina + 1}/${paginas.length}</span>
           </div>
           <div class="production-layout">
             <table class="production-main-table">
@@ -5682,16 +5717,12 @@
       const listasEmbalaje = obtenerListasEmbalaje(data.detalles || []);
       renderizarMatrizProducto([
         {
-          contenedorId:'hojaProduccion',
           titulo:'BOCADITOS / TORTAS',
-          productosLista:listasEmbalaje.bocaditos,
-          extraClass:''
+          productosLista:listasEmbalaje.bocaditos
         },
         {
-          contenedorId:'hojaProduccionExtra',
           titulo:'SÁNGUCHES / TRIPLES / PANES',
-          productosLista:listasEmbalaje.extras,
-          extraClass:' kitchen-page-updated'
+          productosLista:listasEmbalaje.extras
         }
       ]);
       const paginasCocina = [...document.querySelectorAll('#embalajeWrapper .kitchen-page')];
