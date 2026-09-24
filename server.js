@@ -1185,6 +1185,29 @@ async function procesarCronogramaCasinos(buffer) {
         contextoHoja.anio * 12 + contextoHoja.mes === periodoMasReciente
       );
 
+  const claveBaseHojaCasino = (hoja) => normalizarProducto(hoja?.name || '')
+    .replace(/\b(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SETIEMBRE|SEPTIEMBRE|SETIEMB|SEPTIEMB|ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SET|SEP|SEPT|OCT|NOV|DIC)\b/g, ' ')
+    .replace(/\b20\d{2}\b/g, ' ')
+    .replace(/\b(MODIF(?:ICADO)?|CORREG(?:IDO)?|RECTIF(?:ICADO)?)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const esHojaCorreccion = (hoja) => /\b(MODIF(?:ICADO)?|CORREG(?:IDO)?|RECTIF(?:ICADO)?)\b/.test(normalizarProducto(hoja?.name || ''));
+  const clavesConCorreccion = new Set(
+    hojasObjetivo
+      .filter(({ hoja }) => esHojaCorreccion(hoja))
+      .map(({ hoja }) => claveBaseHojaCasino(hoja))
+      .filter(Boolean)
+  );
+  const hojasProcesables = hojasObjetivo.filter(({ hoja }) =>
+    esHojaCorreccion(hoja) || !clavesConCorreccion.has(claveBaseHojaCasino(hoja))
+  );
+
+  if (hojasProcesables.length < hojasObjetivo.length) {
+    advertencias.push(
+      `Se reemplazaron ${hojasObjetivo.length - hojasProcesables.length} hoja(s) base por su versión MODIF/CORREGIDA/RECTIFICADA.`
+    );
+  }
+
   if (hojasObjetivo.length < libro.worksheets.length && periodoMasReciente !== null) {
     const anio = Math.floor(periodoMasReciente / 12);
     const mes = (periodoMasReciente % 12) + 1;
@@ -1193,7 +1216,7 @@ async function procesarCronogramaCasinos(buffer) {
     );
   }
 
-  hojasObjetivo.forEach(({ hoja, contextoHoja }) => {
+  hojasProcesables.forEach(({ hoja, contextoHoja }) => {
 
     const limiteFilasCabecera = Math.min(Math.max(hoja.rowCount, 1), 15);
     let filaCabecera = 0;
