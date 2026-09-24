@@ -4169,6 +4169,7 @@
 
     async function cargarCronogramaCasinoPersistido() {
       const estado = document.getElementById('casinoEstado');
+      mostrarCargaCasino(true, 'Cargando cronogramas guardados…');
       try {
         const respuesta = await fetch('/api/admin/casinos/cronograma', { credentials:'same-origin', cache:'no-store' });
         const data = await respuesta.json().catch(() => ({}));
@@ -4189,6 +4190,8 @@
           estado.textContent = error.message || 'No se pudo cargar el cronograma guardado.';
         }
         return false;
+      } finally {
+        mostrarCargaCasino(false);
       }
     }
 
@@ -4224,8 +4227,6 @@
 
       if (boton) boton.disabled = true;
       mostrarCargaCasino(true, 'Leyendo el Excel y preparando la información…');
-      document.getElementById('casinoDiasResumen').innerHTML = '';
-      document.getElementById('casinosProduccion').innerHTML = '';
       if (estado) {
         estado.className = 'casino-status';
         estado.textContent = 'Procesando cronograma…';
@@ -4249,7 +4250,10 @@
           closeDashboard();
           throw new Error('Tu sesión expiró. Inicia sesión nuevamente.');
         }
-        if (!respuesta.ok) throw new Error(data.error || 'No se pudo procesar el cronograma.');
+        if (!respuesta.ok) {
+          const detalle = data.detalle ? ` ${data.detalle}` : '';
+          throw new Error(`${data.error || 'No se pudo procesar el cronograma.'}${detalle}`);
+        }
 
         window.__casinoProduccionData = data;
         window.__casinoSemanaIndex = -1;
@@ -4268,18 +4272,12 @@
           estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes.length} día(s) · ${semanasDetectadas.length} semana(s) · guardado solo en Casinos y disponible en Embalaje y Producción${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
         }
       } catch (error) {
-        window.__casinoProduccionData = null;
-        window.__casinoSemanaIndex = 0;
-        window.__casinoSemanas = [];
-        document.getElementById('casinosProduccion').innerHTML = '';
-        document.getElementById('casinoDiasResumen').innerHTML = '';
-        const imprimir = document.getElementById('imprimirCasinosBtn');
-        if (imprimir) imprimir.disabled = true;
         if (estado) {
           estado.className = 'casino-status error';
           estado.textContent = error.message || 'No se pudo procesar el cronograma.';
         }
       } finally {
+        mostrarCargaCasino(false);
         if (boton) boton.disabled = false;
       }
     }
