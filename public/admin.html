@@ -3790,6 +3790,9 @@
 
 
     window.__casinoProduccionData = null;
+    window.__casinoCronogramaId = null;
+    window.__casinoImportaciones = [];
+    window.__casinoCronogramasCargados = false;
     window.__casinoSemanaIndex = -1;
     window.__casinoSemanas = [];
     window.__casinoArchivoAbierto = false;
@@ -4120,10 +4123,15 @@
       if (!casino) return;
 
       try {
+        const cronogramaId = Number(window.__casinoCronogramaId);
+        if (!Number.isInteger(cronogramaId) || cronogramaId <= 0) {
+          throw new Error('Abre primero el cronograma que deseas editar.');
+        }
         const params = new URLSearchParams({
           desde: semana.inicio,
           hasta: semana.fin,
-          casino
+          casino,
+          cronograma_id: String(cronogramaId)
         });
         const respuesta = await fetch(`/api/admin/casinos/pedidos?${params.toString()}`, {
           credentials:'same-origin',
@@ -4165,7 +4173,6 @@
 
     function renderizarProduccionCasinos(data) {
       const contenedor = document.getElementById('casinosProduccion');
-      const botonImprimir = document.getElementById('imprimirCasinosBtn');
       if (!contenedor) return;
 
       const dias = obtenerDiasCasinoVigentes(data);
@@ -4176,7 +4183,6 @@
         window.__casinoSemanaIndex = 0;
         renderizarSelectorSemanasCasino([]);
         contenedor.innerHTML = '<div class="casino-empty-day">No hay pedidos en el cronograma importado.</div>';
-        if (botonImprimir) botonImprimir.disabled = true;
         return;
       }
 
@@ -4211,9 +4217,7 @@
                 <button type="button" class="casino-print-btn" onclick="editarSemanaCasino(${indice}, ${semana.indice})">
                   Editar semana
                 </button>
-                <button type="button" class="casino-print-btn" onclick="imprimirCasinoIndividual(${indice})">
-                  Imprimir este casino
-                </button>
+
               </div>
             </div>
             ${hojas}
@@ -4225,30 +4229,138 @@
         contenedor.innerHTML = '<div class="casino-empty-day">No hay casinos con pedidos en esta semana.</div>';
       }
 
-      if (botonImprimir) botonImprimir.disabled = !cronogramas.length;
     }
 
-    async function cargarCronogramaCasinoPersistido() {
+    function renderizarTarjetasCronogramasCasino(importaciones = []) {
+      const contenedor = document.getElementById('casinoCronogramasLista');
+      if (!contenedor) return;
+      window.__casinoImportaciones = Array.isArray(importaciones) ? importaciones : [];
+
+      if (!window.__casinoImportaciones.length) {
+        contenedor.innerHTML = '<div class="casino-empty-day">Todavía no hay cronogramas importados.</div>';
+        return;
+      }
+
+      contenedor.innerHTML = window.__casinoImportaciones.map((item) => {
+        const id = Number(item.id);
+        const activo = id === Number(window.__casinoCronogramaId);
+        const creado = item.creado_en ? formatearFechaHoraEmision(item.creado_en) : 'Sin fecha de importación';
+        return `
+          <article class="casino-cronograma-card${activo ? ' active' : ''}" data-cronograma-id="${id}">
+            <div class="casino-cronograma-copy">
+              <strong title="${escapeHtmlAdmin(item.nombre_archivo || 'Cronograma.xlsx')}">${escapeHtmlAdmin(item.nombre_archivo || 'Cronograma.xlsx')}</strong>
+              <span>${escapeHtmlAdmin(formatearFechaCasino(item.fecha_inicio))} – ${escapeHtmlAdmin(formatearFechaCasino(item.fecha_fin))}</span>
+              <small>Importado: ${escapeHtmlAdmin(creado)}</small>
+            </div>
+            <div class="casino-cronograma-actions">
+              <button type="button" class="btn btn-ghost" onclick="abrirCronogramaCasino(${id})">Abrir</button>
+              <button type="button" class="btn btn-warning" onclick="imprimirCronogramaCasino(${id})">Imprimir</button>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function actualizarCabeceraCronogramaCasino(data) {
+      const contenedor = document.getElementById('casinoCronogramaActivo');
+      if (!contenedor) return;
+      if (!data) {
+        contenedor.hidden = true;
+        contenedor.innerHTML = '';
+        return;
+      }
+      contenedor.hidden = false;
+      contenedor.innerHTML = `
+        <span><strong>${escapeHtmlAdmin(data.nombre_archivo || 'Cronograma')}</strong> · ${escapeHtmlAdmin(formatearFechaCasino(data.fecha_inicio))} – ${escapeHtmlAdmin(formatearFechaCasino(data.fecha_fin))}</span>
+        <span>${Array.isArray(data.casinos) ? data.casinos.length : 0} casino(s)</span>
+      `;
+    }
+
+    async function abrirCronogramaCasino(id, opciones = {}) {
+      const cronogramaId = Number(id);
+      if (!Number.isInteger(cronogramaId) || cronogramaId <= 0) return false;
+      const forzar = Boolean(opciones.forzar);
+
+      if (!forzar && Number(window.__casinoCronogramaId) === cronogramaId && window.__casinoProduccionData) {
+        renderizarTarjetasCronogramasCasino(window.__casinoImportaciones);
+        return true;
+      }
+
+      mostrarCargaCasino(true, 'Cargando solo este cronograma…');
+      try {
+        const respuesta = await fetch(`/api/admin/casinos/cronograma/${cronogramaId}`, {
+          credentials:'same-origin',
+          cache:'no-store'
+        });
+        const data = await respuesta.json().catch(() => ({}));
+        if (!respuesta.ok) throw new Error(data.error || 'No se pudo cargar este cronograma.');
+        if (!data.cronograma) throw new Error('El cronograma no tiene datos disponibles.');
+
+        window.__casinoCronogramaId = cronogramaId;
+        window.__casinoProduccionData = data.cronograma;
+        window.__casinoSemanaIndex = -1;
+        window.__casinoSemanas = [];
+        window.__casinoArchivoAbierto = false;
+
+        renderizarTarjetasCronogramasCasino(window.__casinoImportaciones);
+        actualizarCabeceraCronogramaCasino(data.cronograma);
+        renderizarProduccionCasinos(data.cronograma);
+        return true;
+      } catch (error) {
+        const estado = document.getElementById('casinoEstado');
+        if (estado) {
+          estado.className = 'casino-status error';
+          estado.textContent = error.message || 'No se pudo cargar este cronograma.';
+        }
+        return false;
+      } finally {
+        mostrarCargaCasino(false);
+      }
+    }
+
+    async function imprimirCronogramaCasino(id) {
+      const cargado = await abrirCronogramaCasino(id);
+      if (!cargado) return;
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      imprimirHojaCasinos();
+    }
+
+    async function cargarCronogramaCasinoPersistido(abrirId = null) {
       const estado = document.getElementById('casinoEstado');
-      mostrarCargaCasino(true, 'Cargando cronogramas guardados…');
+      mostrarCargaCasino(true, 'Cargando lista de cronogramas…');
       try {
         const respuesta = await fetch('/api/admin/casinos/cronograma', { credentials:'same-origin', cache:'no-store' });
         const data = await respuesta.json().catch(() => ({}));
-        if (!respuesta.ok) throw new Error(data.error || 'No se pudo cargar el cronograma guardado.');
-        if (!data.existe || !data.cronograma) return false;
+        if (!respuesta.ok) throw new Error(data.error || 'No se pudieron cargar los cronogramas guardados.');
 
-        window.__casinoProduccionData = data.cronograma;
-        if (!Number.isInteger(window.__casinoSemanaIndex)) window.__casinoSemanaIndex = -1;
-        renderizarProduccionCasinos(data.cronograma);
+        window.__casinoCronogramasCargados = true;
+        renderizarTarjetasCronogramasCasino(data.importaciones || []);
+
+        if (!data.existe) {
+          window.__casinoCronogramaId = null;
+          window.__casinoProduccionData = null;
+          actualizarCabeceraCronogramaCasino(null);
+          document.getElementById('casinoDiasResumen').innerHTML = '';
+          document.getElementById('casinoArchivoSemanas').innerHTML = '';
+          document.getElementById('casinosProduccion').innerHTML = '';
+          if (estado) {
+            estado.className = 'casino-status';
+            estado.textContent = 'Todavía no se ha cargado un cronograma.';
+          }
+          return false;
+        }
+
         if (estado) {
           estado.className = 'casino-status success';
-          estado.textContent = `Cronogramas guardados · ${data.cronograma.fecha_inicio || ''} a ${data.cronograma.fecha_fin || ''}.`;
+          estado.textContent = `${(data.importaciones || []).length} cronograma(s) guardado(s). Abre uno para ver sus pedidos.`;
         }
+
+        if (abrirId) return abrirCronogramaCasino(abrirId, { forzar:true });
         return true;
       } catch (error) {
-        if (estado && !window.__casinoProduccionData) {
+        if (estado) {
           estado.className = 'casino-status error';
-          estado.textContent = error.message || 'No se pudo cargar el cronograma guardado.';
+          estado.textContent = error.message || 'No se pudieron cargar los cronogramas guardados.';
         }
         return false;
       } finally {
@@ -4316,21 +4428,15 @@
           throw new Error(`${data.error || 'No se pudo procesar el cronograma.'}${detalle}`);
         }
 
-        window.__casinoProduccionData = data;
-        window.__casinoSemanaIndex = -1;
-        mostrarCargaCasino(true, 'Generando las hojas semanales y la vista previa…');
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        renderizarProduccionCasinos(data);
-        await cargarCronogramaCasinoPersistido();
+        mostrarCargaCasino(true, 'Guardado. Actualizando la lista de cronogramas…');
+        await cargarCronogramaCasinoPersistido(data.cronograma_id);
         firmaProduccion = '';
 
         const sinReconocer = Array.isArray(data.productos_no_reconocidos) ? data.productos_no_reconocidos.length : 0;
         const advertencias = Array.isArray(data.advertencias) ? data.advertencias.length : 0;
         if (estado) {
           estado.className = 'casino-status success';
-          const diasVigentes = obtenerDiasCasinoVigentes(data);
-          const semanasDetectadas = crearSemanasCasino(diasVigentes);
-          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes.length} día(s) · ${semanasDetectadas.length} semana(s) · guardado solo en Casinos y disponible en Embalaje y Producción${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
+          estado.textContent = `${Number(data.casinos_detectados || 0)} casino(s) · ${Number(data.dias_detectados || 0)} día(s) · cronograma guardado por separado y disponible en Embalaje y Producción${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
         }
       } catch (error) {
         if (estado) {
@@ -4473,7 +4579,7 @@
       }
       if (tab === 'cocina') return cargarMatriz();
       if (tab === 'usuarios') return cargarUsuariosAdmin();
-      if (tab === 'casinos' && !window.__casinoProduccionData) return cargarCronogramaCasinoPersistido();
+      if (tab === 'casinos' && !window.__casinoCronogramasCargados) return cargarCronogramaCasinoPersistido();
       if (tab === 'digitacion' && !panelesCargados.has(tab)) {
         renderQuickEntryPreview();
         panelesCargados.add(tab);
@@ -4492,7 +4598,10 @@
       if (tab === 'general') await cargarPedidosGenerales();
       if (tab === 'historial') await cargarHistorialPedidos();
       if (tab === 'cocina') await cargarMatriz();
-      if (tab === 'casinos') await cargarCronogramaCasinoPersistido();
+      if (tab === 'casinos') {
+        if (window.__casinoCronogramaId) await abrirCronogramaCasino(window.__casinoCronogramaId, { forzar:true });
+        else await cargarCronogramaCasinoPersistido();
+      }
     }
 
     document.getElementById('buscarPedidosGenerales')?.addEventListener('input', (event) => {
