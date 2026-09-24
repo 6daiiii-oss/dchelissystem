@@ -2911,7 +2911,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         OR
         (fecha_recoge = ? AND hora_recoge < '15:00')
       )
-        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
+        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Pendiente de pago', 'Despachado (D''chelis)', 'Cancelado')
         ${FILTRO_NEWPORT_HOJAS_SQL}
       ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
     `, [fecha, fechaSiguiente]);
@@ -2963,7 +2963,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
              fecha_emision, fecha_registro, cronograma_casino_id
       FROM pedidos
       WHERE fecha_recoge = ?
-        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
+        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Pendiente de pago', 'Despachado (D''chelis)', 'Cancelado')
         ${FILTRO_NEWPORT_HOJAS_SQL}
       ORDER BY hora_recoge ASC, id ASC
     `, [fecha]);
@@ -3150,7 +3150,7 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
       SELECT id, cliente_nombre, origen, fecha_recoge, hora_recoge, fecha_emision, fecha_registro
       FROM pedidos
       WHERE fecha_recoge = ?
-        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
+        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Pendiente de pago', 'Despachado (D''chelis)', 'Cancelado')
         ${FILTRO_NEWPORT_HOJAS_SQL}
       ORDER BY hora_recoge, id
     `, [fecha]);
