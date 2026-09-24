@@ -1320,6 +1320,14 @@ function resolverNombreCasino(nombre, pan = '', tipo = '') {
     const petipan = resolverVariantePetipanCasino(candidato);
     if (petipan) return petipan;
 
+    // Pye genérico conserva su identidad hasta conocer la cantidad.
+    // La cantidad decide después si es "Torta Pye..." (1-5) o bocadito (10+).
+    if (/\b(PIE|PYE)\b/.test(clave) && !/^TORTA\b/.test(clave)) {
+      if (/\bLIMON\b/.test(clave)) return 'Pye de Limón';
+      if (/\bMANZANA\b/.test(clave)) return 'Pye de Manzana';
+      return String(candidato).replace(/^PIE\b/i, 'Pye').replace(/^PYE\b/i, 'Pye').trim();
+    }
+
     if (CASINO_ALIAS_EXACTOS[clave]) return CASINO_ALIAS_EXACTOS[clave];
     const resuelto = resolverNombreCocina(candidato);
     if (resuelto) return resuelto;
