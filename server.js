@@ -6,7 +6,7 @@ const ExcelJS = require('exceljs');
 const db = require('./db');
 const { extraerPedidosCasino } = require('./casino-production');
 const { unirCronogramasCasino } = require('./casino-archive');
-const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion } = require('./public/production-classification');
+const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion, resolverPyePorCantidad } = require('./public/production-classification');
 
 const app = express();
 
@@ -123,7 +123,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
         if (!casino) continue;
 
         const items = (dia.productos || []).map((producto) => ({
-          producto_nombre: resolverProductoCasinoOperacion(producto?.nombre || ''),
+          producto_nombre: resolverPyePorCantidad(resolverProductoCasinoOperacion(producto?.nombre || ''), Number(producto?.por_casino?.[casino] || 0), normalizarProducto),
           cantidad: Number(producto?.por_casino?.[casino] || 0)
         })).filter((item) => item.producto_nombre && Number.isFinite(item.cantidad) && item.cantidad > 0);
         if (!items.length) continue;
@@ -1564,18 +1564,19 @@ async function procesarCronogramaCasinos(buffer) {
           continue;
         }
 
-        const nombreProducto = resolverNombreCasino(nombreOriginal, pan, tipo);
-        const grupo = grupoProductoCasino(nombreProducto, categoriaActual, esFormatoPanTipo);
+        const nombreProductoBase = resolverNombreCasino(nombreOriginal, pan, tipo);
         const reconocido = resolverVariantePetipanCasino([pan, tipo].filter(Boolean).join(' '))
           || resolverVariantePetipanCasino(nombreOriginal)
           || resolverNombreCocina(nombreOriginal)
           || CASINO_ALIAS_EXACTOS[normalizarProducto(nombreOriginal)]
           || CASINO_ALIAS_EXACTOS[normalizarProducto([pan, tipo].filter(Boolean).join(' '))];
-        if (!reconocido && nombreProducto === nombreOriginal) productosNoReconocidos.add(nombreOriginal);
+        if (!reconocido && nombreProductoBase === nombreOriginal) productosNoReconocidos.add(nombreOriginal);
 
         cantidadesFila.forEach(({ fechaIso, cantidad }) => {
           if (!(cantidad > 0)) return;
 
+          const nombreProducto = resolverPyePorCantidad(nombreProductoBase, cantidad, normalizarProducto);
+          const grupo = grupoProductoCasino(nombreProducto, categoriaActual, esFormatoPanTipo);
           const dia = diasMap.get(fechaIso);
           dia.casinos.add(casino);
 
@@ -2361,7 +2362,9 @@ app.post('/api/pedidos', protectDigitacionOrigin, async (req, res) => {
       const stmt = db.prepare(queryDetalle);
       detalles.forEach((det) => {
         const paquetes = det.paquetes && typeof det.paquetes === 'object' ? JSON.stringify(det.paquetes) : '{}';
-        stmt.run(pedidoId, det.producto_nombre, det.cantidad, det.subtotal, paquetes, String(det.foto_torta || ''));
+        const cantidad = Number(det.cantidad || 0);
+        const nombreProducto = resolverPyePorCantidad(det.producto_nombre, cantidad, normalizarProducto);
+        stmt.run(pedidoId, nombreProducto, cantidad, det.subtotal, paquetes, String(det.foto_torta || ''));
       });
 
       stmt.finalize(async (err) => {
@@ -3044,8 +3047,9 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
         const cantidad = Number(item.cantidad || 0);
         const subtotal = Number(item.subtotal || 0);
         if (!nombre || cantidad <= 0) return;
+        const nombreProducto = resolverPyePorCantidad(nombre, cantidad, normalizarProducto);
         const paquetes = item.paquetes && typeof item.paquetes === 'object' ? JSON.stringify(item.paquetes) : '{}';
-        stmt.run(id, nombre, cantidad, subtotal, paquetes, String(item.foto_torta || ''));
+        stmt.run(id, nombreProducto, cantidad, subtotal, paquetes, String(item.foto_torta || ''));
       });
 
       stmt.finalize((finalizeErr) => {
