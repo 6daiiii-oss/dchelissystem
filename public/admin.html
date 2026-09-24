@@ -1191,6 +1191,11 @@
     .user-active-control input { width:auto !important; min-height:auto !important; }
     @media (max-width: 1050px) { .user-admin-card { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     @media (max-width: 640px) { .user-admin-card { grid-template-columns:1fr; } }
+    @media (max-width: 640px) {
+      .casino-cronograma-card { align-items:flex-start; flex-direction:column; }
+      .casino-cronograma-actions { width:100%; }
+      .casino-cronograma-actions .btn { flex:1; }
+    }
 
     .casino-panel { overflow: visible; }
     .casino-upload-card {
@@ -1229,6 +1234,63 @@
     }
     .casino-status.error { color:#b42318; }
     .casino-status.success { color:#087c32; }
+
+    .casino-cronograma-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+      gap:12px;
+      margin:0 0 18px;
+    }
+    .casino-cronograma-card {
+      display:flex;
+      justify-content:space-between;
+      gap:14px;
+      align-items:center;
+      min-width:0;
+      padding:15px 16px;
+      border:1px solid #dce8df;
+      border-radius:14px;
+      background:#fff;
+      box-shadow:0 5px 16px rgba(23,60,43,.045);
+    }
+    .casino-cronograma-card.active {
+      border-color:#0b7431;
+      box-shadow:0 0 0 2px rgba(11,116,49,.10),0 8px 20px rgba(23,60,43,.07);
+      background:#f7fcf8;
+    }
+    .casino-cronograma-copy { min-width:0; }
+    .casino-cronograma-copy strong {
+      display:block;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      color:#173c2b;
+      font-size:.9rem;
+    }
+    .casino-cronograma-copy span,
+    .casino-cronograma-copy small {
+      display:block;
+      margin-top:3px;
+      color:var(--muted);
+      font-size:.72rem;
+      font-weight:700;
+    }
+    .casino-cronograma-actions { display:flex; gap:7px; flex:0 0 auto; }
+    .casino-cronograma-actions .btn { min-height:38px; padding:8px 11px; }
+    .casino-cronograma-active {
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:center;
+      margin:0 0 10px;
+      padding:10px 12px;
+      border-left:4px solid #0b7431;
+      background:#f6faf7;
+      color:#173c2b;
+      font-size:.8rem;
+      font-weight:800;
+    }
+    .casino-cronograma-active[hidden] { display:none; }
 
     .casino-loading {
       display:flex;
@@ -2440,9 +2502,6 @@
               Importa uno o más cronogramas. Cada casino y fecha se guarda como pedido CASINO interno, editable solo desde esta sección, y alimenta Embalaje y Producción sin aparecer en Pedidos Generales.
             </div>
           </div>
-          <button id="imprimirCasinosBtn" class="btn btn-warning" type="button" onclick="imprimirHojaCasinos()" disabled>
-            Imprimir todos los casinos
-          </button>
         </div>
 
         <div class="casino-upload-card no-print">
@@ -2470,6 +2529,8 @@
             <div class="casino-loading-bar" aria-hidden="true"></div>
           </div>
         </div>
+        <div id="casinoCronogramasLista" class="casino-cronograma-grid no-print"></div>
+        <div id="casinoCronogramaActivo" class="casino-cronograma-active no-print" hidden></div>
         <div id="casinoDiasResumen" class="casino-days-strip no-print"></div>
         <div id="casinoArchivoSemanas" class="casino-archive-weeks no-print" hidden></div>
         <div id="casinosProduccion"></div>
