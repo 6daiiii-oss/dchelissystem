@@ -935,10 +935,13 @@ function grupoProductoCasino(nombre, categoria = '', esFormatoPanTipo = false) {
   if (PRODUCTOS_COCINA_EXTRA.some((item) => normalizarProducto(item) === clave)) return 'extra';
   if (PRODUCTOS_COCINA.some((item) => normalizarProducto(item) === clave)) return 'principal';
 
+  const grupoCompartido = grupoProductoProduccion(nombre, normalizarProducto);
+  if (grupoCompartido !== 'Bocaditos') return 'extra';
+
   const contexto = normalizarProducto(`${categoria} ${nombre}`);
   if (
     esFormatoPanTipo ||
-    /\b(PAN|TRIPLE|SANDWICH|SANGUCHE|PETIPAN|CROISSANT|HAMBURGUESA|HOT DOG|BAGUET|CIABATTA|FRANCES)\b/.test(contexto)
+    /\b(PAN|TRIPLE|SANDWICH|SANGUCHE|PETIPAN|CROISSANT|HAMBURGUESA|HOT DOG|BAGUET|CIABATTA|FRANCES|PIQUEO)\b/.test(contexto)
   ) return 'extra';
 
   return 'principal';
@@ -953,10 +956,11 @@ async function procesarCronogramaCasinos(buffer) {
   const advertencias = [];
   const productosNoReconocidos = new Set();
 
+  let contextoCronologico = { anio: null, mes: null };
+
   libro.worksheets.forEach((hoja) => {
-    const casino = String(hoja.name || '').trim();
-    if (!casino) return;
-    casinosOrden.push(casino);
+    const contextoHoja = contextoFechaCasinoHoja(hoja, contextoCronologico);
+    if (Number.isInteger(contextoHoja.mes)) contextoCronologico = contextoHoja;
 
     const limiteFilasCabecera = Math.min(Math.max(hoja.rowCount, 1), 15);
     let filaCabecera = 0;
@@ -964,8 +968,7 @@ async function procesarCronogramaCasinos(buffer) {
     for (let fila = 1; fila <= limiteFilasCabecera; fila += 1) {
       let diasDetectados = 0;
       for (let columna = 1; columna <= hoja.columnCount; columna += 1) {
-        const valor = normalizarProducto(valorCeldaCasino(hoja.getCell(fila, columna)));
-        if (CASINO_DIAS.has(valor)) diasDetectados += 1;
+        if (resolverDiaCasino(valorCeldaCasino(hoja.getCell(fila, columna)))) diasDetectados += 1;
       }
       if (diasDetectados >= 3) {
         filaCabecera = fila;
@@ -973,10 +976,12 @@ async function procesarCronogramaCasinos(buffer) {
       }
     }
 
+    const casino = filaCabecera ? nombreCasinoDesdeHoja(hoja, filaCabecera) : String(hoja.name || '').trim();
     if (!filaCabecera) {
-      advertencias.push(`${casino}: no se encontró una fila de días reconocible.`);
+      advertencias.push(`${casino || hoja.name}: no se encontró una fila de días reconocible.`);
       return;
     }
+    if (!casinosOrden.includes(casino)) casinosOrden.push(casino);
 
     let columnaArticulo = 0;
     let columnaPan = 0;
@@ -985,10 +990,16 @@ async function procesarCronogramaCasinos(buffer) {
 
     for (let columna = 1; columna <= hoja.columnCount; columna += 1) {
       const encabezado = normalizarProducto(valorCeldaCasino(hoja.getCell(filaCabecera, columna)));
-      if (encabezado === 'ARTICULO') columnaArticulo = columna;
+      if (encabezado === 'ARTICULO' || encabezado === 'ITEM' || encabezado === 'PRODUCTO') columnaArticulo = columna;
       if (encabezado === 'PAN') columnaPan = columna;
       if (encabezado === 'TIPO') columnaTipo = columna;
-      if (CASINO_DIAS.has(encabezado)) columnasDia.push({ columna, encabezado });
+      const dia = resolverDiaCasino(encabezado);
+      if (dia) columnasDia.push({ columna, encabezado: dia });
+    }
+
+    if (!columnaArticulo && !(columnaPan && columnaTipo) && columnasDia.length) {
+      const primeraColumnaDia = Math.min(...columnasDia.map((item) => item.columna));
+      if (primeraColumnaDia > 1) columnaArticulo = 1;
     }
 
     if (!columnaArticulo && !(columnaPan && columnaTipo)) {
@@ -997,20 +1008,22 @@ async function procesarCronogramaCasinos(buffer) {
     }
 
     const filaFechas = filaCabecera + 1;
-    let anioReferencia = new Date().getFullYear();
+    let anioReferencia = Number(contextoHoja.anio || new Date().getFullYear());
+    let mesReferencia = Number.isInteger(contextoHoja.mes) ? contextoHoja.mes : null;
 
     for (const item of columnasDia) {
       const valorFecha = valorCeldaCasino(hoja.getCell(filaFechas, item.columna));
-      const fecha = fechaExcelCasino(valorFecha, anioReferencia);
-      if (fecha && (valorFecha instanceof Date || typeof valorFecha === 'number' || /\d{4}/.test(String(valorFecha)))) {
+      const fecha = fechaExcelCasino(valorFecha, anioReferencia, mesReferencia);
+      if (fecha && (valorFecha instanceof Date || (typeof valorFecha === 'number' && valorFecha > 20000) || /\d{4}/.test(String(valorFecha)))) {
         anioReferencia = fecha.getUTCFullYear();
+        mesReferencia = fecha.getUTCMonth();
         break;
       }
     }
 
     const fechasColumnas = columnasDia
       .map((item) => {
-        const fecha = fechaExcelCasino(valorCeldaCasino(hoja.getCell(filaFechas, item.columna)), anioReferencia);
+        const fecha = fechaExcelCasino(valorCeldaCasino(hoja.getCell(filaFechas, item.columna)), anioReferencia, mesReferencia);
         if (!fecha) return null;
         const fechaIso = isoFechaCasino(fecha);
         if (!diasMap.has(fechaIso)) {
@@ -1024,6 +1037,11 @@ async function procesarCronogramaCasinos(buffer) {
         return { ...item, fecha, fechaIso };
       })
       .filter(Boolean);
+
+    if (!fechasColumnas.length) {
+      advertencias.push(`${casino}: se encontraron días, pero no fechas válidas.`);
+      return;
+    }
 
     let categoriaActual = '';
     const esFormatoPanTipo = !columnaArticulo && columnaPan && columnaTipo;
@@ -1052,6 +1070,18 @@ async function procesarCronogramaCasinos(buffer) {
         claveOriginal.includes('#REF')
       ) continue;
 
+      const cantidadesFila = fechasColumnas.map(({ columna, fechaIso }) => ({
+        fechaIso,
+        cantidad: numeroCasino(valorCeldaCasino(hoja.getCell(fila, columna)))
+      }));
+      const tieneCantidad = cantidadesFila.some((item) => item.cantidad > 0);
+      if (!tieneCantidad) {
+        if (/\b(BOCADITOS?|DULCES?|SALADOS?|PANES?|SANDWICH|SANGUCHE|TRIPLES?|PIQUEOS?|KEKES?|TORTAS?)\b/.test(claveOriginal)) {
+          categoriaActual = nombreOriginal;
+        }
+        continue;
+      }
+
       const nombreProducto = resolverNombreCasino(nombreOriginal, pan, tipo);
       const grupo = grupoProductoCasino(nombreProducto, categoriaActual, esFormatoPanTipo);
       const reconocido = resolverVariantePetipanCasino([pan, tipo].filter(Boolean).join(' '))
@@ -1061,8 +1091,7 @@ async function procesarCronogramaCasinos(buffer) {
         || CASINO_ALIAS_EXACTOS[normalizarProducto([pan, tipo].filter(Boolean).join(' '))];
       if (!reconocido && nombreProducto === nombreOriginal) productosNoReconocidos.add(nombreOriginal);
 
-      fechasColumnas.forEach(({ columna, fechaIso }) => {
-        const cantidad = numeroCasino(valorCeldaCasino(hoja.getCell(fila, columna)));
+      cantidadesFila.forEach(({ fechaIso, cantidad }) => {
         if (!(cantidad > 0)) return;
 
         const dia = diasMap.get(fechaIso);
