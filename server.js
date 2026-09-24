@@ -1784,6 +1784,10 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
     // todos los JSON históricos en cada importación.
     etapaImportacion = 'verificación de duplicados';
     const huella = huellaCronogramaCasino(resultado);
+    const nombreGuardado = nombreArchivo || 'Cronograma.xlsx';
+    const fechaInicio = resultado.dias[0]?.fecha || '';
+    const fechaFin = resultado.dias.at(-1)?.fecha || fechaInicio;
+
     const existente = await dbGetAsync(`
       SELECT id, huella, nombre_archivo, fecha_inicio, fecha_fin
       FROM casino_cronogramas
@@ -1802,21 +1806,43 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
       });
     }
 
-    const fechaInicio = resultado.dias[0]?.fecha || '';
-    const fechaFin = resultado.dias.at(-1)?.fecha || fechaInicio;
-    etapaImportacion = 'guardado del cronograma';
+    // Si se vuelve a importar el mismo archivo para un período que se solapa,
+    // se considera una revisión del mismo cronograma y reemplaza la versión vieja.
+    // Esto evita duplicar producción al corregir un archivo ya importado.
+    const reemplazo = await dbGetAsync(`
+      SELECT id, nombre_archivo, fecha_inicio, fecha_fin
+      FROM casino_cronogramas
+      WHERE LOWER(nombre_archivo) = LOWER(?)
+        AND NOT (fecha_fin < ? OR fecha_inicio > ?)
+      ORDER BY id DESC
+      LIMIT 1
+    `, [nombreGuardado, fechaInicio, fechaFin]);
+
+    etapaImportacion = reemplazo ? 'reemplazo del cronograma anterior' : 'guardado del cronograma';
     await dbRunAsync('BEGIN TRANSACTION');
     transaccion = true;
 
-    const cronograma = await dbRunAsync(
-      `INSERT INTO casino_cronogramas (huella, nombre_archivo, fecha_inicio, fecha_fin, datos_json)
-       VALUES (?, ?, ?, ?, ?)`,
-      [huella, nombreArchivo || 'Cronograma.xlsx', fechaInicio, fechaFin, JSON.stringify(resultado)]
-    );
+    let cronogramaId;
+    if (reemplazo) {
+      cronogramaId = Number(reemplazo.id);
+      await dbRunAsync(`DELETE FROM pedidos WHERE origen = 'casino' AND cronograma_casino_id = ?`, [cronogramaId]);
+      await dbRunAsync(`
+        UPDATE casino_cronogramas
+        SET huella = ?, nombre_archivo = ?, fecha_inicio = ?, fecha_fin = ?, datos_json = ?, creado_en = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [huella, nombreGuardado, fechaInicio, fechaFin, JSON.stringify(resultado), cronogramaId]);
+    } else {
+      const cronograma = await dbRunAsync(
+        `INSERT INTO casino_cronogramas (huella, nombre_archivo, fecha_inicio, fecha_fin, datos_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        [huella, nombreGuardado, fechaInicio, fechaFin, JSON.stringify(resultado)]
+      );
+      cronogramaId = cronograma.lastID;
+    }
 
     etapaImportacion = 'creación de pedidos Casino';
     const pedidosCreados = await sincronizarPedidosCasinoCronograma(
-      cronograma.lastID,
+      cronogramaId,
       resultado,
       { omitirVerificacionExistencia: true }
     );
@@ -1826,8 +1852,9 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
 
     return res.json({
       ok: true,
-      nombre_archivo: nombreArchivo || 'Cronograma.xlsx',
-      cronograma_id: cronograma.lastID,
+      nombre_archivo: nombreGuardado,
+      cronograma_id: cronogramaId,
+      reemplazado: Boolean(reemplazo),
       pedidos_casino_creados: pedidosCreados,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
