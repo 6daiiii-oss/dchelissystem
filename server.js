@@ -186,7 +186,11 @@ async function construirCronogramaCasinoDesdePedidos() {
     casinos: [...dia.casinos],
     productos: [...dia.productos.values()].sort((a, b) => {
       if (a.grupo !== b.grupo) return a.grupo === 'principal' ? -1 : 1;
-      return String(a.nombre).localeCompare(String(b.nombre), 'es');
+      const lista = a.grupo === 'extra' ? PRODUCTOS_COCINA_EXTRA : PRODUCTOS_COCINA;
+      const mapa = new Map(lista.map((nombre, indice) => [normalizarProducto(nombre), indice]));
+      const ai = mapa.get(normalizarProducto(a.nombre)) ?? 9999;
+      const bi = mapa.get(normalizarProducto(b.nombre)) ?? 9999;
+      return ai - bi || String(a.nombre).localeCompare(String(b.nombre), 'es');
     })
   }));
 
@@ -2613,9 +2617,25 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
         const id = Number(det.pedido_id);
         fila.porCliente.set(id, (fila.porCliente.get(id) || 0) + Number(det.cantidad || 0));
       }
+      const ordenGrupos = new Map([
+        ['Bocaditos', 0],
+        ['Sándwiches', 1],
+        ['Triples', 2],
+        ['Piqueos', 3],
+        ['Panes', 4]
+      ]);
+      const ordenCatalogo = new Map(
+        [...PRODUCTOS_COCINA, ...PRODUCTOS_COCINA_EXTRA]
+          .map((nombre, indice) => [normalizarProducto(nombre), indice])
+      );
       const productosGrupo = [...porProducto.values()].sort((a, b) => {
-        const rango = (nombre) => grupoProductoProduccion(nombre, normalizarProducto) === 'Bocaditos' ? 0 : 1;
-        return rango(a.nombre) - rango(b.nombre) || a.nombre.localeCompare(b.nombre, 'es');
+        const grupoA = grupoProductoProduccion(a.nombre, normalizarProducto);
+        const grupoB = grupoProductoProduccion(b.nombre, normalizarProducto);
+        const rangoA = ordenGrupos.get(grupoA) ?? 99;
+        const rangoB = ordenGrupos.get(grupoB) ?? 99;
+        const ordenA = ordenCatalogo.get(normalizarProducto(a.nombre)) ?? 9999;
+        const ordenB = ordenCatalogo.get(normalizarProducto(b.nombre)) ?? 9999;
+        return rangoA - rangoB || ordenA - ordenB || a.nombre.localeCompare(b.nombre, 'es');
       });
       const worksheet = workbook.addWorksheet(grupo.nombre, {
         pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
