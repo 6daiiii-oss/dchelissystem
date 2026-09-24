@@ -3959,13 +3959,65 @@
       );
     }
 
-    function renderizarTablaCasino(productos, dias, titulo) {
-      const productosVisibles = productosConPedidoEnDias(productos, dias);
-      if (!dias.length || !productosVisibles.length) {
-        return `<div class="casino-empty-day">Sin pedidos de ${escapeHtmlAdmin(titulo.toLowerCase())} en esta semana.</div>`;
+    const MAX_FILAS_CASINO_UNA_HOJA = 38;
+    const ORDEN_CASINO_UNA_HOJA = ['dulces', 'salados', 'panes', 'sanguches', 'triples', 'tortas', 'kekes'];
+    const ORDEN_CASINO_HOJA_1 = ['dulces', 'salados', 'panes', 'kekes', 'tortas'];
+    const ORDEN_CASINO_HOJA_2 = ['sanguches', 'triples'];
+
+    function categoriaSalidaCasino(nombre) {
+      const clave = normalizarNombreProducto(nombre || '');
+      if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
+      if (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave)) return 'tortas';
+
+      const grupo = grupoProductoProduccion(nombre || '', normalizarNombreProducto);
+      if (grupo === 'Panes') return 'panes';
+      if (grupo === 'Sándwiches') return 'sanguches';
+      if (grupo === 'Triples') return 'triples';
+
+      if (/\b(ALFAJOR|OREJITA|PANUELIT|PANUELO|PIONON|PYE|PIE|RELAMPAG|TARTALETA|BISCOTELA|BROWNIE|CISNE|COCADA|CONITO|DONA|KEKITO|MERENG|MILHOJA|MOUSSE|NIDITO|PROFITEROL|ROSQUITA|TORTITA|TRES LECHES|TRUFA)\b/.test(clave)) {
+        return 'dulces';
+      }
+      return 'salados';
+    }
+
+    function ordenarProductosSalidaCasino(productos, ordenCategorias) {
+      const rango = new Map(ordenCategorias.map((categoria, indice) => [categoria, indice]));
+      return (Array.isArray(productos) ? productos : [])
+        .map((producto, indice) => ({
+          ...producto,
+          __categoriaCasino: categoriaSalidaCasino(producto?.nombre || ''),
+          __indiceCasino: indice
+        }))
+        .filter((producto) => rango.has(producto.__categoriaCasino))
+        .sort((a, b) =>
+          (rango.get(a.__categoriaCasino) ?? 99) - (rango.get(b.__categoriaCasino) ?? 99)
+          || a.__indiceCasino - b.__indiceCasino
+        );
+    }
+
+    function dividirHojasSalidaCasino(productos, dias) {
+      const visibles = productosConPedidoEnDias(productos, dias);
+      if (visibles.length <= MAX_FILAS_CASINO_UNA_HOJA) {
+        return [ordenarProductosSalidaCasino(visibles, ORDEN_CASINO_UNA_HOJA)];
       }
 
-      const anchoMinimo = Math.max(620, 220 + (dias.length * 72) + 70);
+      const hoja1 = ordenarProductosSalidaCasino(
+        visibles.filter((producto) => ORDEN_CASINO_HOJA_1.includes(categoriaSalidaCasino(producto.nombre))),
+        ORDEN_CASINO_HOJA_1
+      );
+      const hoja2 = ordenarProductosSalidaCasino(
+        visibles.filter((producto) => ORDEN_CASINO_HOJA_2.includes(categoriaSalidaCasino(producto.nombre))),
+        ORDEN_CASINO_HOJA_2
+      );
+      return [hoja1, hoja2].filter((hoja) => hoja.length);
+    }
+
+    function renderizarTablaCasino(casino, productos, dias) {
+      if (!dias.length || !productos.length) {
+        return '<div class="casino-empty-day">Sin pedidos en esta hoja.</div>';
+      }
+
+      const anchoMinimo = Math.max(620, 250 + (dias.length * 86));
       const encabezados = dias.map((dia) => `
         <th class="casino-day-head">
           <span class="casino-day-name">${escapeHtmlAdmin(dia.dia)}</span>
@@ -3973,11 +4025,11 @@
         </th>
       `).join('');
 
-      const filas = productosVisibles.map((producto) => {
-        let totalSemana = 0;
+      const totalesDia = new Map(dias.map((dia) => [dia.fecha, 0]));
+      const filas = productos.map((producto) => {
         const cantidades = dias.map((dia) => {
           const cantidad = Number(producto.por_fecha?.[dia.fecha] || 0);
-          totalSemana += cantidad;
+          if (cantidad > 0) totalesDia.set(dia.fecha, Number(totalesDia.get(dia.fecha) || 0) + cantidad);
           return `<td class="casino-qty${cantidad > 0 ? '' : ' casino-zero'}">${cantidad > 0 ? renderizarNumeroCasino(cantidad) : ''}</td>`;
         }).join('');
 
@@ -3985,45 +4037,49 @@
           <tr>
             <td class="casino-product-col">${renderizarNombreCasino(producto.nombre)}</td>
             ${cantidades}
-            <td class="casino-total-col">${renderizarNumeroCasino(totalSemana)}</td>
           </tr>
         `;
       }).join('');
 
+      const filaTotales = dias.map((dia) => {
+        const total = Number(totalesDia.get(dia.fecha) || 0);
+        return `<td class="casino-qty casino-total-day">${total > 0 ? renderizarNumeroCasino(total) : ''}</td>`;
+      }).join('');
+
       return `
         <section class="casino-section">
-          <h5 class="casino-section-title">${escapeHtmlAdmin(titulo)}</h5>
           <div class="casino-day-table-wrap">
             <table class="casino-day-table" style="min-width:${anchoMinimo}px;">
               <thead>
                 <tr>
-                  <th class="casino-product-col">Producto</th>
+                  <th class="casino-product-col casino-name-head">${escapeHtmlAdmin(casino)}</th>
                   ${encabezados}
-                  <th class="casino-total-col">TOTAL</th>
                 </tr>
               </thead>
-              <tbody>${filas}</tbody>
+              <tbody>
+                ${filas}
+                <tr class="casino-total-row">
+                  <td class="casino-product-col">TOTAL</td>
+                  ${filaTotales}
+                </tr>
+              </tbody>
             </table>
           </div>
         </section>
       `;
     }
 
-    function renderizarHojaSemanaCasino(casino, productos, semana, categoriaTitulo) {
+    function renderizarHojaSemanaCasino(casino, productos, semana) {
       const diasSemana = Array.isArray(semana?.dias) ? semana.dias : [];
-      const cantidadProductos = productosConPedidoEnDias(productos, diasSemana).length;
-
-      // A4 vertical: todo el listado debe caber en una sola hoja.
-      // La letra solo baja cuando la cantidad de filas lo exige.
-      const filas = Math.max(1, cantidadProductos);
-      const altoDisponibleMm = 252;
-      const altoFilaMm = Math.min(18, altoDisponibleMm / filas);
-      const fuenteBasePx = Math.max(4.2, Math.min(19, altoFilaMm * 2.35));
-      const fuenteProductoPx = Math.max(4, Math.min(19, fuenteBasePx));
-      const fuenteNumeroPx = Math.max(5, Math.min(27, altoFilaMm * 3.0));
-      const paddingMm = Math.max(0.03, Math.min(2.0, altoFilaMm * 0.10));
-      const fuenteDiaPx = Math.max(8, Math.min(14.5, diasSemana.length > 8 ? 10.5 : 12.5));
-      const fuenteFechaPx = Math.max(7, Math.min(12.5, diasSemana.length > 8 ? 8.8 : 10.5));
+      const filas = Math.max(1, productos.length + 1);
+      const altoDisponibleMm = 270;
+      const altoFilaMm = Math.min(7.2, altoDisponibleMm / (filas + 2));
+      const fuenteBasePx = Math.max(6.2, Math.min(11.5, altoFilaMm * 1.65));
+      const fuenteProductoPx = Math.max(6, Math.min(11.5, fuenteBasePx));
+      const fuenteNumeroPx = Math.max(7, Math.min(13, altoFilaMm * 1.9));
+      const paddingMm = Math.max(0.2, Math.min(1.1, altoFilaMm * 0.11));
+      const fuenteDiaPx = Math.max(7.5, Math.min(10.5, diasSemana.length > 7 ? 8 : 9.5));
+      const fuenteFechaPx = Math.max(6.8, Math.min(9.5, diasSemana.length > 7 ? 7.3 : 8.5));
 
       const estiloAjuste = [
         `--casino-row-mm:${altoFilaMm.toFixed(3)}mm`,
@@ -4037,14 +4093,7 @@
 
       return `
         <section class="casino-print-sheet casino-fit-sheet" style="${estiloAjuste}">
-          <div class="casino-print-sheet-head">
-            <div>
-              <span>D'chelis · Cronograma de producción · Casinos</span>
-              <h5>${escapeHtmlAdmin(casino)} · Semana ${semana.numero} · ${escapeHtmlAdmin(categoriaTitulo)}</h5>
-            </div>
-            <span>${escapeHtmlAdmin(semana.rango)}</span>
-          </div>
-          ${renderizarTablaCasino(productos, diasSemana, categoriaTitulo)}
+          ${renderizarTablaCasino(casino, productos, diasSemana)}
         </section>
       `;
     }
@@ -4202,11 +4251,9 @@
         .filter((cronograma) => cronograma.productos.length > 0);
 
       contenedor.innerHTML = cronogramas.map((cronograma, indice) => {
-        // Orden de impresión: casino → bocaditos → sánguches → siguiente casino.
-        const hojas = [
-          renderizarHojaSemanaCasino(cronograma.casino, cronograma.principales, semana, 'Bocaditos'),
-          renderizarHojaSemanaCasino(cronograma.casino, cronograma.extras, semana, 'Sánguches, triples y panes')
-        ].join('');
+        const hojas = dividirHojasSalidaCasino(cronograma.productos, semana.dias)
+          .map((productosHoja) => renderizarHojaSemanaCasino(cronograma.casino, productosHoja, semana))
+          .join('');
 
         return `
           <article class="casino-day-page" data-casino-index="${indice}">
