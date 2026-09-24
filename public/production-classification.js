@@ -1,8 +1,16 @@
+function normalizarBaseProduccion(nombre) {
+  return String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function resolverPetipanNombre(nombre) {
   const original = String(nombre || '').trim();
-  const limpio = original.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
-    .replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
-  const coincidencia = limpio.match(/^(?:PETIT\s*PAN|PETI\s*PAN)(?:\s+(.*))?$/);
+  const limpio = normalizarBaseProduccion(original)
+    .replace(/^(?:MINI|MINNI)\s+/, '')
+    .replace(/^PAN\s+/, '')
+    .replace(/\s+(?:CHICO|PEQUENO)(?:\s+X\s*\d+\s*UND)?$/, '')
+    .trim();
+  const coincidencia = limpio.match(/^(?:PETIT\s*PAN|PETI\s*PAN|PETIPAN|PETITPAN)(?:\s+(.*))?$/);
   if (!coincidencia) return null;
   const relleno = String(coincidencia[1] || '').replace(/\bMINI\b/g, '').replace(/\s+/g, ' ').trim();
   if (!relleno) return 'Petipan';
@@ -13,43 +21,59 @@ function resolverPetipanNombre(nombre) {
     return 'Petipan de pollo c/durazno';
   }
   if (/^(?:(?:DE|CON) )?POLLO$/.test(relleno)) return 'Petipan de Pollo';
-  // Un relleno no conocido se mantiene independiente: no se pierde bajo "Petipan".
-  const originalRelleno = original.replace(/^(?:petit\s*pan|peti\s*pan)(?:\s+|$)/i, '')
+  const originalRelleno = original
+    .replace(/^(?:(?:mini|minni)\s+)?(?:pan\s+)?(?:petit\s*pan|peti\s*pan|petipan|petitpan)(?:\s+|$)/i, '')
     .replace(/\bmini\b/ig, '').replace(/\s+/g, ' ').trim();
-  return `Petipan ${originalRelleno}`;
+  return originalRelleno ? `Petipan ${originalRelleno}` : 'Petipan';
 }
 
 function resolverCiabattaNombre(nombre) {
   const original = String(nombre || '').trim();
-  const clave = original.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  const clave = normalizarBaseProduccion(original);
   if (!/\bCIABATTA\b/.test(clave)) return null;
   if (/\bCIABATTA\b.*\bHOT\s*DOG\b/.test(clave)) return 'Ciabatta con hotdog';
-  // Evitar que una coincidencia parcial del catálogo elimine un relleno distinto.
-  if (/^(?:MINI CIABATTA|CIABATTA|PAN CIABATTA MINI)$/.test(clave)) return 'Mini Ciabatta';
+  if (/^(?:(?:MINI|MINNI)\s+CIABATTA|CIABATTA|PAN\s+CIABATTA\s+(?:MINI|CHICO)(?:\s+X\s*\d+\s*UND)?)$/.test(clave)) {
+    return 'Mini Ciabatta';
+  }
   return original;
 }
 
 function grupoProductoProduccion(nombre, normalizar) {
   const clave = normalizar(nombre);
   if (/\bEMPANADA\b.*\bBODA\b/.test(clave)) return 'Bocaditos';
-  if (/\bCIABATTA\b/.test(clave) && !/^(?:SANDWICH|SANGUCHE|TRIPLE)\b/.test(clave)) return 'Panes';
-  if (/^(?:PETIPAN|PETIT PAN|PETITPAN|PETI PAN)(?:\s|$)/.test(clave)) {
-    return /^(?:PETIPAN|PETIT PAN|PETITPAN|PETI PAN)(?:\s+MINI)?$/.test(clave) ? 'Panes' : 'Sándwiches y triples';
+
+  if (/\b(BROCHETA|ALITA\s+BOUCHET|GUINDON|ESPARRAGO|HOJARASCA|TEQUENO|VOULEVAN|CANAPE)\b/.test(clave)
+      || /\bPIONONIT(?:O|OS)\b.*\bESPINACA\b/.test(clave)) {
+    return 'Piqueos';
   }
-  if (/\b(SANDWICH|SANGUCHE|TRIPLE|BUTIFARRA|CAPRESE|CAPRECCE)\b/.test(clave)
+
+  if (/^TRIPLE(?:S)?\b/.test(clave)) return 'Triples';
+
+  if (/^(?:PETIPAN|PETIT PAN|PETITPAN|PETI PAN)(?:\s|$)/.test(clave)) {
+    return /^(?:PETIPAN|PETIT PAN|PETITPAN|PETI PAN)(?:\s+MINI)?$/.test(clave) ? 'Panes' : 'Sándwiches';
+  }
+
+  if (/\b(SANDWICH|SANGUCHE|BUTIFARRA|CAPRESE|CAPRECCE)\b/.test(clave)
       || /\bCROISSANT\b.*\b(POLLO|MIXTO|JAMON|QUESO)\b/.test(clave)
       || /\b(?:FRANCES|ARABE|CIABATTA)\b.*\b(POLLO|ASADO|LOMITO|HAMBURGUESA)\b/.test(clave)) {
-    return 'Sándwiches y triples';
+    return 'Sándwiches';
   }
-  if (/^(PAN|MINI|BAGUETINA|BAGUETTE|CIABATTA|CROISSANT|FRANCES|ARABE)\b/.test(clave)) return 'Panes';
+
+  if (/\bCIABATTA\b/.test(clave) && !/^(?:SANDWICH|SANGUCHE|TRIPLE)\b/.test(clave)) return 'Panes';
+  if (/^(PAN|MINI|MINNI|BAGUETINA|BAGUETTE|BAGUETINO|CIABATTA|CROISSANT|FRANCES|ARABE|PULLMAN|PULMAN|ROSETA)\b/.test(clave)) return 'Panes';
+
   return 'Bocaditos';
 }
 
 function tipoItemCocina(nombre, cantidad, normalizar) {
   const clave = normalizar(nombre);
+  const unidades = Number(cantidad || 0);
   const esKeke = /\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave);
   const esPastel = /\b(TORTA|TORTITAS?|PIE|PYE|MOUSSE|CREMA|TRES LECHES)\b/.test(clave);
-  const esTorta = esPastel && (/^TORTA\b/.test(clave) || Number(cantidad) < 10);
+  const esTortaExplicita = /^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave);
+  const esPyeEntero = /\b(PIE|PYE)\b/.test(clave) && unidades > 0 && unidades <= 6
+    && !/\b(MINI|BOCADITO|TARTALETA)\b/.test(clave);
+  const esTorta = esTortaExplicita || esPyeEntero;
   return { esKeke, esTorta, esPastel, grupo: grupoProductoProduccion(nombre, normalizar) };
 }
 
@@ -65,40 +89,69 @@ function filtrarItemsEmbalaje(detalles, resolver, normalizar) {
   });
 }
 
-function clasificarHojaProduccion(detalles, clientes, resolver, normalizar) {
+function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, ordenReferencia = []) {
   const nombres = new Map((clientes || []).map((cliente) => [Number(cliente.id), cliente.cliente_nombre || 'Cliente']));
   const principales = new Map();
   const especiales = new Map();
+  const orden = new Map((ordenReferencia || []).map((nombre, indice) => [normalizar(nombre), indice]));
+  const grupos = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes'];
+
+  const acumularTurno = (destino, detalle, cantidad) => {
+    if (detalle?.es_urgente) destino.urgente += cantidad;
+    else destino.normal += cantidad;
+    destino.total += cantidad;
+  };
 
   for (const detalle of detalles || []) {
     const cantidad = Number(detalle.cantidad || 0);
     if (!Number.isFinite(cantidad) || cantidad <= 0) continue;
-    const nombre = String(resolverPetipanNombre(detalle.producto_nombre) || resolverCiabattaNombre(detalle.producto_nombre)
-      || resolver(detalle.producto_nombre) || detalle.producto_nombre || 'Producto')
-      .replace(/^(?:KEKES\s+)+(?=KEKE\b)/i, '').trim();
+    const nombre = String(
+      resolverPetipanNombre(detalle.producto_nombre)
+      || resolverCiabattaNombre(detalle.producto_nombre)
+      || resolver(detalle.producto_nombre)
+      || detalle.producto_nombre
+      || 'Producto'
+    ).replace(/^(?:KEKES\s+)+(?=KEKE\b)/i, '').trim();
+
     const clave = normalizar(nombre);
     const { esKeke, esPastel, esTorta, grupo } = tipoItemCocina(nombre, cantidad, normalizar);
 
     if (esKeke || esTorta) {
       const cliente = nombres.get(Number(detalle.pedido_id)) || 'Cliente';
-      const etiqueta = esKeke ? nombre : `${nombre} (TORTA)`;
+      const etiqueta = esKeke ? nombre : (nombre.toUpperCase().startsWith('TORTA ') ? nombre : `Torta ${nombre}`);
       const llave = esKeke ? `keke:${clave}` : `torta:${clave}:${Number(detalle.pedido_id)}`;
-      if (!especiales.has(llave)) especiales.set(llave, { nombre: etiqueta, cliente: esKeke ? '' : cliente, total: 0 });
-      especiales.get(llave).total += cantidad;
-    } else {
-      const etiqueta = esPastel ? `${nombre} (BOCADITOS)` : nombre;
-      const llave = `principal:${clave}`;
-      if (!principales.has(llave)) principales.set(llave, { nombre: etiqueta, grupo, total: 0 });
-      principales.get(llave).total += cantidad;
+      if (!especiales.has(llave)) {
+        especiales.set(llave, {
+          nombre: etiqueta,
+          cliente: esKeke ? '' : cliente,
+          tipo: esKeke ? 'keke' : 'torta',
+          urgente: 0,
+          normal: 0,
+          total: 0
+        });
+      }
+      acumularTurno(especiales.get(llave), detalle, cantidad);
+      continue;
     }
+
+    const etiqueta = esPastel ? `${nombre} (BOCADITOS)` : nombre;
+    const llave = `principal:${clave}`;
+    if (!principales.has(llave)) {
+      principales.set(llave, { nombre: etiqueta, grupo, urgente: 0, normal: 0, total: 0, orden: orden.get(clave) ?? 99999 });
+    }
+    acumularTurno(principales.get(llave), detalle, cantidad);
   }
 
-  const ordenar = (a, b) => a.nombre.localeCompare(b.nombre, 'es') || a.cliente?.localeCompare(b.cliente || '', 'es') || 0;
+  const ordenarTexto = (a, b) => a.nombre.localeCompare(b.nombre, 'es') || String(a.cliente || '').localeCompare(String(b.cliente || ''), 'es');
   return {
     filas: [...principales.values()].sort((a, b) =>
-      ['Bocaditos', 'Sándwiches y triples', 'Panes'].indexOf(a.grupo)
-      - ['Bocaditos', 'Sándwiches y triples', 'Panes'].indexOf(b.grupo) || ordenar(a, b)),
-    especiales: [...especiales.values()].sort(ordenar)
+      grupos.indexOf(a.grupo) - grupos.indexOf(b.grupo)
+      || a.orden - b.orden
+      || ordenarTexto(a, b)
+    ),
+    especiales: [...especiales.values()].sort((a, b) =>
+      (a.tipo === 'keke' ? 0 : 1) - (b.tipo === 'keke' ? 0 : 1) || ordenarTexto(a, b)
+    )
   };
 }
 
