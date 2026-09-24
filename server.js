@@ -410,7 +410,8 @@ const PRODUCTOS_COCINA_EXTRA = [
   'Triple espinaca y queso crema', 'Triple mermelada y queso crema', 'Triple pollo y lomo ahumado',
   'Triple pollo y tocino', 'Triple pollo con aceituna', 'Triple pollo con piña', 'Triple pollo, pecanas y jamón',
   'Pan de Molde (Pullman)', 'Pan de Molde Integral', 'Pan de Molde Marmoleado', 'Pan de Molde de Color',
-  'Pan de Molde Blanco chico', 'Pan de Molde Integral chico', 'Baguetina', 'Mini Francés', 'Mini Croissant', 'Pan de Hamburguesa'
+  'Pan de Molde Blanco chico', 'Pan de Molde Integral chico', 'Baguetina', 'Mini Francés', 'Mini Croissant',
+  'Pan de Hamburguesa', 'Mini Arabe', 'Mini Ciabatta', 'Mini Integral', 'Mini Jamón', 'Mini Hot Dog', 'Mini Aceituna'
 ];
 
 const PRODUCTOS_COCINA_MAPA_TIENDA = Object.fromEntries(Object.entries({
@@ -672,13 +673,72 @@ function resolverNombreCocina(nombre) {
 }
 
 
-const CASINO_DIAS = new Set(['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO']);
+const CASINO_DIAS_ALIAS = Object.fromEntries(Object.entries({
+  L: 'LUNES', LUN: 'LUNES', LUNES: 'LUNES',
+  M: 'MARTES', MAR: 'MARTES', MARTES: 'MARTES',
+  X: 'MIERCOLES', MI: 'MIERCOLES', MIE: 'MIERCOLES', MIER: 'MIERCOLES', MIERCOLES: 'MIERCOLES',
+  J: 'JUEVES', JUE: 'JUEVES', JUEVES: 'JUEVES',
+  V: 'VIERNES', VIE: 'VIERNES', VIERNES: 'VIERNES',
+  S: 'SABADO', SAB: 'SABADO', SABADO: 'SABADO',
+  D: 'DOMINGO', DOM: 'DOMINGO', DOMINGO: 'DOMINGO'
+}).map(([clave, valor]) => [normalizarProducto(clave), valor]));
+
+function resolverDiaCasino(valor) {
+  const clave = normalizarProducto(valor).replace(/\bDIAS?\b/g, '').trim();
+  return CASINO_DIAS_ALIAS[clave] || '';
+}
+
 const CASINO_MESES = {
   ENE: 0, ENERO: 0, FEB: 1, FEBRERO: 1, MAR: 2, MARZO: 2, ABR: 3, ABRIL: 3,
   MAY: 4, MAYO: 4, JUN: 5, JUNIO: 5, JUL: 6, JULIO: 6, AGO: 7, AGOSTO: 7,
   SEP: 8, SET: 8, SEPT: 8, SETIEMBRE: 8, SEPTIEMBRE: 8, OCT: 9, OCTUBRE: 9,
   NOV: 10, NOVIEMBRE: 10, DIC: 11, DICIEMBRE: 11
 };
+
+function contextoFechaCasinoHoja(hoja, anterior = {}) {
+  const textos = [String(hoja?.name || '')];
+  for (let fila = 1; fila <= Math.min(5, hoja.rowCount || 0); fila += 1) {
+    for (let columna = 1; columna <= Math.min(4, hoja.columnCount || 0); columna += 1) {
+      const valor = valorCeldaCasino(hoja.getCell(fila, columna));
+      if (valor !== null && valor !== undefined && !(valor instanceof Date)) textos.push(String(valor));
+      if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+        textos.push(String(valor.getFullYear()));
+        textos.push(Object.keys(CASINO_MESES).find((mes) => CASINO_MESES[mes] === valor.getMonth()) || '');
+      }
+    }
+  }
+  const unido = normalizarProducto(textos.join(' '));
+  const anioExplicito = unido.match(/\b(20\d{2})\b/);
+  let mes = null;
+  for (const [nombre, indice] of Object.entries(CASINO_MESES)) {
+    if (new RegExp(`(?:^|\\s)${nombre}(?:\\s|$)`).test(unido)) {
+      mes = indice;
+      break;
+    }
+  }
+  let anio = anioExplicito ? Number(anioExplicito[1]) : Number(anterior.anio || new Date().getFullYear());
+  if (!anioExplicito && Number.isInteger(mes) && Number.isInteger(anterior.mes) && mes < anterior.mes - 6) anio += 1;
+  return { anio, mes: Number.isInteger(mes) ? mes : (Number.isInteger(anterior.mes) ? anterior.mes : null) };
+}
+
+function nombreCasinoDesdeHoja(hoja, filaCabecera) {
+  const candidatos = [
+    valorCeldaCasino(hoja.getCell(filaCabecera, 1)),
+    valorCeldaCasino(hoja.getCell(1, 1)),
+    hoja.name
+  ].map((valor) => String(valor || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+
+  for (const candidatoOriginal of candidatos) {
+    let candidato = candidatoOriginal.replace(/[→]/g, ' ').trim();
+    const clave = normalizarProducto(candidato);
+    if (!clave || /^(DIAS?|FECHAS?|ARTICULO|PAN|TIPO)$/.test(clave)) continue;
+    candidato = candidato.replace(/\bCRONOGRAMA\b.*$/i, '').trim();
+    candidato = candidato.replace(/\b(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SETIEMBRE|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE|ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SET|SEP|OCT|NOV|DIC)\b.*$/i, '').trim();
+    candidato = candidato.replace(/\b(20\d{2}|MODIF(?:ICADO)?|CORREGIDO|RECTIF(?:ICADO)?|ADIC(?:IONAL)?)\b.*$/i, '').trim();
+    if (candidato) return candidato;
+  }
+  return String(hoja.name || 'Casino').trim();
+}
 
 const CASINO_PETIPAN_VARIANTES = Object.fromEntries(Object.entries({
   'PETIPAN': 'Petipan',
@@ -718,6 +778,30 @@ function resolverVariantePetipanCasino(nombre) {
 }
 
 const CASINO_ALIAS_EXACTOS = Object.fromEntries(Object.entries({
+  'PAN CIABATTA CHICO X 100UND': 'Mini Ciabatta',
+  'PAN PETIPAN CHICO X 100UND': 'Petipan',
+  'PAN PULLMAN 10 TAPAS': 'Pan de Molde (Pullman)',
+  'PAN PULLMAN 10 TAPAS INTEGRAL': 'Pan de Molde Integral',
+  'PULMAN BLANCO': 'Pan de Molde (Pullman)',
+  'PULLMAN BLANCO': 'Pan de Molde (Pullman)',
+  'PULMAN MARMOLEADO': 'Pan de Molde Marmoleado',
+  'PULLMAN MARMOLEADO': 'Pan de Molde Marmoleado',
+  'MINNI PETIPAN': 'Petipan',
+  'MINI PETIPAN': 'Petipan',
+  'MINNI CROISANT': 'Mini Croissant',
+  'MINNI CROISSANT': 'Mini Croissant',
+  'MINI CROISANT': 'Mini Croissant',
+  'MINNI CIABATTA': 'Mini Ciabatta',
+  'MINNI HAMBURGUESA': 'Pan de Hamburguesa',
+  'MINNI BAGUETINO': 'Baguetina',
+  'MINI BAGUETINO': 'Baguetina',
+  'MINNI FRANCES': 'Mini Francés',
+  'PIONO': 'PIONONO',
+  'NIDO DE AMOR': 'NIDITOS',
+  'NIDOS DE AMOR': 'NIDITOS',
+  'ALFAJORES': 'ALFAJOR',
+  'OREJAS': 'OREJITAS',
+  'ALFAJORES CHOCOLATE': 'ALFAJOR CHOCOLATE',
   'PAN BAGUETTE MINI': 'Baguetina',
   'PAN CIABATTA MINI': 'Mini Ciabatta',
   'PAN CROISSANT MINI': 'Mini Croissant',
@@ -765,7 +849,7 @@ function numeroCasino(valor) {
   return Number.isFinite(numero) ? numero : 0;
 }
 
-function fechaExcelCasino(valor, anioReferencia = new Date().getFullYear()) {
+function fechaExcelCasino(valor, anioReferencia = new Date().getFullYear(), mesReferencia = null) {
   if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
     return new Date(Date.UTC(valor.getFullYear(), valor.getMonth(), valor.getDate()));
   }
@@ -774,10 +858,18 @@ function fechaExcelCasino(valor, anioReferencia = new Date().getFullYear()) {
     const milisegundos = Date.UTC(1899, 11, 30) + Math.round(valor * 86400000);
     return new Date(milisegundos);
   }
+  if (typeof valor === 'number' && Number.isFinite(valor) && valor >= 1 && valor <= 31 && Number.isInteger(mesReferencia)) {
+    return new Date(Date.UTC(Number(anioReferencia), mesReferencia, Number(valor)));
+  }
 
   const textoOriginal = String(valor ?? '').trim();
   if (!textoOriginal) return null;
   const texto = normalizarProducto(textoOriginal);
+
+  if (/^\d{1,2}$/.test(texto) && Number.isInteger(mesReferencia)) {
+    const dia = Number(texto);
+    if (dia >= 1 && dia <= 31) return new Date(Date.UTC(Number(anioReferencia), mesReferencia, dia));
+  }
 
   let match = texto.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
   if (match) {
