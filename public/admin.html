@@ -1616,6 +1616,9 @@
 
     @media screen and (max-width: 640px) {
       .casino-upload-card { padding:14px; border-radius:14px; }
+      .casino-cronograma-card { align-items:flex-start; flex-direction:column; }
+      .casino-cronograma-actions { width:100%; }
+      .casino-cronograma-actions .btn { flex:1; }
       .casino-day-page { padding:10px; border-radius:13px; }
       .casino-day-heading { align-items:flex-start; flex-direction:column; gap:5px; }
       .casino-heading-actions { width:100%; justify-content:stretch; }
@@ -4355,7 +4358,7 @@
           estado.textContent = `${(data.importaciones || []).length} cronograma(s) guardado(s). Abre uno para ver sus pedidos.`;
         }
 
-        if (abrirId) return abrirCronogramaCasino(abrirId, { forzar:true });
+        if (abrirId) return await abrirCronogramaCasino(abrirId, { forzar:true });
         return true;
       } catch (error) {
         if (estado) {
