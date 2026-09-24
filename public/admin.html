@@ -4863,7 +4863,16 @@
           <ul class="items-list">${(pedido.detalles || []).map(item => `<li><span class="item-name">${item.producto_nombre}${item.foto_torta ? `<img src="${item.foto_torta}" alt="Foto de ${item.producto_nombre}" class="cake-detail-photo">` : ''}</span><span class="item-qty">${obtenerTextoItem(item)}</span></li>`).join('') || '<li>Sin productos</li>'}</ul>
         </div>
         ${esHistorial ? `
-          <div class="history-locked-note">Pedido archivado · solo lectura</div>
+          <div class="order-actions">
+            <label>Estado del pedido</label>
+            <select class="status-select" data-id="${pedido.id}" onchange="actualizarEstadoPedido(this)">
+              ${['Pendiente de verificación de pago', 'Pendiente de pago', 'Registrado', 'En preparación', 'Listo para despacho', "Despachado (D'chelis)"].map(estado => '<option value="' + estado + '" ' + (estado === (pedido.estado || 'Registrado') ? 'selected' : '') + '>' + estado + '</option>').join('')}
+            </select>
+            <div class="history-locked-note" style="margin-top:10px;">Si cambias el pedido a un estado activo, volverá a Pedidos generales y dejará de estar archivado.</div>
+            <button type="button" class="btn btn-ghost" style="margin-top:10px; width:100%;" onclick="descargarBoletaAdmin(${pedido.id})">Descargar orden de pedido</button>
+            <button type="button" class="btn btn-warning" style="margin-top:10px; width:100%;" onclick="imprimirOrdenPedido(${pedido.id})">Imprimir orden de pedido</button>
+            <button type="button" class="btn btn-primary" style="margin-top:10px; width:100%;" onclick="imprimirTresBoletas(${pedido.id})">Imprimir A4 · 3 copias</button>
+          </div>
         ` : `
           <div class="order-actions">
             <label>Estado del pedido</label>
@@ -5059,7 +5068,9 @@
         return;
       }
       const pedido = pedidosDisponibles.get(Number(id));
+      const pedidoHistorial = pedidosHistorialDisponibles.get(Number(id));
       if (pedido) pedido.estado = estado;
+      if (pedidoHistorial) pedidoHistorial.estado = estado;
       const tarjeta = document.querySelector(`[data-pedido-id="${id}"]`);
       if (tarjeta) tarjeta.className = `order-card estado-${normalizarEstadoClase(estado)}`;
       document.getElementById('pedidoDetalleModal').classList.remove('active');
@@ -5543,7 +5554,7 @@
                   return `
                     <article data-pedido-id="${pedido.id}" class="order-card history-order-card" onclick="abrirDetallePedido(${pedido.id})" tabindex="0">
                       <div class="order-head">
-                        <span class="badge status">Archivado</span>
+                        <span class="badge status">${escapeHtmlAdmin(pedido.estado || 'Archivado')}</span>
                         ${pedido.despachado_por ? `<span class="badge history-dispatch-badge">Despachado · ${escapeHtmlAdmin(pedido.despachado_por)}</span>` : ''}
                       </div>
                       <span class="order-code">${obtenerCodigoVisible(pedido.codigo, pedido.id)}</span>
