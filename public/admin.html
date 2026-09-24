@@ -7,7 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="digitacion-config.js"></script>
-<script src="production-classification.js?v=4"></script>
+<script src="production-classification.js?v=5"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -3234,8 +3234,8 @@
     };
 
     const PEDIDO_EXTERNO_NOMBRES_LIMPIOS = {
-      'PYE MANZANA': 'Pye de manzana mini',
-      'PYE LIMON': 'Pye de limón mini',
+      'PYE MANZANA': 'Pye de Manzana',
+      'PYE LIMON': 'Pye de Limón',
       'PIONONITOS': 'Pionono mini'
     };
 
@@ -3371,7 +3371,10 @@
           .trim();
         if (!productoLimpio) return;
 
-        const producto = resolverProductoPedidoExterno(productoLimpio);
+        const productoBase = resolverProductoPedidoExterno(productoLimpio);
+        const producto = productoBase
+          ? (resolverProductoDigitadoPorCantidad(productoBase, cantidadNumero) || productoBase)
+          : null;
         const visible = producto ? nombreLimpioPedidoExterno(producto) : productoLimpio;
         const clave = normalizarNombreProducto(visible) || visible;
 
@@ -3529,6 +3532,20 @@
       return coincidencias.length ? ganador : candidatos[0].producto;
     }
 
+    function resolverProductoDigitadoPorCantidad(texto, cantidad) {
+      const base = resolverProductoDigitado(texto);
+      if (!base) return null;
+
+      const ajustado = resolverPyePorCantidad(base, cantidad, normalizarNombreProducto);
+      if (normalizarNombreProducto(ajustado) === normalizarNombreProducto(base)) return base;
+
+      const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
+      const exacto = catalogo.find((item) =>
+        normalizarNombreProducto(item?.nombre || '') === normalizarNombreProducto(ajustado)
+      );
+      return exacto?.nombre || ajustado;
+    }
+
     function renderQuickEntryPreview() {
       const lista = getQuickEntryLines();
       actualizarOpcionesTortaDigitacion(lista);
@@ -3538,7 +3555,9 @@
       const lineas = lista.map((linea) => {
         const match = linea.match(/^\s*(\d+)\s*(?:x|X)?\s*(.+?)\s*$/i);
         const cantidad = match ? Number(match[1]) : null;
-        const producto = match ? resolverProductoDigitado(match[2]) : resolverProductoDigitado(linea);
+        const producto = match
+          ? resolverProductoDigitadoPorCantidad(match[2], cantidad)
+          : resolverProductoDigitado(linea);
         const nombre = producto || 'Producto no identificado';
         const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
         const item = buscarItemCatalogoDigitacion(catalogo, producto);
@@ -3551,7 +3570,7 @@
         const match = linea.match(/^\s*(\d+)\s*(?:x|X)?\s*(.+?)\s*$/i);
         if (!match) return sum;
         const cantidad = Number(match[1]) || 0;
-        const producto = resolverProductoDigitado(match[2]);
+        const producto = resolverProductoDigitadoPorCantidad(match[2], cantidad);
         const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
         const item = buscarItemCatalogoDigitacion(catalogo, producto);
         const subtotal = calcularSubtotalCatalogo(item, cantidad);
@@ -3592,7 +3611,10 @@
     function actualizarOpcionesTortaDigitacion(lineas = getQuickEntryLines()) {
       const tortas = lineas.map((linea, indice) => {
         const match = linea.match(/^\s*(\d+)\s*(?:x|X)?\s*(.+?)\s*$/i);
-        const producto = resolverProductoDigitado(match ? match[2] : linea);
+        const cantidad = match ? Number(match[1]) : 1;
+        const producto = match
+          ? resolverProductoDigitadoPorCantidad(match[2], cantidad)
+          : resolverProductoDigitado(linea);
         const item = (window.__quickCatalog || []).find((entry) => normalizarNombreProducto(entry.nombre) === normalizarNombreProducto(producto || ''));
         return item?.categoria === 'Torta Chantilly'
           ? { indice, producto: item.nombre, key: obtenerClaveFotoTorta(indice, item.nombre) }
@@ -3720,7 +3742,7 @@
         const match = linea.match(/^\s*(\d+)\s*(?:x|X)?\s*(.+?)\s*$/i);
         const cantidad = match ? Number(match[1]) : null;
         const productoTexto = match ? match[2] : linea;
-        const producto = resolverProductoDigitado(productoTexto);
+        const producto = resolverProductoDigitadoPorCantidad(productoTexto, cantidad);
         if (!producto || !cantidad || cantidad <= 0) {
           mostrarErrorAdmin(`No se pudo interpretar: "${linea}". Usa formato como "25 triples PJQ".`, 'quickEntryInput');
           return;
