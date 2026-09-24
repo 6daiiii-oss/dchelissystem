@@ -5825,7 +5825,7 @@
       if (firmaProduccion === nuevaFirmaProduccion) return;
 
       const etiqueta = document.getElementById('kitchenWindowLabel');
-      if (etiqueta) etiqueta.textContent = `Producción: ${data.ventana?.desde || ''} → ${data.ventana?.hasta || ''} · Embalaje: recojos del ${data.embalaje?.fecha || fecha}`;
+      if (etiqueta) etiqueta.textContent = `Producción: ${data.ventana?.desde || ''} → ${data.ventana?.hasta || ''} · Rojo: emitido entre 08:00 del día anterior y 08:00 del día de la hoja, con recojo ese mismo día · Embalaje: recojos del ${data.embalaje?.fecha || fecha}`;
 
       renderizarHojaProduccionCocina(data);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
