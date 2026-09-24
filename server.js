@@ -227,6 +227,93 @@ async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '', c
   };
 }
 
+function combinarCronogramaCasinoConPedidos(baseOriginal, editado) {
+  let base;
+  try { base = JSON.parse(JSON.stringify(baseOriginal || {})); }
+  catch { base = {}; }
+
+  if (!Array.isArray(base.dias)) base.dias = [];
+  if (!Array.isArray(base.casinos)) base.casinos = [];
+  if (!editado || !Array.isArray(editado.dias) || !editado.dias.length) return base;
+
+  const diasBase = new Map(base.dias.map((dia) => [String(dia?.fecha || ''), dia]));
+  const casinos = new Set([...(base.casinos || []), ...(editado.casinos || [])].filter(Boolean));
+
+  for (const diaEditado of editado.dias) {
+    const fecha = String(diaEditado?.fecha || '');
+    if (!fecha) continue;
+    if (!diasBase.has(fecha)) {
+      const fechaObj = new Date(`${fecha}T12:00:00Z`);
+      const nuevoDia = {
+        fecha,
+        dia: Number.isNaN(fechaObj.getTime()) ? (diaEditado.dia || '') : diaFechaCasino(fechaObj),
+        casinos: [],
+        productos: []
+      };
+      base.dias.push(nuevoDia);
+      diasBase.set(fecha, nuevoDia);
+    }
+
+    const destino = diasBase.get(fecha);
+    if (!Array.isArray(destino.productos)) destino.productos = [];
+    if (!Array.isArray(destino.casinos)) destino.casinos = [];
+
+    const casinosEditados = new Set((diaEditado.casinos || []).filter(Boolean));
+    casinosEditados.forEach((casino) => casinos.add(casino));
+
+    // Un pedido editado reemplaza, no suma, la información de ese casino/fecha.
+    for (const producto of destino.productos) {
+      if (!producto?.por_casino) producto.por_casino = {};
+      for (const casino of casinosEditados) delete producto.por_casino[casino];
+    }
+
+    for (const productoEditado of diaEditado.productos || []) {
+      const nombre = resolverProductoProduccion(productoEditado?.nombre || '') || productoEditado?.nombre || 'Producto';
+      const clave = normalizarProducto(nombre);
+      let producto = destino.productos.find((item) => normalizarProducto(item?.nombre || '') === clave);
+      if (!producto) {
+        producto = {
+          nombre,
+          grupo: productoEditado.grupo || (grupoProductoCasino(nombre) === 'extra' ? 'extra' : 'principal'),
+          por_casino: {},
+          total: 0
+        };
+        destino.productos.push(producto);
+      }
+      if (!producto.por_casino) producto.por_casino = {};
+
+      for (const [casino, cantidadValor] of Object.entries(productoEditado.por_casino || {})) {
+        const cantidad = Number(cantidadValor || 0);
+        if (cantidad > 0) {
+          producto.por_casino[casino] = cantidad;
+          casinos.add(casino);
+        }
+      }
+    }
+
+    destino.productos = destino.productos
+      .map((producto) => {
+        const total = Object.values(producto.por_casino || {})
+          .reduce((suma, cantidad) => suma + Number(cantidad || 0), 0);
+        return { ...producto, total };
+      })
+      .filter((producto) => producto.total > 0);
+
+    destino.casinos = [...new Set([
+      ...(destino.casinos || []),
+      ...(diaEditado.casinos || [])
+    ].filter((casino) =>
+      destino.productos.some((producto) => Number(producto?.por_casino?.[casino] || 0) > 0)
+    ))];
+  }
+
+  base.dias.sort((a, b) => String(a?.fecha || '').localeCompare(String(b?.fecha || '')));
+  base.casinos = [...casinos];
+  base.fecha_inicio = base.dias[0]?.fecha || base.fecha_inicio || '';
+  base.fecha_fin = base.dias.at(-1)?.fecha || base.fecha_fin || base.fecha_inicio || '';
+  return base;
+}
+
 function encodeBase64Url(value) {
   return Buffer.from(value).toString('base64url');
 }
@@ -1643,18 +1730,17 @@ app.get('/api/admin/casinos/cronograma/:id', requireAdminAuth, async (req, res) 
     `, [id]);
     if (!meta) return res.status(404).json({ error: 'Cronograma no encontrado.' });
 
-    // Los pedidos internos se consultan solo para ESTA importación.
-    let cronograma = await construirCronogramaCasinoDesdePedidos({ cronogramaId: id });
-
-    // Importaciones antiguas sin pedidos internos siguen siendo visibles sin
-    // hacer una migración costosa al abrir la tarjeta.
-    if (!cronograma) {
-      try {
-        cronograma = JSON.parse(meta.datos_json);
-      } catch {
-        return res.status(500).json({ error: 'El cronograma guardado está dañado.' });
-      }
+    let cronogramaBase;
+    try {
+      cronogramaBase = JSON.parse(meta.datos_json);
+    } catch {
+      return res.status(500).json({ error: 'El cronograma guardado está dañado.' });
     }
+
+    // Solo se consultan las ediciones de ESTA importación. La base JSON conserva
+    // semanas aún no migradas; los pedidos internos sustituyen las fechas editadas.
+    const cronogramaEditado = await construirCronogramaCasinoDesdePedidos({ cronogramaId: id });
+    let cronograma = combinarCronogramaCasinoConPedidos(cronogramaBase, cronogramaEditado);
 
     cronograma = {
       ...cronograma,
