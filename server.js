@@ -1082,6 +1082,27 @@ function grupoProductoCasino(nombre, categoria = '', esFormatoPanTipo = false) {
   return 'principal';
 }
 
+function huellaCronogramaCasino(datos) {
+  const dias = (Array.isArray(datos?.dias) ? datos.dias : [])
+    .map((dia) => ({
+      fecha: String(dia?.fecha || ''),
+      productos: (Array.isArray(dia?.productos) ? dia.productos : [])
+        .map((producto) => ({
+          nombre: normalizarProducto(resolverProductoProduccion(producto?.nombre || '') || producto?.nombre || ''),
+          por_casino: Object.entries(producto?.por_casino || {})
+            .map(([casino, cantidad]) => [normalizarProducto(casino), Number(cantidad || 0)])
+            .filter(([, cantidad]) => Number.isFinite(cantidad) && cantidad > 0)
+            .sort((a, b) => a[0].localeCompare(b[0], 'es'))
+        }))
+        .filter((producto) => producto.nombre && producto.por_casino.length)
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    }))
+    .filter((dia) => dia.fecha && dia.productos.length)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  return crypto.createHash('sha256').update(JSON.stringify(dias)).digest('hex');
+}
+
 async function procesarCronogramaCasinos(buffer) {
   const libro = new ExcelJS.Workbook();
   await libro.xlsx.load(buffer);
@@ -1516,17 +1537,35 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
     if (!buffer.length) return res.status(400).json({ error: 'El archivo Excel está vacío o no es válido.' });
     if (buffer.length > 6 * 1024 * 1024) return res.status(413).json({ error: 'El archivo supera el límite de 6 MB.' });
 
-    const huella = crypto.createHash('sha256').update(buffer).digest('hex');
-    const existente = await dbGetAsync(`SELECT id, nombre_archivo, fecha_inicio, fecha_fin FROM casino_cronogramas WHERE huella = ? LIMIT 1`, [huella]);
+    const resultado = await procesarCronogramaCasinos(buffer);
+    if (!resultado.dias.length) return res.status(400).json({ error: 'No se encontraron días válidos en el cronograma.' });
+
+    // La identidad se basa en el contenido interpretado, no en los bytes del XLSX.
+    // Así el mismo cronograma reexportado por Excel no duplica pedidos.
+    const huella = huellaCronogramaCasino(resultado);
+    const importacionesExistentes = await dbAllAsync(`
+      SELECT id, huella, nombre_archivo, fecha_inicio, fecha_fin, datos_json
+      FROM casino_cronogramas
+      ORDER BY id DESC
+    `);
+    let existente = importacionesExistentes.find((row) => row.huella === huella) || null;
+    if (!existente) {
+      existente = importacionesExistentes.find((row) => {
+        try { return huellaCronogramaCasino(JSON.parse(row.datos_json)) === huella; }
+        catch { return false; }
+      }) || null;
+    }
     if (existente) {
       return res.status(409).json({
         error: 'Este cronograma ya fue importado anteriormente.',
-        cronograma_existente: existente
+        cronograma_existente: {
+          id: existente.id,
+          nombre_archivo: existente.nombre_archivo,
+          fecha_inicio: existente.fecha_inicio,
+          fecha_fin: existente.fecha_fin
+        }
       });
     }
-
-    const resultado = await procesarCronogramaCasinos(buffer);
-    if (!resultado.dias.length) return res.status(400).json({ error: 'No se encontraron días válidos en el cronograma.' });
 
     const fechaInicio = resultado.dias[0]?.fecha || '';
     const fechaFin = resultado.dias.at(-1)?.fecha || fechaInicio;
