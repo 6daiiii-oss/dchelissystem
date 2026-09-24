@@ -427,6 +427,28 @@ function sumarDiasIso(fechaIso, dias = 1) {
   return fecha.toISOString().slice(0, 10);
 }
 
+function instanteLima(fechaIso, hora = '08:00') {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fechaIso || '')) || !/^\d{2}:\d{2}$/.test(String(hora || ''))) return null;
+  const fecha = new Date(`${fechaIso}T${hora}:00-05:00`);
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
+}
+
+function esUrgentePorEmision(fechaHoja, pedido = {}) {
+  if (String(pedido.fecha_recoge || '') !== String(fechaHoja || '')) return false;
+
+  const fechaAnterior = sumarDiasIso(fechaHoja, -1);
+  const desde = instanteLima(fechaAnterior, '08:00');
+  const hasta = instanteLima(fechaHoja, '08:00');
+  if (!desde || !hasta) return false;
+
+  const valorEmision = pedido.fecha_emision || pedido.fecha_registro;
+  if (!valorEmision) return false;
+  const emision = valorEmision instanceof Date ? valorEmision : new Date(valorEmision);
+  if (Number.isNaN(emision.getTime())) return false;
+
+  return emision.getTime() >= desde.getTime() && emision.getTime() <= hasta.getTime();
+}
+
 function firmaDetallesPedido(detalles = []) {
   const acumulado = new Map();
   (Array.isArray(detalles) ? detalles : []).forEach((item) => {
@@ -2421,10 +2443,9 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
     const fechaSiguiente = sumarDiasIso(fecha, 1);
     if (!fechaSiguiente) return res.status(400).json({ error: 'Fecha inválida' });
 
-    const clientes = await dbAllAsync(`
+    const clientesBase = await dbAllAsync(`
       SELECT id, codigo, cliente_nombre, tipo_cliente, origen, fecha_recoge, hora_recoge,
-             fecha_emision, cronograma_casino_id,
-             CASE WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN TRUE ELSE FALSE END AS es_urgente
+             fecha_emision, fecha_registro, cronograma_casino_id
       FROM pedidos
       WHERE (
         (fecha_recoge = ? AND hora_recoge >= '15:00')
@@ -2432,11 +2453,17 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         (fecha_recoge = ? AND hora_recoge < '15:00')
       )
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
-      ORDER BY
-        CASE WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN 0
-             ELSE 1 END,
-        fecha_recoge ASC, hora_recoge ASC, id ASC
-    `, [fecha, fecha, fechaSiguiente, fecha]);
+      ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
+    `, [fecha, fechaSiguiente]);
+
+    const clientes = clientesBase
+      .map((pedido) => ({ ...pedido, es_urgente: esUrgentePorEmision(fecha, pedido) }))
+      .sort((a, b) =>
+        Number(Boolean(b.es_urgente)) - Number(Boolean(a.es_urgente))
+        || String(a.fecha_recoge || '').localeCompare(String(b.fecha_recoge || ''))
+        || String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
+        || Number(a.id) - Number(b.id)
+      );
 
     const ids = clientes.map((item) => Number(item.id)).filter(Boolean);
     let detalles = [];
@@ -2444,6 +2471,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       const placeholders = ids.map(() => '?').join(',');
       const rows = await dbAllAsync(
         `SELECT p.id AS pedido_id, p.origen, p.tipo_cliente, p.fecha_recoge, p.hora_recoge,
+                p.fecha_emision, p.fecha_registro,
                 dp.producto_nombre, dp.cantidad, dp.paquetes, dp.foto_torta
          FROM detalles_pedido dp
          JOIN pedidos p ON dp.pedido_id = p.id
@@ -2460,7 +2488,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
           tipo_cliente: det.tipo_cliente || 'Cliente',
           fecha_recoge: det.fecha_recoge,
           hora_recoge: det.hora_recoge,
-          es_urgente: det.fecha_recoge === fecha && String(det.hora_recoge || '') >= '15:00',
+          es_urgente: esUrgentePorEmision(fecha, det),
           producto_nombre: resuelto,
           producto_nombre_original: det.producto_nombre,
           cantidad: Number(det.cantidad || 0),
@@ -2470,17 +2498,22 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       });
     }
 
-    const clientesEmbalaje = await dbAllAsync(`
+    const clientesEmbalajeBase = await dbAllAsync(`
       SELECT id, codigo, cliente_nombre, tipo_cliente, origen, fecha_recoge, hora_recoge,
-             fecha_emision, cronograma_casino_id,
-             CASE WHEN hora_recoge >= '15:00' THEN TRUE ELSE FALSE END AS es_urgente
+             fecha_emision, fecha_registro, cronograma_casino_id
       FROM pedidos
       WHERE fecha_recoge = ?
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
-      ORDER BY
-        CASE WHEN hora_recoge >= '15:00' THEN 1 ELSE 0 END,
-        hora_recoge ASC, id ASC
+      ORDER BY hora_recoge ASC, id ASC
     `, [fecha]);
+
+    const clientesEmbalaje = clientesEmbalajeBase
+      .map((pedido) => ({ ...pedido, es_urgente: esUrgentePorEmision(fecha, pedido) }))
+      .sort((a, b) =>
+        Number(Boolean(b.es_urgente)) - Number(Boolean(a.es_urgente))
+        || String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
+        || Number(a.id) - Number(b.id)
+      );
 
     const idsEmbalaje = clientesEmbalaje.map((item) => Number(item.id)).filter(Boolean);
     let detallesEmbalaje = [];
@@ -2488,6 +2521,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       const placeholders = idsEmbalaje.map(() => '?').join(',');
       const rows = await dbAllAsync(
         `SELECT p.id AS pedido_id, p.origen, p.tipo_cliente, p.fecha_recoge, p.hora_recoge,
+                p.fecha_emision, p.fecha_registro,
                 dp.producto_nombre, dp.cantidad, dp.paquetes, dp.foto_torta
          FROM detalles_pedido dp
          JOIN pedidos p ON dp.pedido_id = p.id
@@ -2502,7 +2536,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         tipo_cliente: det.tipo_cliente || 'Cliente',
         fecha_recoge: det.fecha_recoge,
         hora_recoge: det.hora_recoge,
-        es_urgente: String(det.hora_recoge || '') >= '15:00',
+        es_urgente: esUrgentePorEmision(fecha, det),
         producto_nombre: resolverProductoProduccion(det.producto_nombre),
         producto_nombre_original: det.producto_nombre,
         cantidad: Number(det.cantidad || 0),
@@ -2651,16 +2685,20 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
   try {
     const fecha = String(req.query.fecha || '').trim();
     if (!fecha) return res.status(400).send('Fecha requerida');
-    const clientes = await dbAllAsync(`
-      SELECT id, cliente_nombre, origen, fecha_recoge, hora_recoge,
-             CASE WHEN hora_recoge >= '15:00' THEN TRUE ELSE FALSE END AS es_urgente
+    const clientesBase = await dbAllAsync(`
+      SELECT id, cliente_nombre, origen, fecha_recoge, hora_recoge, fecha_emision, fecha_registro
       FROM pedidos
       WHERE fecha_recoge = ?
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
-      ORDER BY
-        CASE WHEN hora_recoge >= '15:00' THEN 1 ELSE 0 END,
-        hora_recoge, id
+      ORDER BY hora_recoge, id
     `, [fecha]);
+    const clientes = clientesBase
+      .map((pedido) => ({ ...pedido, es_urgente: esUrgentePorEmision(fecha, pedido) }))
+      .sort((a, b) =>
+        Number(Boolean(b.es_urgente)) - Number(Boolean(a.es_urgente))
+        || String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
+        || Number(a.id) - Number(b.id)
+      );
 
     const ids = clientes.map((c) => c.id);
     let detalles = [];
