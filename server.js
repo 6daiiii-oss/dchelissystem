@@ -1858,6 +1858,179 @@ app.get('/api/admin/casinos/cronograma/:id', requireAdminAuth, async (req, res) 
   }
 });
 
+app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const desde = String(req.query.desde || '').trim();
+    const hasta = String(req.query.hasta || '').trim();
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).send('Cronograma no válido.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || desde > hasta) {
+      return res.status(400).send('Rango de semana inválido.');
+    }
+
+    const meta = await dbGetAsync(`
+      SELECT id, nombre_archivo, fecha_inicio, fecha_fin, datos_json, creado_en
+      FROM casino_cronogramas
+      WHERE id = ?
+      LIMIT 1
+    `, [id]);
+    if (!meta) return res.status(404).send('Cronograma no encontrado.');
+
+    let cronogramaBase;
+    try { cronogramaBase = JSON.parse(meta.datos_json); }
+    catch { return res.status(500).send('El cronograma guardado está dañado.'); }
+
+    const cronogramaEditado = await construirCronogramaCasinoDesdePedidos({ cronogramaId: id });
+    const cronograma = combinarCronogramaCasinoConPedidos(cronogramaBase, cronogramaEditado);
+    const dias = (Array.isArray(cronograma?.dias) ? cronograma.dias : [])
+      .filter((dia) => dia?.fecha >= desde && dia?.fecha <= hasta)
+      .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+    if (!dias.length) return res.status(404).send('No hay días del cronograma en esa semana.');
+
+    const normalizarCategoria = (nombre) => {
+      const clave = normalizarProducto(nombre || '');
+      if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
+      if (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave)) return 'tortas';
+      const grupo = grupoProductoProduccion(nombre || '', normalizarProducto);
+      if (grupo === 'Panes') return 'panes';
+      if (grupo === 'Sándwiches') return 'sanguches';
+      if (grupo === 'Triples') return 'triples';
+      if (/\b(ALFAJOR|OREJITA|PANUELIT|PANUELO|PIONON|PYE|PIE|RELAMPAG|TARTALETA|BISCOTELA|BROWNIE|CISNE|COCADA|CONITO|DONA|KEKITO|MERENG|MILHOJA|MOUSSE|NIDITO|PROFITEROL|ROSQUITA|TORTITA|TRES LECHES|TRUFA)\b/.test(clave)) return 'dulces';
+      return 'salados';
+    };
+    const ordenUna = ['dulces', 'salados', 'panes', 'sanguches', 'triples', 'tortas', 'kekes'];
+    const ordenHoja1 = ['dulces', 'salados', 'panes', 'kekes', 'tortas'];
+    const ordenHoja2 = ['sanguches', 'triples'];
+    const maxFilasUnaHoja = 38;
+
+    const casinos = new Set(Array.isArray(cronograma?.casinos) ? cronograma.casinos : []);
+    dias.forEach((dia) => (dia.casinos || []).forEach((casino) => casino && casinos.add(casino)));
+
+    const construirProductosCasino = (casino) => {
+      const mapa = new Map();
+      let indice = 0;
+      dias.forEach((dia) => {
+        (dia.productos || []).forEach((producto) => {
+          const cantidad = Number(producto?.por_casino?.[casino] || 0);
+          if (!(cantidad > 0)) return;
+          const nombre = String(producto?.nombre || 'Producto').trim();
+          const clave = normalizarProducto(nombre) || nombre;
+          if (!mapa.has(clave)) {
+            mapa.set(clave, { nombre, por_fecha: {}, categoria: normalizarCategoria(nombre), indice: indice++ });
+          }
+          const fila = mapa.get(clave);
+          fila.por_fecha[dia.fecha] = Number(fila.por_fecha[dia.fecha] || 0) + cantidad;
+        });
+      });
+      return [...mapa.values()];
+    };
+
+    const ordenar = (productos, orden) => {
+      const rango = new Map(orden.map((categoria, indice) => [categoria, indice]));
+      return productos.slice().filter((p) => rango.has(p.categoria)).sort((a, b) =>
+        (rango.get(a.categoria) ?? 99) - (rango.get(b.categoria) ?? 99) || a.indice - b.indice
+      );
+    };
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "D'chelis";
+    const nombresUsados = new Set();
+    const nombreHoja = (casino, sufijo = '') => {
+      const base = `${String(casino || 'Casino').replace(/[\\/*?:\[\]]/g, ' ').replace(/\s+/g, ' ').trim()}${sufijo}`.slice(0, 31) || 'Casino';
+      let nombre = base;
+      let n = 2;
+      while (nombresUsados.has(nombre)) {
+        const cola = ` ${n++}`;
+        nombre = `${base.slice(0, 31 - cola.length)}${cola}`;
+      }
+      nombresUsados.add(nombre);
+      return nombre;
+    };
+
+    const borde = {
+      top: { style:'thin', color:{ argb:'FF333333' } },
+      left: { style:'thin', color:{ argb:'FF333333' } },
+      bottom: { style:'thin', color:{ argb:'FF333333' } },
+      right: { style:'thin', color:{ argb:'FF333333' } }
+    };
+
+    const agregarHoja = (casino, productos, numeroHoja = 1, totalHojas = 1) => {
+      if (!productos.length) return;
+      const sufijo = totalHojas > 1 ? ` ${numeroHoja}` : '';
+      const ws = workbook.addWorksheet(nombreHoja(casino, sufijo), {
+        pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1, margins: { left:0.2, right:0.2, top:0.2, bottom:0.2, header:0, footer:0 } }
+      });
+      ws.views = [{ showGridLines: false }];
+      ws.getColumn(1).width = 34;
+      for (let col = 2; col <= dias.length + 1; col += 1) ws.getColumn(col).width = 11;
+
+      const cabecera = [String(casino || 'Casino').toUpperCase(), ...dias.map((dia) => {
+        const partes = String(dia.fecha || '').split('-');
+        const fechaCorta = partes.length === 3 ? `${partes[2]}/${partes[1]}` : String(dia.fecha || '');
+        return `${String(dia.dia || '').toUpperCase()}\n${fechaCorta}`;
+      })];
+      const rowCabecera = ws.addRow(cabecera);
+      rowCabecera.height = 30;
+      rowCabecera.eachCell((cell, col) => {
+        cell.font = { bold:true, size: col === 1 ? 12 : 9 };
+        cell.alignment = { horizontal: col === 1 ? 'left' : 'center', vertical:'middle', wrapText:true };
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb: col === 1 ? 'FFF2F2F2' : 'FFE7EFE8' } };
+        cell.border = borde;
+      });
+
+      const totales = new Map(dias.map((dia) => [dia.fecha, 0]));
+      productos.forEach((producto) => {
+        const valores = [producto.nombre.toUpperCase()];
+        dias.forEach((dia) => {
+          const cantidad = Number(producto.por_fecha?.[dia.fecha] || 0);
+          valores.push(cantidad > 0 ? cantidad : '');
+          if (cantidad > 0) totales.set(dia.fecha, Number(totales.get(dia.fecha) || 0) + cantidad);
+        });
+        const row = ws.addRow(valores);
+        row.height = 17;
+        row.eachCell({ includeEmpty:true }, (cell, col) => {
+          cell.font = { bold: col === 1, size: 9 };
+          cell.alignment = { horizontal: col === 1 ? 'left' : 'center', vertical:'middle', wrapText: col === 1 };
+          cell.border = borde;
+          if (col > 1 && cell.value !== '') cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFDDECDD' } };
+        });
+      });
+
+      const totalRow = ws.addRow(['TOTAL', ...dias.map((dia) => Number(totales.get(dia.fecha) || 0) || '')]);
+      totalRow.height = 19;
+      totalRow.eachCell({ includeEmpty:true }, (cell, col) => {
+        cell.font = { bold:true, size:9 };
+        cell.alignment = { horizontal: col === 1 ? 'left' : 'center', vertical:'middle' };
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFE6E6E6' } };
+        cell.border = borde;
+      });
+      ws.pageSetup.printArea = `A1:${ws.getColumn(dias.length + 1).letter}${ws.rowCount}`;
+    };
+
+    for (const casino of casinos) {
+      const productos = construirProductosCasino(casino);
+      if (!productos.length) continue;
+      if (productos.length <= maxFilasUnaHoja) {
+        agregarHoja(casino, ordenar(productos, ordenUna), 1, 1);
+      } else {
+        const hoja1 = ordenar(productos.filter((p) => ordenHoja1.includes(p.categoria)), ordenHoja1);
+        const hoja2 = ordenar(productos.filter((p) => ordenHoja2.includes(p.categoria)), ordenHoja2);
+        const hojas = [hoja1, hoja2].filter((hoja) => hoja.length);
+        hojas.forEach((hoja, indice) => agregarHoja(casino, hoja, indice + 1, hojas.length));
+      }
+    }
+
+    if (!workbook.worksheets.length) return res.status(404).send('No hay pedidos Casino para exportar en esa semana.');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="casinos-${desde}-${hasta}.xlsx"`);
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (error) {
+    console.error('Error exportando Excel Casino:', error);
+    return res.status(500).send('No se pudo generar el Excel de Casinos.');
+  }
+});
+
 app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res) => {
   let transaccion = false;
   let etapaImportacion = 'validación del archivo';
