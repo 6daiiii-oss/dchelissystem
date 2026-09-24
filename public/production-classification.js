@@ -114,7 +114,12 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
     ).replace(/^(?:KEKES\s+)+(?=KEKE\b)/i, '').trim();
 
     const clave = normalizar(nombre);
-    const { esKeke, esPastel, esTorta, grupo } = tipoItemCocina(nombre, cantidad, normalizar);
+    const fuenteTipo = detalle.producto_nombre_original || detalle.producto_nombre || nombre;
+    const tipo = tipoItemCocina(fuenteTipo, cantidad, normalizar);
+    const esKeke = tipo.esKeke;
+    const esPastel = tipo.esPastel;
+    const esTorta = tipo.esTorta;
+    const grupo = grupoProductoProduccion(nombre, normalizar);
 
     if (esKeke || esTorta) {
       const cliente = nombres.get(Number(detalle.pedido_id)) || 'Cliente';
