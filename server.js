@@ -2009,12 +2009,11 @@ app.get('/api/admin/pedidos/:id/fotos', requireAdminAuth, (req, res) => {
 app.get('/api/colaboradores/salidas', requireStaffAuth, (req, res) => {
   const fecha = String(req.query.fecha || new Date().toISOString().slice(0, 10)).trim();
   db.all(`
-    SELECT p.id, p.codigo, p.cliente_nombre, p.fecha_recoge, p.hora_recoge, p.estado,
+    SELECT p.id, p.codigo, p.cliente_nombre, p.origen, p.fecha_recoge, p.hora_recoge, p.estado,
            d.producto_nombre, d.cantidad, d.paquetes
     FROM pedidos p
     LEFT JOIN detalles_pedido d ON d.pedido_id = p.id
     WHERE p.fecha_recoge = ?
-      AND COALESCE(p.origen, 'pg') <> 'casino'
       AND COALESCE(p.estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Pendiente de pago', 'Despachado (D''chelis)')
     ORDER BY p.hora_recoge ASC, p.id ASC, d.id ASC
   `, [fecha], (err, rows) => {
@@ -2023,7 +2022,7 @@ app.get('/api/colaboradores/salidas', requireStaffAuth, (req, res) => {
     (rows || []).forEach((row) => {
       if (!pedidos.has(row.id)) {
         pedidos.set(row.id, {
-          id: row.id, codigo: row.codigo, cliente_nombre: row.cliente_nombre,
+          id: row.id, codigo: row.codigo, cliente_nombre: row.cliente_nombre, origen: row.origen || 'pg',
           fecha_recoge: row.fecha_recoge, hora_recoge: row.hora_recoge,
           estado: row.estado, detalles: []
         });
