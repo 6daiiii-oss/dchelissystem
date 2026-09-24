@@ -78,8 +78,9 @@ function inicioSemanaCasino(fechaIso) {
   return fecha.toISOString().slice(0, 10);
 }
 
-async function sincronizarPedidosCasinoCronograma(cronogramaId, datos) {
+async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones = {}) {
   if (!cronogramaId || !Array.isArray(datos?.dias)) return 0;
+  const omitirVerificacionExistencia = Boolean(opciones.omitirVerificacionExistencia);
   let creados = 0;
 
   for (const dia of datos.dias) {
@@ -96,8 +97,10 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos) {
       if (!items.length) continue;
 
       const casinoUid = `cronograma:${cronogramaId}:${dia.fecha}:${normalizarProducto(casino)}`;
-      const existente = await dbGetAsync(`SELECT id FROM pedidos WHERE casino_uid = ? LIMIT 1`, [casinoUid]);
-      if (existente) continue;
+      if (!omitirVerificacionExistencia) {
+        const existente = await dbGetAsync(`SELECT id FROM pedidos WHERE casino_uid = ? LIMIT 1`, [casinoUid]);
+        if (existente) continue;
+      }
 
       const hash = crypto.createHash('sha1').update(casinoUid).digest('hex').slice(0, 8).toUpperCase();
       const codigo = `CAS-${String(dia.fecha).replace(/-/g, '')}-${hash}`;
@@ -118,11 +121,17 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos) {
       }
       if (!pedidoId) continue;
 
-      for (const item of items) {
+      if (items.length) {
+        const valores = [];
+        const parametros = [];
+        for (const item of items) {
+          valores.push("(?, ?, ?, 0, '{}', '')");
+          parametros.push(pedidoId, item.producto_nombre, item.cantidad);
+        }
         await dbRunAsync(
           `INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta)
-           VALUES (?, ?, ?, 0, '{}', '')`,
-          [pedidoId, item.producto_nombre, item.cantidad]
+           VALUES ${valores.join(', ')}`,
+          parametros
         );
       }
       creados += 1;
@@ -131,16 +140,26 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos) {
   return creados;
 }
 
-async function construirCronogramaCasinoDesdePedidos() {
+async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '' } = {}) {
+  const condiciones = ["p.origen = 'casino'", "COALESCE(p.estado, 'Registrado') <> 'Cancelado'"];
+  const parametros = [];
+  if (desde) {
+    condiciones.push('p.fecha_recoge >= ?');
+    parametros.push(desde);
+  }
+  if (hasta) {
+    condiciones.push('p.fecha_recoge <= ?');
+    parametros.push(hasta);
+  }
+
   const rows = await dbAllAsync(`
     SELECT p.id, p.cliente_nombre, p.casino_nombre, p.fecha_recoge, p.cronograma_casino_id,
            dp.producto_nombre, dp.cantidad
     FROM pedidos p
     JOIN detalles_pedido dp ON dp.pedido_id = p.id
-    WHERE p.origen = 'casino'
-      AND COALESCE(p.estado, 'Registrado') <> 'Cancelado'
+    WHERE ${condiciones.join(' AND ')}
     ORDER BY p.fecha_recoge ASC, p.id ASC, dp.id ASC
-  `);
+  `, parametros);
   if (!rows.length) return null;
 
   const dias = new Map();
@@ -853,29 +872,40 @@ const CASINO_MESES = {
 };
 
 function contextoFechaCasinoHoja(hoja, anterior = {}) {
+  // El mes/año se obtiene solo del nombre de la hoja y de las filas de título.
+  // No se inspecciona la fila de días: "Mar" (martes) no debe interpretarse como marzo.
   const textos = [String(hoja?.name || '')];
-  for (let fila = 1; fila <= Math.min(5, hoja.rowCount || 0); fila += 1) {
-    for (let columna = 1; columna <= Math.min(4, hoja.columnCount || 0); columna += 1) {
+  for (let fila = 1; fila <= Math.min(2, hoja.rowCount || 0); fila += 1) {
+    for (let columna = 1; columna <= Math.min(8, hoja.columnCount || 0); columna += 1) {
       const valor = valorCeldaCasino(hoja.getCell(fila, columna));
-      if (valor !== null && valor !== undefined && !(valor instanceof Date)) textos.push(String(valor));
       if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
         textos.push(String(valor.getFullYear()));
-        textos.push(Object.keys(CASINO_MESES).find((mes) => CASINO_MESES[mes] === valor.getMonth()) || '');
+        const nombreMes = Object.keys(CASINO_MESES).find((mes) => CASINO_MESES[mes] === valor.getMonth());
+        if (nombreMes) textos.push(nombreMes);
+      } else if (valor !== null && valor !== undefined) {
+        const texto = String(valor).trim();
+        if (texto && !resolverDiaCasino(texto)) textos.push(texto);
       }
     }
   }
+
   const unido = normalizarProducto(textos.join(' '));
   const anioExplicito = unido.match(/\b(20\d{2})\b/);
   let mes = null;
-  for (const [nombre, indice] of Object.entries(CASINO_MESES)) {
+  const nombresMes = Object.keys(CASINO_MESES).sort((a, b) => b.length - a.length);
+  for (const nombre of nombresMes) {
     if (new RegExp(`(?:^|\\s)${nombre}(?:\\s|$)`).test(unido)) {
-      mes = indice;
+      mes = CASINO_MESES[nombre];
       break;
     }
   }
+
   let anio = anioExplicito ? Number(anioExplicito[1]) : Number(anterior.anio || new Date().getFullYear());
   if (!anioExplicito && Number.isInteger(mes) && Number.isInteger(anterior.mes) && mes < anterior.mes - 6) anio += 1;
-  return { anio, mes: Number.isInteger(mes) ? mes : (Number.isInteger(anterior.mes) ? anterior.mes : null) };
+  return {
+    anio,
+    mes: Number.isInteger(mes) ? mes : (Number.isInteger(anterior.mes) ? anterior.mes : null)
+  };
 }
 
 function nombreCasinoDesdeHoja(hoja, filaCabecera) {
@@ -1135,10 +1165,31 @@ async function procesarCronogramaCasinos(buffer) {
   const productosNoReconocidos = new Set();
 
   let contextoCronologico = { anio: null, mes: null };
-
-  libro.worksheets.forEach((hoja) => {
+  const hojasConContexto = libro.worksheets.map((hoja) => {
     const contextoHoja = contextoFechaCasinoHoja(hoja, contextoCronologico);
     if (Number.isInteger(contextoHoja.mes)) contextoCronologico = contextoHoja;
+    return { hoja, contextoHoja: { ...contextoHoja } };
+  });
+
+  const periodos = hojasConContexto
+    .filter(({ contextoHoja }) => Number.isInteger(contextoHoja.anio) && Number.isInteger(contextoHoja.mes))
+    .map(({ contextoHoja }) => contextoHoja.anio * 12 + contextoHoja.mes);
+  const periodoMasReciente = periodos.length ? Math.max(...periodos) : null;
+  const hojasObjetivo = periodoMasReciente === null
+    ? hojasConContexto
+    : hojasConContexto.filter(({ contextoHoja }) =>
+        contextoHoja.anio * 12 + contextoHoja.mes === periodoMasReciente
+      );
+
+  if (hojasObjetivo.length < libro.worksheets.length && periodoMasReciente !== null) {
+    const anio = Math.floor(periodoMasReciente / 12);
+    const mes = (periodoMasReciente % 12) + 1;
+    advertencias.push(
+      `Se omitieron ${libro.worksheets.length - hojasObjetivo.length} hoja(s) históricas; se importó solo el período más reciente ${String(mes).padStart(2, '0')}/${anio}.`
+    );
+  }
+
+  hojasObjetivo.forEach(({ hoja, contextoHoja }) => {
 
     const limiteFilasCabecera = Math.min(Math.max(hoja.rowCount, 1), 15);
     let filaCabecera = 0;
@@ -1514,28 +1565,37 @@ app.put('/api/admin/usuarios/:id', requireAdminAuth, async (req, res) => {
 
 app.get('/api/admin/casinos/cronograma', requireAdminAuth, async (req, res) => {
   try {
-    const rows = await dbAllAsync(`
-      SELECT id, nombre_archivo, fecha_inicio, fecha_fin, datos_json, creado_en
+    const importaciones = await dbAllAsync(`
+      SELECT id, nombre_archivo, fecha_inicio, fecha_fin, creado_en
       FROM casino_cronogramas
       ORDER BY id DESC
+      LIMIT 100
     `);
 
-    // Compatibilidad: cronogramas importados antes de esta versión se convierten
-    // una sola vez en pedidos Casino persistentes.
-    for (const row of rows) {
-      const existente = await dbGetAsync(`SELECT 1 AS existe FROM pedidos WHERE origen = 'casino' AND cronograma_casino_id = ? LIMIT 1`, [row.id]);
-      if (existente) continue;
-      let datos;
-      try { datos = JSON.parse(row.datos_json); } catch { continue; }
-      await sincronizarPedidosCasinoCronograma(row.id, datos);
+    const ahoraLima = new Date(Date.now() - 5 * 60 * 60 * 1000);
+    const hoyLima = ahoraLima.toISOString().slice(0, 10);
+    const desde = sumarDiasIso(hoyLima, -45);
+
+    // Solo reconstruye el período operativo reciente y futuro. Evita recorrer
+    // años de pedidos históricos al abrir la pestaña Casinos.
+    let cronograma = await construirCronogramaCasinoDesdePedidos({ desde });
+
+    // Compatibilidad con importaciones antiguas que aún no tienen pedidos Casino:
+    // se muestran desde JSON, pero no se migran durante la carga de la página.
+    if (!cronograma && importaciones.length) {
+      const filasJson = await dbAllAsync(`
+        SELECT id, nombre_archivo, fecha_inicio, fecha_fin, datos_json, creado_en
+        FROM casino_cronogramas
+        ORDER BY id DESC
+        LIMIT 5
+      `);
+      cronograma = unirCronogramasCasino(filasJson);
     }
 
-    const cronogramaPedidos = await construirCronogramaCasinoDesdePedidos();
-    const cronograma = cronogramaPedidos || unirCronogramasCasino(rows);
     return res.json({
       existe: Boolean(cronograma),
       cronograma,
-      importaciones: rows.map(({ datos_json, ...meta }) => meta)
+      importaciones
     });
   } catch (error) {
     console.error('Error cargando cronograma persistente:', error);
@@ -1545,6 +1605,7 @@ app.get('/api/admin/casinos/cronograma', requireAdminAuth, async (req, res) => {
 
 app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res) => {
   let transaccion = false;
+  let etapaImportacion = 'validación del archivo';
   try {
     const archivoBase64 = String(req.body?.archivo_base64 || '').trim();
     const nombreArchivo = String(req.body?.nombre_archivo || '').trim();
@@ -1559,24 +1620,20 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
     if (!buffer.length) return res.status(400).json({ error: 'El archivo Excel está vacío o no es válido.' });
     if (buffer.length > 6 * 1024 * 1024) return res.status(413).json({ error: 'El archivo supera el límite de 6 MB.' });
 
+    etapaImportacion = 'lectura e interpretación del cronograma';
     const resultado = await procesarCronogramaCasinos(buffer);
     if (!resultado.dias.length) return res.status(400).json({ error: 'No se encontraron días válidos en el cronograma.' });
 
-    // La identidad se basa en el contenido interpretado, no en los bytes del XLSX.
-    // Así el mismo cronograma reexportado por Excel no duplica pedidos.
+    // La huella ya es semántica; buscarla por índice evita leer y recalcular
+    // todos los JSON históricos en cada importación.
+    etapaImportacion = 'verificación de duplicados';
     const huella = huellaCronogramaCasino(resultado);
-    const importacionesExistentes = await dbAllAsync(`
-      SELECT id, huella, nombre_archivo, fecha_inicio, fecha_fin, datos_json
+    const existente = await dbGetAsync(`
+      SELECT id, huella, nombre_archivo, fecha_inicio, fecha_fin
       FROM casino_cronogramas
-      ORDER BY id DESC
-    `);
-    let existente = importacionesExistentes.find((row) => row.huella === huella) || null;
-    if (!existente) {
-      existente = importacionesExistentes.find((row) => {
-        try { return huellaCronogramaCasino(JSON.parse(row.datos_json)) === huella; }
-        catch { return false; }
-      }) || null;
-    }
+      WHERE huella = ?
+      LIMIT 1
+    `, [huella]);
     if (existente) {
       return res.status(409).json({
         error: 'Este cronograma ya fue importado anteriormente.',
@@ -1591,6 +1648,7 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
 
     const fechaInicio = resultado.dias[0]?.fecha || '';
     const fechaFin = resultado.dias.at(-1)?.fecha || fechaInicio;
+    etapaImportacion = 'guardado del cronograma';
     await dbRunAsync('BEGIN TRANSACTION');
     transaccion = true;
 
@@ -1600,7 +1658,12 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
       [huella, nombreArchivo || 'Cronograma.xlsx', fechaInicio, fechaFin, JSON.stringify(resultado)]
     );
 
-    const pedidosCreados = await sincronizarPedidosCasinoCronograma(cronograma.lastID, resultado);
+    etapaImportacion = 'creación de pedidos Casino';
+    const pedidosCreados = await sincronizarPedidosCasinoCronograma(
+      cronograma.lastID,
+      resultado,
+      { omitirVerificacionExistencia: true }
+    );
 
     await dbRunAsync('COMMIT');
     transaccion = false;
@@ -1616,8 +1679,11 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
     });
   } catch (error) {
     if (transaccion) await dbRunAsync('ROLLBACK').catch(() => {});
-    console.error('Error procesando cronograma de casinos:', error);
-    return res.status(400).json({ error: 'No se pudo importar el Excel. Verifica que conserve el formato del cronograma de casinos.' });
+    console.error(`Error procesando cronograma de casinos durante ${etapaImportacion}:`, error);
+    return res.status(500).json({
+      error: `No se pudo importar el Excel durante ${etapaImportacion}.`,
+      detalle: String(error?.message || '').slice(0, 180)
+    });
   }
 });
 
