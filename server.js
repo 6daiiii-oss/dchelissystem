@@ -69,6 +69,137 @@ async function cargarCasinosProduccion(fecha) {
   return { clientes: [], detalles: [] };
 }
 
+function inicioSemanaCasino(fechaIso) {
+  const fecha = new Date(`${fechaIso}T12:00:00Z`);
+  if (Number.isNaN(fecha.getTime())) return '';
+  const dia = fecha.getUTCDay();
+  const retroceso = dia === 0 ? 6 : dia - 1;
+  fecha.setUTCDate(fecha.getUTCDate() - retroceso);
+  return fecha.toISOString().slice(0, 10);
+}
+
+async function sincronizarPedidosCasinoCronograma(cronogramaId, datos) {
+  if (!cronogramaId || !Array.isArray(datos?.dias)) return 0;
+  let creados = 0;
+
+  for (const dia of datos.dias) {
+    if (!dia?.fecha) continue;
+    const casinos = Array.isArray(dia.casinos) && dia.casinos.length ? dia.casinos : (datos.casinos || []);
+    for (const casinoOriginal of casinos) {
+      const casino = String(casinoOriginal || '').trim();
+      if (!casino) continue;
+
+      const items = (dia.productos || []).map((producto) => ({
+        producto_nombre: resolverProductoProduccion(producto?.nombre || ''),
+        cantidad: Number(producto?.por_casino?.[casino] || 0)
+      })).filter((item) => item.producto_nombre && Number.isFinite(item.cantidad) && item.cantidad > 0);
+      if (!items.length) continue;
+
+      const casinoUid = `cronograma:${cronogramaId}:${dia.fecha}:${normalizarProducto(casino)}`;
+      const existente = await dbGetAsync(`SELECT id FROM pedidos WHERE casino_uid = ? LIMIT 1`, [casinoUid]);
+      if (existente) continue;
+
+      const hash = crypto.createHash('sha1').update(casinoUid).digest('hex').slice(0, 8).toUpperCase();
+      const codigo = `CAS-${String(dia.fecha).replace(/-/g, '')}-${hash}`;
+      const pedido = await dbRunAsync(`
+        INSERT INTO pedidos (
+          codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
+          fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento,
+          nro_operacion, estado, fecha_emision, origen, cronograma_casino_id,
+          casino_nombre, casino_semana, casino_uid
+        ) VALUES (?, 'Casino', ?, 'CASINO', 0, 0, 'Cuenta Casino', ?, '12:00', '', '', '', '', '',
+                  'Registrado', CURRENT_TIMESTAMP, 'casino', ?, ?, ?, ?)
+      `, [codigo, casino, dia.fecha, Number(cronogramaId), casino, inicioSemanaCasino(dia.fecha), casinoUid]);
+
+      let pedidoId = pedido.lastID;
+      if (!pedidoId) {
+        const fila = await dbGetAsync(`SELECT id FROM pedidos WHERE casino_uid = ? LIMIT 1`, [casinoUid]);
+        pedidoId = fila?.id;
+      }
+      if (!pedidoId) continue;
+
+      for (const item of items) {
+        await dbRunAsync(
+          `INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta)
+           VALUES (?, ?, ?, 0, '{}', '')`,
+          [pedidoId, item.producto_nombre, item.cantidad]
+        );
+      }
+      creados += 1;
+    }
+  }
+  return creados;
+}
+
+async function construirCronogramaCasinoDesdePedidos() {
+  const rows = await dbAllAsync(`
+    SELECT p.id, p.cliente_nombre, p.casino_nombre, p.fecha_recoge, p.cronograma_casino_id,
+           dp.producto_nombre, dp.cantidad
+    FROM pedidos p
+    JOIN detalles_pedido dp ON dp.pedido_id = p.id
+    WHERE p.origen = 'casino'
+      AND COALESCE(p.estado, 'Registrado') <> 'Cancelado'
+    ORDER BY p.fecha_recoge ASC, p.id ASC, dp.id ASC
+  `);
+  if (!rows.length) return null;
+
+  const dias = new Map();
+  const casinos = new Set();
+  for (const row of rows) {
+    const fecha = String(row.fecha_recoge || '');
+    if (!fecha) continue;
+    const casino = String(row.casino_nombre || row.cliente_nombre || 'Casino').trim();
+    if (!dias.has(fecha)) {
+      const fechaObj = new Date(`${fecha}T12:00:00Z`);
+      dias.set(fecha, {
+        fecha,
+        dia: Number.isNaN(fechaObj.getTime()) ? '' : diaFechaCasino(fechaObj),
+        casinos: new Set(),
+        productos: new Map()
+      });
+    }
+    const dia = dias.get(fecha);
+    dia.casinos.add(casino);
+    casinos.add(casino);
+
+    const nombre = resolverProductoProduccion(row.producto_nombre) || row.producto_nombre;
+    const clave = normalizarProducto(nombre);
+    if (!clave) continue;
+    if (!dia.productos.has(clave)) {
+      dia.productos.set(clave, {
+        nombre,
+        grupo: grupoProductoCasino(nombre) === 'extra' ? 'extra' : 'principal',
+        por_casino: {},
+        total: 0
+      });
+    }
+    const producto = dia.productos.get(clave);
+    const cantidad = Number(row.cantidad || 0);
+    if (!(cantidad > 0)) continue;
+    producto.por_casino[casino] = Number(producto.por_casino[casino] || 0) + cantidad;
+    producto.total += cantidad;
+  }
+
+  const diasOrdenados = [...dias.values()].sort((a, b) => a.fecha.localeCompare(b.fecha)).map((dia) => ({
+    fecha: dia.fecha,
+    dia: dia.dia,
+    casinos: [...dia.casinos],
+    productos: [...dia.productos.values()].sort((a, b) => {
+      if (a.grupo !== b.grupo) return a.grupo === 'principal' ? -1 : 1;
+      return String(a.nombre).localeCompare(String(b.nombre), 'es');
+    })
+  }));
+
+  return {
+    id: 'pedidos-casino',
+    nombre_archivo: 'Cronogramas persistentes',
+    fecha_inicio: diasOrdenados[0]?.fecha || '',
+    fecha_fin: diasOrdenados.at(-1)?.fecha || '',
+    casinos: [...casinos],
+    dias: diasOrdenados
+  };
+}
+
 function encodeBase64Url(value) {
   return Buffer.from(value).toString('base64url');
 }
@@ -1341,13 +1472,26 @@ app.get('/api/admin/casinos/cronograma', requireAdminAuth, async (req, res) => {
       FROM casino_cronogramas
       ORDER BY id DESC
     `);
-    // Las fechas repetidas conservan la importación más reciente.
-    const cronograma = unirCronogramasCasino(rows);
+
+    // Compatibilidad: cronogramas importados antes de esta versión se convierten
+    // una sola vez en pedidos Casino persistentes.
+    for (const row of rows) {
+      const existente = await dbGetAsync(`SELECT 1 AS existe FROM pedidos WHERE origen = 'casino' AND cronograma_casino_id = ? LIMIT 1`, [row.id]);
+      if (existente) continue;
+      let datos;
+      try { datos = JSON.parse(row.datos_json); } catch { continue; }
+      await sincronizarPedidosCasinoCronograma(row.id, datos);
+    }
+
+    const cronogramaPedidos = await construirCronogramaCasinoDesdePedidos();
+    const cronograma = cronogramaPedidos || unirCronogramasCasino(rows);
     return res.json({
       existe: Boolean(cronograma),
-      cronograma
+      cronograma,
+      importaciones: rows.map(({ datos_json, ...meta }) => meta)
     });
   } catch (error) {
+    console.error('Error cargando cronograma persistente:', error);
     return res.status(500).json({ error: 'No se pudo cargar el cronograma de casinos.' });
   }
 });
@@ -1391,6 +1535,8 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
       [huella, nombreArchivo || 'Cronograma.xlsx', fechaInicio, fechaFin, JSON.stringify(resultado)]
     );
 
+    const pedidosCreados = await sincronizarPedidosCasinoCronograma(cronograma.lastID, resultado);
+
     await dbRunAsync('COMMIT');
     transaccion = false;
 
@@ -1398,6 +1544,7 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
       ok: true,
       nombre_archivo: nombreArchivo || 'Cronograma.xlsx',
       cronograma_id: cronograma.lastID,
+      pedidos_casino_creados: pedidosCreados,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
       ...resultado
@@ -1580,10 +1727,9 @@ app.post('/api/pedidos', protectDigitacionOrigin, async (req, res) => {
     db.run('BEGIN TRANSACTION');
 
     const pagoPendiente = String(metodo_pago || '').includes('verificación pendiente');
-    const esDigitacionSinPago = String(origen || '').trim().toLowerCase() === 'digitacion' && Number(adelanto || 0) <= 0;
-    const estadoInicial = pagoPendiente
-      ? 'Pendiente de verificación de pago'
-      : (esDigitacionSinPago ? 'Pendiente de pago' : 'Registrado');
+    // Digitación es un registro interno válido aunque el adelanto sea 0.
+    // El saldo se representa con los montos, no ocultando el pedido como "Pendiente de pago".
+    const estadoInicial = pagoPendiente ? 'Pendiente de verificación de pago' : 'Registrado';
     const origenPedido = String(origen || '').trim().toLowerCase() === 'digitacion' ? 'digitacion' : 'web';
     const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, nro_operacion, estado, fecha_emision, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)`;
 
@@ -1706,10 +1852,9 @@ app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
   const parametros = rango ? [desde, hasta] : [];
   db.all(`
         SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-          fecha_recoge, hora_recoge, dedicatoria, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, registrado_en, despachado_por
+          fecha_recoge, hora_recoge, dedicatoria, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, casino_nombre, casino_semana, registrado_en, despachado_por
     FROM pedidos
-    WHERE COALESCE(origen, 'pg') <> 'casino'
-      AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')${rango}
+    WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')${rango}
     ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
   `, parametros, (err, pedidos) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -1743,8 +1888,7 @@ app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
 
     if (!rango) return responder(false);
     db.get(`SELECT 1 AS existe FROM pedidos
-      WHERE COALESCE(origen, 'pg') <> 'casino'
-        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')
+      WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')
         AND fecha_recoge > ? LIMIT 1`, [hasta], (errorMas, siguiente) => {
       if (errorMas) return res.status(500).json({ error: errorMas.message });
       responder(Boolean(siguiente));
@@ -1767,10 +1911,9 @@ app.get('/api/admin/historial-pedidos', requireAdminAuth, (req, res) => {
   const parametros = buscar ? [`%${buscar}%`, limite + 1, offset] : [limite + 1, offset];
   db.all(`
     SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
-      fecha_recoge, hora_recoge, dedicatoria, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, registrado_en, despachado_por
+      fecha_recoge, hora_recoge, dedicatoria, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, casino_nombre, casino_semana, registrado_en, despachado_por
     FROM pedidos
-    WHERE COALESCE(origen, 'pg') <> 'casino'
-      AND COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
+    WHERE COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
       AND COALESCE(registrado_en, fecha_registro) >= (CURRENT_TIMESTAMP - INTERVAL '1 year')
       ${condicionBusqueda}
     ORDER BY fecha_recoge DESC, hora_recoge DESC, id DESC
@@ -2247,7 +2390,6 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         (fecha_recoge = ? AND hora_recoge < '15:00')
       )
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
-        AND COALESCE(origen, 'pg') <> 'casino'
       ORDER BY
         CASE WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN 0
              ELSE 1 END,
@@ -2285,10 +2427,6 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         };
       });
     }
-
-    const casinos = await cargarCasinosProduccion(fechaSiguiente);
-    clientes.push(...casinos.clientes);
-    detalles.push(...casinos.detalles);
 
     return res.json({
       fecha,
@@ -2434,7 +2572,6 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
       FROM pedidos
       WHERE ((fecha_recoge = ? AND hora_recoge >= '15:00') OR (fecha_recoge = ? AND hora_recoge < '15:00'))
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
-        AND COALESCE(origen, 'pg') <> 'casino'
       ORDER BY
         CASE WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN 0
              ELSE 1 END,
@@ -2455,10 +2592,6 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
         producto_nombre: resolverProductoProduccion(det.producto_nombre)
       }));
     }
-
-    const casinos = await cargarCasinosProduccion(fechaSiguiente);
-    clientes.push(...casinos.clientes);
-    detalles.push(...casinos.detalles);
 
     const workbook = new ExcelJS.Workbook();
     const visibles = filtrarItemsEmbalaje(detalles, (nombre) => nombre, normalizarProducto);
