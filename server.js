@@ -1904,6 +1904,68 @@ function eliminarPedidosRegistradosAntiguos() {
 eliminarPedidosRegistradosAntiguos();
 setInterval(eliminarPedidosRegistradosAntiguos, 60 * 60 * 1000);
 
+// Endpoint exclusivo de Casinos: evita mezclar o descargar pedidos Casino en Pedidos Generales.
+app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
+  try {
+    const desde = String(req.query.desde || '').trim();
+    const hasta = String(req.query.hasta || '').trim();
+    const casino = String(req.query.casino || '').trim();
+
+    if (!desde || !hasta || !/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || desde > hasta) {
+      return res.status(400).json({ error: 'Rango de fechas inválido.' });
+    }
+    if (!casino) return res.status(400).json({ error: 'Casino requerido.' });
+
+    const pedidos = await dbAllAsync(`
+      SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
+             fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento,
+             estado, fecha_registro, fecha_emision, origen, cronograma_casino_id,
+             casino_nombre, casino_semana, registrado_en, despachado_por
+      FROM pedidos
+      WHERE origen = 'casino'
+        AND fecha_recoge >= ?
+        AND fecha_recoge <= ?
+        AND LOWER(TRIM(COALESCE(NULLIF(casino_nombre, ''), cliente_nombre))) = LOWER(TRIM(?))
+        AND COALESCE(estado, 'Registrado') <> 'Cancelado'
+      ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
+    `, [desde, hasta, casino]);
+
+    if (!pedidos.length) return res.json({ pedidos: [] });
+
+    const ids = pedidos.map((pedido) => Number(pedido.id));
+    const placeholders = ids.map(() => '?').join(',');
+    const detalles = await dbAllAsync(`
+      SELECT pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta
+      FROM detalles_pedido
+      WHERE pedido_id IN (${placeholders})
+      ORDER BY pedido_id ASC, id ASC
+    `, ids);
+
+    const porId = new Map(pedidos.map((pedido) => [Number(pedido.id), {
+      ...pedido,
+      estado: normalizarEstadoPedido(pedido.estado),
+      detalles: []
+    }]));
+
+    for (const detalle of detalles || []) {
+      const pedido = porId.get(Number(detalle.pedido_id));
+      if (!pedido) continue;
+      pedido.detalles.push({
+        producto_nombre: detalle.producto_nombre,
+        cantidad: detalle.cantidad,
+        subtotal: detalle.subtotal,
+        paquetes: detalle.paquetes ? JSON.parse(detalle.paquetes) : {},
+        foto_torta: detalle.foto_torta || ''
+      });
+    }
+
+    return res.json({ pedidos: [...porId.values()] });
+  } catch (error) {
+    console.error('Error cargando pedidos de Casino:', error);
+    return res.status(500).json({ error: 'No se pudieron cargar los pedidos del casino.' });
+  }
+});
+
 // Endpoint: Obtener Pedidos Generales
 app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
   const resumen = req.query.resumen === '1';
@@ -1919,7 +1981,8 @@ app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
         SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
           fecha_recoge, hora_recoge, dedicatoria, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, casino_nombre, casino_semana, registrado_en, despachado_por
     FROM pedidos
-    WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')${rango}
+    WHERE COALESCE(origen, 'pg') <> 'casino'
+      AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')${rango}
     ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
   `, parametros, (err, pedidos) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -1953,7 +2016,8 @@ app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
 
     if (!rango) return responder(false);
     db.get(`SELECT 1 AS existe FROM pedidos
-      WHERE COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')
+      WHERE COALESCE(origen, 'pg') <> 'casino'
+        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de pago', 'Despachado (D''chelis)')
         AND fecha_recoge > ? LIMIT 1`, [hasta], (errorMas, siguiente) => {
       if (errorMas) return res.status(500).json({ error: errorMas.message });
       responder(Boolean(siguiente));
@@ -1978,7 +2042,8 @@ app.get('/api/admin/historial-pedidos', requireAdminAuth, (req, res) => {
     SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
       fecha_recoge, hora_recoge, dedicatoria, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}, tipo_comprobante, numero_documento, estado, fecha_registro, fecha_emision, origen, cronograma_casino_id, casino_nombre, casino_semana, registrado_en, despachado_por
     FROM pedidos
-    WHERE COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
+    WHERE COALESCE(origen, 'pg') <> 'casino'
+      AND COALESCE(estado, 'Registrado') IN ('Pendiente de pago', 'Despachado (D''chelis)')
       AND COALESCE(registrado_en, fecha_registro) >= (CURRENT_TIMESTAMP - INTERVAL '1 year')
       ${condicionBusqueda}
     ORDER BY fecha_recoge DESC, hora_recoge DESC, id DESC
