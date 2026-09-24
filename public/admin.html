@@ -2107,12 +2107,16 @@
     .production-main-table { width:100%; border-collapse:collapse; table-layout:fixed; font-family:Arial,Helvetica,sans-serif; }
     .production-main-table th, .production-main-table td { border:1px solid #333; padding:3px 5px; font-size:11px; line-height:1.18; }
     .production-main-table th { background:#f3f4f6; text-align:left; font-weight:900; }
-    .production-main-table th:first-child { width:78%; }
-    .production-main-table th:last-child { width:22%; text-align:right; }
+    .production-main-table th:first-child { width:58%; }
+    .production-main-table th:not(:first-child) { width:14%; text-align:right; }
     .production-main-table .production-group-row th { width:auto; padding:5px; background:#e7eaed; text-align:left; font-size:10px; letter-spacing:.04em; }
     .kitchen-page .embalaje-group-row th { background:#e7eaed; text-align:left; padding:5px 7px; font-weight:900; letter-spacing:.04em; }
     .production-prod-name { font-weight:800; overflow-wrap:anywhere; }
+    .production-urgent { font-weight:900; text-align:right; white-space:nowrap; color:#c40000; }
+    .production-normal { font-weight:800; text-align:right; white-space:nowrap; color:#111; }
     .production-total { font-weight:900; text-align:right; white-space:nowrap; }
+    .production-layout-wide { grid-template-columns:1fr; }
+    .production-layout-wide aside { display:none; }
     .production-blank-space { min-height:44mm; }
     .production-casino-section { margin-top:3mm; }
     .production-casino-title { margin:0 0 3mm; font:900 11px Arial,sans-serif; text-transform:uppercase; }
@@ -2120,6 +2124,8 @@
     .production-casino-line { display:flex; gap:4px; align-items:baseline; padding:2px 0; border-bottom:1px solid #ddd; font:800 10px/1.22 Arial,sans-serif; }
     .production-casino-line strong { flex:none; min-width:14px; }
     .production-casino-line span { overflow-wrap:anywhere; }
+    .production-special-turns { margin-left:auto; display:flex; gap:5px; white-space:nowrap; font-size:9px; }
+    .production-special-turns .urgent { color:#c40000; font-weight:900; }
     .production-compact .production-main-table td { padding:2px 4px; font-size:9px; line-height:1.08; }
     .production-paper + .production-paper { margin-top:16px; }
     @media screen and (max-width:700px) { .production-layout { grid-template-columns:1fr; } .production-blank-space { min-height:12mm; } }
@@ -2430,9 +2436,9 @@
       <div class="panel casino-panel">
         <div class="header-row no-print">
           <div>
-            <h3>Hoja de cocina · Casinos</h3>
+            <h3>Cronogramas · Casinos</h3>
             <div style="margin-top:5px; color:var(--muted); font-size:.82rem;">
-              Sube el cronograma Excel. Después de cargarlo podrás cambiar entre las semanas detectadas y la impresión se ajustará a la semana seleccionada.
+              Importa uno o más cronogramas. Cada casino y fecha se registra como pedido CASINO editable y alimenta Pedidos Generales, Embalaje y Producción.
             </div>
           </div>
           <button id="imprimirCasinosBtn" class="btn btn-warning" type="button" onclick="imprimirHojaCasinos()" disabled>
@@ -2448,7 +2454,7 @@
           <div class="casino-upload-actions">
             <input id="casinoExcelInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
             <button id="procesarCasinoExcelBtn" class="btn btn-success" type="button" onclick="procesarCronogramaCasinos()">
-              Generar hoja de cocina
+              Importar cronograma
             </button>
           </div>
           <div id="casinoEstado" class="casino-status">Todavía no se ha cargado un cronograma.</div>
@@ -4202,7 +4208,7 @@
           estado.className = 'casino-status success';
           const diasVigentes = obtenerDiasCasinoVigentes(data);
           const semanasDetectadas = crearSemanasCasino(diasVigentes);
-          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes.length} día(s) · ${semanasDetectadas.length} semana(s) · disponible directamente en Cocina y Embalaje${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
+          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes.length} día(s) · ${semanasDetectadas.length} semana(s) · registrado en Pedidos Generales y disponible en Embalaje y Producción${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
         }
       } catch (error) {
         window.__casinoProduccionData = null;
@@ -5402,12 +5408,16 @@
         const clave = normalizarNombreProducto(nombre);
         if (clave && !activos.has(clave)) activos.set(clave, { nombre, grupo: grupoProductoProduccion(nombre, normalizarNombreProducto) });
       }
-      const listas = { bocaditos:[], sandwiches:[], panes:[] };
+      const listas = { bocaditos:[], sandwiches:[], triples:[], piqueos:[], panes:[] };
       const agregar = (clave) => {
         const item = activos.get(clave);
         if (!item) return;
         activos.delete(clave);
-        const destino = item.grupo === 'Panes' ? listas.panes : item.grupo === 'Sándwiches y triples' ? listas.sandwiches : listas.bocaditos;
+        const destino = item.grupo === 'Panes' ? listas.panes
+          : item.grupo === 'Triples' ? listas.triples
+          : item.grupo === 'Piqueos' ? listas.piqueos
+          : item.grupo === 'Sándwiches' ? listas.sandwiches
+          : listas.bocaditos;
         destino.push(item.nombre);
       };
       for (const nombre of [...resolverProductoNombres(), ...obtenerProductosExtraParaProduccion()]) {
@@ -5647,56 +5657,86 @@
     const contenedor = document.getElementById('hojaProduccionCocina');
     if (!contenedor) return;
     const detalles = Array.isArray(data?.detalles) ? data.detalles : [];
+    const ordenReferencia = [...resolverProductoNombres(), ...obtenerProductosExtraParaProduccion()];
     const { filas, especiales } = clasificarHojaProduccion(
-      detalles, data.clientes || [], obtenerProductoResolucion, normalizarNombreProducto
+      detalles, data.clientes || [], obtenerProductoResolucion, normalizarNombreProducto, ordenReferencia
     );
+
     const paginas = [];
-    const agregarGrupo = (titulo, productos, acompanantes) => {
+    const agregarPaginas = (titulo, productos, acompanantes = [], anchoCompleto = false) => {
       if (!productos.length && !acompanantes.length) return;
-      const cantidadPaginas = Math.max(1, Math.ceil(productos.length / 30), Math.ceil(acompanantes.length / 25));
-      const porPagina = Math.ceil(productos.length / cantidadPaginas);
-      const acompanantesPorPagina = Math.ceil(acompanantes.length / cantidadPaginas);
+      const maxProductos = anchoCompleto ? 34 : 28;
+      const maxAcompanantes = 18;
+      const cantidadPaginas = Math.max(
+        1,
+        Math.ceil(productos.length / maxProductos),
+        Math.ceil(acompanantes.length / maxAcompanantes)
+      );
       for (let i = 0; i < cantidadPaginas; i += 1) {
         paginas.push({
           titulo,
-          bloque: productos.slice(i * porPagina, (i + 1) * porPagina),
-          kekes: acompanantes.slice(i * acompanantesPorPagina, (i + 1) * acompanantesPorPagina)
+          bloque: productos.slice(i * maxProductos, (i + 1) * maxProductos),
+          especiales: acompanantes.slice(i * maxAcompanantes, (i + 1) * maxAcompanantes),
+          anchoCompleto,
+          continuacion: i > 0
         });
       }
     };
-    agregarGrupo('Bocaditos', filas.filter((item) => item.grupo === 'Bocaditos'), especiales);
-    agregarGrupo('Sándwiches y triples', filas.filter((item) => item.grupo === 'Sándwiches y triples'), []);
-    agregarGrupo('Panes', filas.filter((item) => item.grupo === 'Panes'), []);
-    if (!paginas.length) paginas.push({ titulo:'Bocaditos', bloque:[], kekes:[] });
 
-    contenedor.innerHTML = paginas.map(({ titulo, bloque, kekes }, pagina) => {
-      return `
-        <section class="production-paper${bloque.length > 36 ? ' production-compact' : ''}">
-          <div class="production-paper-title">
-            <h4>${formatearFecha(data.fecha).toUpperCase()}${pagina && paginas[pagina - 1].titulo === titulo ? ' · CONTINUACIÓN' : ''}</h4>
-            <span>${escapeHtmlAdmin(titulo)} · ${pagina + 1}/${paginas.length}</span>
-          </div>
-          <div class="production-layout">
-            <table class="production-main-table">
-              <thead><tr><th>PRODUCTO</th><th>TOTAL</th></tr></thead>
-              <tbody>${bloque.length ? bloque.map((item, indice) => `
-                ${indice === 0 || bloque[indice - 1].grupo !== item.grupo ? `<tr class="production-group-row"><th colspan="2">${escapeHtmlAdmin(item.grupo.toUpperCase())}</th></tr>` : ''}
-                <tr><td class="production-prod-name">${escapeHtmlAdmin(item.nombre.toUpperCase())}</td><td class="production-total">${item.total}</td></tr>
-              `).join('') : '<tr><td colspan="2">Sin producción en esta ventana.</td></tr>'}</tbody>
-            </table>
-            <aside>
-              <div class="production-blank-space"></div>
-              ${kekes.length ? `<div class="production-casino-section">
-                <h5 class="production-casino-title">Kekes y tortas</h5>
-                <div class="production-casino-list">${kekes.map((item) => `
-                  <div class="production-casino-line"><strong>${item.total}</strong><span>${escapeHtmlAdmin(item.nombre.toUpperCase())}${item.cliente ? ` (${escapeHtmlAdmin(item.cliente.toUpperCase())})` : ''}</span></div>
-                `).join('')}</div>
-              </div>` : ''}
-            </aside>
-          </div>
-        </section>
-      `;
-    }).join('');
+    const bocaditos = filas.filter((item) => item.grupo === 'Bocaditos');
+    const produccionPanaderia = filas.filter((item) =>
+      ['Sándwiches', 'Triples', 'Piqueos', 'Panes'].includes(item.grupo)
+    );
+
+    agregarPaginas('Bocaditos dulces y salados', bocaditos, especiales, false);
+    agregarPaginas('Sándwiches · Triples · Piqueos · Panes', produccionPanaderia, [], true);
+    if (!paginas.length) paginas.push({ titulo:'Bocaditos dulces y salados', bloque:[], especiales:[], anchoCompleto:false, continuacion:false });
+
+    contenedor.innerHTML = paginas.map(({ titulo, bloque, especiales: acompanantes, anchoCompleto, continuacion }, pagina) => `
+      <section class="production-paper${bloque.length > 32 ? ' production-compact' : ''}">
+        <div class="production-paper-title">
+          <h4>${formatearFecha(data.fecha).toUpperCase()}${continuacion ? ' · CONTINUACIÓN' : ''}</h4>
+          <span>${escapeHtmlAdmin(titulo)} · ${pagina + 1}/${paginas.length}</span>
+        </div>
+        <div class="production-layout${anchoCompleto ? ' production-layout-wide' : ''}">
+          <table class="production-main-table">
+            <thead>
+              <tr>
+                <th>PRODUCTO</th>
+                <th class="production-urgent">URGENTE</th>
+                <th>NORMAL</th>
+                <th>TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>${bloque.length ? bloque.map((item, indice) => `
+              ${indice === 0 || bloque[indice - 1].grupo !== item.grupo ? `<tr class="production-group-row"><th colspan="4">${escapeHtmlAdmin(item.grupo.toUpperCase())}</th></tr>` : ''}
+              <tr>
+                <td class="production-prod-name">${escapeHtmlAdmin(item.nombre.toUpperCase())}</td>
+                <td class="production-urgent">${item.urgente > 0 ? item.urgente : ''}</td>
+                <td class="production-normal">${item.normal > 0 ? item.normal : ''}</td>
+                <td class="production-total">${item.total}</td>
+              </tr>
+            `).join('') : '<tr><td colspan="4">Sin producción en esta ventana.</td></tr>'}</tbody>
+          </table>
+          <aside>
+            <div class="production-blank-space"></div>
+            ${acompanantes.length ? `<div class="production-casino-section">
+              <h5 class="production-casino-title">Kekes y tortas</h5>
+              <div class="production-casino-list">${acompanantes.map((item) => `
+                <div class="production-casino-line">
+                  <strong>${item.total}</strong>
+                  <span>${escapeHtmlAdmin(item.nombre.toUpperCase())}${item.cliente ? ` (${escapeHtmlAdmin(item.cliente.toUpperCase())})` : ''}</span>
+                  <span class="production-special-turns">
+                    ${item.urgente > 0 ? `<span class="urgent">U ${item.urgente}</span>` : ''}
+                    ${item.normal > 0 ? `<span>N ${item.normal}</span>` : ''}
+                  </span>
+                </div>
+              `).join('')}</div>
+            </div>` : ''}
+          </aside>
+        </div>
+      </section>
+    `).join('');
   }
 
   async function cargarMatriz() {
@@ -5725,18 +5765,11 @@
       const detallesEmbalaje = filtrarDetallesEmbalaje(data.detalles || []);
       const listasEmbalaje = obtenerListasEmbalaje(detallesEmbalaje);
       renderizarMatrizProducto([
-        {
-          titulo:'BOCADITOS',
-          productosLista:listasEmbalaje.bocaditos
-        },
-        {
-          titulo:'SÁNGUCHES / TRIPLES',
-          productosLista:listasEmbalaje.sandwiches
-        },
-        {
-          titulo:'PANES',
-          productosLista:listasEmbalaje.panes
-        }
+        { titulo:'BOCADITOS', productosLista:listasEmbalaje.bocaditos },
+        { titulo:'SÁNGUCHES / PETIPANES', productosLista:listasEmbalaje.sandwiches },
+        { titulo:'TRIPLES', productosLista:listasEmbalaje.triples },
+        { titulo:'PIQUEOS', productosLista:listasEmbalaje.piqueos },
+        { titulo:'PANES', productosLista:listasEmbalaje.panes }
       ], detallesEmbalaje);
       const paginasCocina = [...document.querySelectorAll('#embalajeWrapper .kitchen-page')];
       paginasCocina.forEach((pagina) => pagina.classList.remove('last-kitchen-page'));
