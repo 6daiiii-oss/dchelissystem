@@ -3536,9 +3536,10 @@
       const base = resolverProductoDigitado(texto);
       if (!base) return null;
 
-      const ajustado = resolverPyePorCantidad(base, cantidad, normalizarNombreProducto);
-      if (normalizarNombreProducto(ajustado) === normalizarNombreProducto(base)) return base;
+      const textoNormalizado = normalizarNombreProducto(texto || '');
+      if (!/\b(PIE|PYE)\b/.test(textoNormalizado)) return base;
 
+      const ajustado = resolverPyePorCantidad(texto, cantidad, normalizarNombreProducto);
       const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
       const exacto = catalogo.find((item) =>
         normalizarNombreProducto(item?.nombre || '') === normalizarNombreProducto(ajustado)
