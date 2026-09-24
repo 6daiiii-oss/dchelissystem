@@ -1510,14 +1510,9 @@ async function procesarCronogramaCasinos(buffer) {
           || claveOriginal.includes('#REF')
         ) continue;
 
-        // Formatos como "X 100UND" expresan centenas: 0.8 = 80 unidades.
-        const claveUnidades = normalizarProducto([nombreOriginal, pan, tipo].filter(Boolean).join(' '));
-        const coincidenciaUnidades = claveUnidades.match(/\bX\s*(\d+)\s*UND\b/);
-        const multiplicadorUnidades = coincidenciaUnidades ? Number(coincidenciaUnidades[1]) : 1;
-
         const cantidadesFila = fechasColumnas.map(({ columna, fechaIso }) => ({
           fechaIso,
-          cantidad: numeroCasino(valorCeldaCasino(hoja.getCell(fila, columna))) * multiplicadorUnidades
+          cantidad: numeroCasino(valorCeldaCasino(hoja.getCell(fila, columna)))
         }));
         const tieneCantidad = cantidadesFila.some((item) => item.cantidad > 0);
         if (!tieneCantidad) {
