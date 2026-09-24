@@ -4439,7 +4439,7 @@
         const advertencias = Array.isArray(data.advertencias) ? data.advertencias.length : 0;
         if (estado) {
           estado.className = 'casino-status success';
-          estado.textContent = `${Number(data.casinos_detectados || 0)} casino(s) · ${Number(data.dias_detectados || 0)} día(s) · cronograma guardado por separado y disponible en Embalaje y Producción${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
+          estado.textContent = `${data.reemplazado ? 'Cronograma actualizado' : 'Cronograma importado'} · ${Number(data.casinos_detectados || 0)} casino(s) · ${Number(data.dias_detectados || 0)} día(s) · guardado por separado y disponible en Embalaje y Producción${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
         }
       } catch (error) {
         if (estado) {
