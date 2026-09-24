@@ -65,16 +65,39 @@ function grupoProductoProduccion(nombre, normalizar) {
   return 'Bocaditos';
 }
 
-function tipoItemCocina(nombre, cantidad, normalizar) {
-  const clave = normalizar(nombre);
+function resolverPyePorCantidad(nombre, cantidad, normalizar) {
+  const original = String(nombre || '').trim();
+  const clave = normalizar(original);
+  if (!/\b(PIE|PYE)\b/.test(clave)) return original;
+
   const unidades = Number(cantidad || 0);
+  const eraTortaExplicita = /^TORTA\b/.test(clave);
+
+  let base = original.replace(/^TORTA\s+/i, '').trim();
+  const claveBase = normalizar(base);
+  if (/\bLIMON\b/.test(claveBase)) base = 'Pye de Limón';
+  else if (/\bMANZANA\b/.test(claveBase)) base = 'Pye de Manzana';
+  else {
+    base = base
+      .replace(/^PIE\b/i, 'Pye')
+      .replace(/^PYE\b/i, 'Pye')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  if (unidades > 0 && unidades <= 5) return `Torta ${base}`;
+  if (unidades >= 10) return base;
+  if (eraTortaExplicita) return `Torta ${base}`;
+  return base;
+}
+
+function tipoItemCocina(nombre, cantidad, normalizar) {
+  const nombreAjustado = resolverPyePorCantidad(nombre, cantidad, normalizar);
+  const clave = normalizar(nombreAjustado);
   const esKeke = /\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave);
   const esPastel = /\b(TORTA|TORTITAS?|PIE|PYE|MOUSSE|CREMA|TRES LECHES)\b/.test(clave);
-  const esTortaExplicita = /^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave);
-  const esPyeEntero = /\b(PIE|PYE)\b/.test(clave) && unidades > 0 && unidades <= 6
-    && !/\b(MINI|BOCADITO|TARTALETA)\b/.test(clave);
-  const esTorta = esTortaExplicita || esPyeEntero;
-  return { esKeke, esTorta, esPastel, grupo: grupoProductoProduccion(nombre, normalizar) };
+  const esTorta = /^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave);
+  return { esKeke, esTorta, esPastel, grupo: grupoProductoProduccion(nombreAjustado, normalizar), nombreAjustado };
 }
 
 function filtrarItemsEmbalaje(detalles, resolver, normalizar) {
@@ -105,7 +128,7 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
   for (const detalle of detalles || []) {
     const cantidad = Number(detalle.cantidad || 0);
     if (!Number.isFinite(cantidad) || cantidad <= 0) continue;
-    const nombre = String(
+    const nombreBase = String(
       resolverPetipanNombre(detalle.producto_nombre)
       || resolverCiabattaNombre(detalle.producto_nombre)
       || resolver(detalle.producto_nombre)
@@ -113,9 +136,10 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
       || 'Producto'
     ).replace(/^(?:KEKES\s+)+(?=KEKE\b)/i, '').trim();
 
-    const clave = normalizar(nombre);
-    const fuenteTipo = detalle.producto_nombre_original || detalle.producto_nombre || nombre;
+    const fuenteTipo = detalle.producto_nombre_original || detalle.producto_nombre || nombreBase;
     const tipo = tipoItemCocina(fuenteTipo, cantidad, normalizar);
+    const nombre = resolverPyePorCantidad(nombreBase, cantidad, normalizar);
+    const clave = normalizar(nombre);
     const esKeke = tipo.esKeke;
     const esPastel = tipo.esPastel;
     const esTorta = tipo.esTorta;
@@ -162,5 +186,5 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
 
 if (typeof module !== 'undefined') module.exports = {
   clasificarHojaProduccion, resolverPetipanNombre, resolverCiabattaNombre,
-  grupoProductoProduccion, tipoItemCocina, filtrarItemsEmbalaje
+  grupoProductoProduccion, tipoItemCocina, filtrarItemsEmbalaje, resolverPyePorCantidad
 };
