@@ -1891,11 +1891,13 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
       const clave = normalizarProducto(nombre || '');
       if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
       if (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave)) return 'tortas';
+      if (/\bCIABATTIT[A-Z]*\b.*\bHOT DOG\b/.test(clave)) return 'panes';
+      if (/\b(CIABATTIT[A-Z]*|FRANCESIT[A-Z]*|MAIZ)\b.*\b(POLLO|ASADO|MECHADA|LOMITO|HAMBURGUESA|TORREJA|PECANAS|PINA|DURAZNO)\b/.test(clave)) return 'sanguches';
       const grupo = grupoProductoProduccion(nombre || '', normalizarProducto);
       if (grupo === 'Panes') return 'panes';
       if (grupo === 'Sándwiches') return 'sanguches';
       if (grupo === 'Triples') return 'triples';
-      if (/\b(ALFAJOR|OREJITA|PANUELIT|PANUELO|PIONON|PYE|PIE|RELAMPAG|TARTALETA|BISCOTELA|BROWNIE|CISNE|COCADA|CONITO|DONA|KEKITO|MERENG|MILHOJA|MOUSSE|NIDITO|PROFITEROL|ROSQUITA|TORTITA|TRES LECHES|TRUFA)\b/.test(clave)) return 'dulces';
+      if (/\b(ALFAJOR(?:CITO)?S?|OREJITAS?|PANUELITOS?|PIONONITOS?|PIONONO|PYE|PIE|RELAMPAGOS?|TARTALETAS?|BISCOTELAS?|BROWNIES?|CISNES?|COCADAS?|CONITOS?|DONAS?|KEKITOS?|MERENGUITOS?|MILHOJAS?|MOUSSE|NIDITOS?|PROFITEROL(?:ES)?|ROSQUITAS?|TORTITAS?|TRES LECHES|TRUFAS?)\b/.test(clave)) return 'dulces';
       return 'salados';
     };
     const ordenUna = ['dulces', 'salados', 'panes', 'sanguches', 'triples', 'tortas', 'kekes'];
