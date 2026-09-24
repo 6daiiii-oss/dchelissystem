@@ -42,7 +42,7 @@ function grupoProductoProduccion(nombre, normalizar) {
   const clave = normalizar(nombre);
   if (/\bEMPANADA\b.*\bBODA\b/.test(clave)) return 'Bocaditos';
 
-  if (/\b(BROCHETA|ALITA\s+BOUCHET|GUINDON|ESPARRAGO|HOJARASCA|TEQUENO|VOULEVAN|CANAPE)\b/.test(clave)
+  if (/\b(BROCHETAS?|ALITAS?\s+BOUCHET|GUINDONES?|ESPARRAGOS?|HOJARASCAS?|TEQUENOS?|VOULEVANS?|CANAPES?)\b/.test(clave)
       || /\bPIONONIT(?:O|OS)\b.*\bESPINACA\b/.test(clave)) {
     return 'Piqueos';
   }
