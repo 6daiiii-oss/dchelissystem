@@ -2437,7 +2437,7 @@
           <div>
             <h3>Cronogramas · Casinos</h3>
             <div style="margin-top:5px; color:var(--muted); font-size:.82rem;">
-              Importa uno o más cronogramas. Cada casino y fecha se registra como pedido CASINO editable y alimenta Pedidos Generales, Embalaje y Producción.
+              Importa uno o más cronogramas. Cada casino y fecha se guarda como pedido CASINO interno, editable solo desde esta sección, y alimenta Embalaje y Producción sin aparecer en Pedidos Generales.
             </div>
           </div>
           <button id="imprimirCasinosBtn" class="btn btn-warning" type="button" onclick="imprimirHojaCasinos()" disabled>
@@ -4059,18 +4059,19 @@
       if (!casino) return;
 
       try {
-        const respuesta = await fetch(`/api/admin/pedidos?desde=${semana.inicio}&hasta=${semana.fin}&resumen=1`, {
+        const params = new URLSearchParams({
+          desde: semana.inicio,
+          hasta: semana.fin,
+          casino
+        });
+        const respuesta = await fetch(`/api/admin/casinos/pedidos?${params.toString()}`, {
           credentials:'same-origin',
           cache:'no-store'
         });
         const resultado = await respuesta.json().catch(() => ({}));
         if (!respuesta.ok) throw new Error(resultado.error || 'No se pudieron cargar los pedidos Casino.');
 
-        const claveCasino = normalizarNombreProducto(casino);
-        const pedidos = (resultado.pedidos || []).filter((pedido) =>
-          pedido.origen === 'casino'
-          && normalizarNombreProducto(pedido.casino_nombre || pedido.cliente_nombre || '') === claveCasino
-        );
+        const pedidos = Array.isArray(resultado.pedidos) ? resultado.pedidos : [];
         if (!pedidos.length) throw new Error('No se encontraron pedidos editables para este casino y semana.');
 
         pedidos.forEach((pedido) => pedidosDisponibles.set(Number(pedido.id), pedido));
@@ -4256,7 +4257,7 @@
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         renderizarProduccionCasinos(data);
         await cargarCronogramaCasinoPersistido();
-        await refrescarVistasTrasCambioPedido();
+        firmaProduccion = '';
 
         const sinReconocer = Array.isArray(data.productos_no_reconocidos) ? data.productos_no_reconocidos.length : 0;
         const advertencias = Array.isArray(data.advertencias) ? data.advertencias.length : 0;
@@ -4264,7 +4265,7 @@
           estado.className = 'casino-status success';
           const diasVigentes = obtenerDiasCasinoVigentes(data);
           const semanasDetectadas = crearSemanasCasino(diasVigentes);
-          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes.length} día(s) · ${semanasDetectadas.length} semana(s) · registrado en Pedidos Generales y disponible en Embalaje y Producción${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
+          estado.textContent = `${data.casinos?.length || 0} casino(s) · ${diasVigentes.length} día(s) · ${semanasDetectadas.length} semana(s) · guardado solo en Casinos y disponible en Embalaje y Producción${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
         }
       } catch (error) {
         window.__casinoProduccionData = null;
