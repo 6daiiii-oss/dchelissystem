@@ -2061,10 +2061,9 @@
     .client-header.kitchen-normal,
     .qty-cell.kitchen-normal { color:#111 !important; }
     .client-header.kitchen-casino,
-    .qty-cell.kitchen-casino { color:#087c32 !important; background:#f1faf3 !important; }
+    .qty-cell.kitchen-casino { background:#f1faf3 !important; }
     .qty-cell.kitchen-urgent { text-align:left !important; padding-left:6px !important; font-weight:900 !important; }
-    .qty-cell.kitchen-normal,
-    .qty-cell.kitchen-casino { text-align:right !important; padding-right:6px !important; font-weight:900 !important; }
+    .qty-cell.kitchen-normal { text-align:right !important; padding-right:6px !important; font-weight:900 !important; }
     .kitchen-casino-tag {
       display:inline-block;
       margin-top:4px;
@@ -2159,7 +2158,6 @@
       }
       body.printing-cocina.printing-embalaje .client-header.kitchen-casino,
       body.printing-cocina.printing-embalaje .qty-cell.kitchen-casino {
-        color:#087c32 !important;
         background:#f1faf3 !important;
         -webkit-print-color-adjust:exact;
         print-color-adjust:exact;
@@ -5566,7 +5564,7 @@
   }
 
   async function marcarPedidosVentanaEnPreparacion() {
-    const clientes = Array.isArray(window.__datosProduccionClientes) ? window.__datosProduccionClientes : [];
+    const clientes = Array.isArray(window.__datosEmbalajeClientes) ? window.__datosEmbalajeClientes : [];
     const editables = clientes.filter((pedido) => pedido.origen !== 'casino');
     try {
       await Promise.all(editables.map((pedido) => fetch(`/api/admin/pedidos/${pedido.id}/estado`, {
@@ -5604,10 +5602,10 @@
     });
   }
 
-  function renderizarMatrizProducto(secciones, detallesEmbalaje = window.__datosProduccionDetalles || []) {
+  function renderizarMatrizProducto(secciones, detallesEmbalaje = window.__datosEmbalajeDetalles || []) {
     const contenedor = document.getElementById('hojaProduccion');
     if (!contenedor) return;
-    const clientes = ordenarClientesEmbalaje(window.__datosProduccionClientes || []);
+    const clientes = ordenarClientesEmbalaje(window.__datosEmbalajeClientes || []);
     const detalles = detallesEmbalaje;
     const indice = new Map();
     const nombresResueltos = new Map();
@@ -5680,9 +5678,10 @@
         let html = '<div class="kitchen-page"><table><thead><tr><th class="prod-col">PRODUCTO</th>';
 
         grupoClientes.forEach((cliente) => {
-          const clase = cliente.origen === 'casino' ? 'kitchen-casino' : (cliente.es_urgente ? 'kitchen-urgent' : 'kitchen-normal');
+          const claseTurno = cliente.es_urgente ? 'kitchen-urgent' : 'kitchen-normal';
+          const claseCasino = cliente.origen === 'casino' ? ' kitchen-casino' : '';
           const tag = cliente.origen === 'casino' ? '<span class="kitchen-casino-tag">CASINO</span>' : '';
-          html += `<th class="client-header ${clase}"><div class="vertical-text">${escapeHtmlAdmin((cliente.cliente_nombre || 'Cliente').toUpperCase())}${tag}</div></th>`;
+          html += `<th class="client-header ${claseTurno}${claseCasino}"><div class="vertical-text">${escapeHtmlAdmin((cliente.cliente_nombre || 'Cliente').toUpperCase())}${tag}</div></th>`;
         });
 
         if (mostrarTotal) html += '<th class="total-header"><div class="vertical-text">TOTAL</div></th>';
@@ -5695,8 +5694,9 @@
           let fila = `<tr><td class="prod-col">${escapeHtmlAdmin(nombre)}</td>`;
           grupoClientes.forEach((cliente) => {
             const cantidad = producto.cantidades.get(Number(cliente.id)) || 0;
-            const clase = cliente.origen === 'casino' ? 'kitchen-casino' : (cliente.es_urgente ? 'kitchen-urgent' : 'kitchen-normal');
-            fila += cantidad > 0 ? `<td class="qty-cell ${clase}">${cantidad}</td>` : '<td></td>';
+            const claseTurno = cliente.es_urgente ? 'kitchen-urgent' : 'kitchen-normal';
+            const claseCasino = cliente.origen === 'casino' ? ' kitchen-casino' : '';
+            fila += cantidad > 0 ? `<td class="qty-cell ${claseTurno}${claseCasino}">${cantidad}</td>` : '<td></td>';
           });
 
           if (mostrarTotal) {
@@ -5812,15 +5812,22 @@
 
       window.__datosProduccionClientes = data.clientes || [];
       window.__datosProduccionDetalles = data.detalles || [];
-      const nuevaFirmaProduccion = JSON.stringify({clientes:data.clientes,detalles:data.detalles,ventana:data.ventana});
+      window.__datosEmbalajeClientes = data.embalaje?.clientes || [];
+      window.__datosEmbalajeDetalles = data.embalaje?.detalles || [];
+      const nuevaFirmaProduccion = JSON.stringify({
+        clientes:data.clientes,
+        detalles:data.detalles,
+        embalaje:data.embalaje,
+        ventana:data.ventana
+      });
       if (firmaProduccion === nuevaFirmaProduccion) return;
 
       const etiqueta = document.getElementById('kitchenWindowLabel');
-      if (etiqueta) etiqueta.textContent = `Ventana: ${data.ventana?.desde || ''} → ${data.ventana?.hasta || ''}`;
+      if (etiqueta) etiqueta.textContent = `Producción: ${data.ventana?.desde || ''} → ${data.ventana?.hasta || ''} · Embalaje: recojos del ${data.embalaje?.fecha || fecha}`;
 
       renderizarHojaProduccionCocina(data);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const detallesEmbalaje = filtrarDetallesEmbalaje(data.detalles || []);
+      const detallesEmbalaje = filtrarDetallesEmbalaje(data.embalaje?.detalles || []);
       const listasEmbalaje = obtenerListasEmbalaje(detallesEmbalaje);
       renderizarMatrizProducto([
         { titulo:'BOCADITOS', productosLista:listasEmbalaje.bocaditos },
