@@ -140,9 +140,13 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
   return creados;
 }
 
-async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '' } = {}) {
+async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '', cronogramaId = null } = {}) {
   const condiciones = ["p.origen = 'casino'", "COALESCE(p.estado, 'Registrado') <> 'Cancelado'"];
   const parametros = [];
+  if (Number.isInteger(Number(cronogramaId)) && Number(cronogramaId) > 0) {
+    condiciones.push('p.cronograma_casino_id = ?');
+    parametros.push(Number(cronogramaId));
+  }
   if (desde) {
     condiciones.push('p.fecha_recoge >= ?');
     parametros.push(desde);
@@ -214,8 +218,8 @@ async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '' } 
   }));
 
   return {
-    id: 'pedidos-casino',
-    nombre_archivo: 'Cronogramas persistentes',
+    id: Number.isInteger(Number(cronogramaId)) && Number(cronogramaId) > 0 ? Number(cronogramaId) : 'pedidos-casino',
+    nombre_archivo: 'Cronograma Casino',
     fecha_inicio: diasOrdenados[0]?.fecha || '',
     fecha_fin: diasOrdenados.at(-1)?.fecha || '',
     casinos: [...casinos],
@@ -1565,60 +1569,66 @@ app.put('/api/admin/usuarios/:id', requireAdminAuth, async (req, res) => {
 
 app.get('/api/admin/casinos/cronograma', requireAdminAuth, async (req, res) => {
   try {
+    // Carga inicial liviana: nunca mezcla datos_json ni pedidos de importaciones distintas.
     const importaciones = await dbAllAsync(`
       SELECT id, nombre_archivo, fecha_inicio, fecha_fin, creado_en
       FROM casino_cronogramas
-      ORDER BY id DESC
+      ORDER BY creado_en DESC, id DESC
       LIMIT 100
     `);
 
-    const ahoraLima = new Date(Date.now() - 5 * 60 * 60 * 1000);
-    const hoyLima = ahoraLima.toISOString().slice(0, 10);
-    const desde = sumarDiasIso(hoyLima, -45);
-
-    // Solo reconstruye el período operativo reciente y futuro. Evita recorrer
-    // años de pedidos históricos al abrir la pestaña Casinos.
-    let cronograma = await construirCronogramaCasinoDesdePedidos({ desde });
-
-    // Compatibilidad con importaciones antiguas que aún no tienen pedidos Casino:
-    // se muestran desde JSON, pero no se migran durante la carga de la página.
-    if (!cronograma && importaciones.length) {
-      const filasJson = await dbAllAsync(`
-        SELECT id, nombre_archivo, fecha_inicio, fecha_fin, datos_json, creado_en
-        FROM casino_cronogramas
-        ORDER BY id DESC
-        LIMIT 5
-      `);
-
-      const filasCompactas = filasJson.map((row) => {
-        try {
-          const datos = JSON.parse(row.datos_json);
-          const fechas = (Array.isArray(datos?.dias) ? datos.dias : [])
-            .map((dia) => String(dia?.fecha || ''))
-            .filter((fecha) => /^\d{4}-\d{2}-\d{2}$/.test(fecha))
-            .sort();
-          const ultimaFecha = fechas.at(-1) || '';
-          const desdeArchivo = ultimaFecha ? sumarDiasIso(ultimaFecha, -45) : '';
-          if (desdeArchivo) {
-            datos.dias = (datos.dias || []).filter((dia) => String(dia?.fecha || '') >= desdeArchivo);
-          }
-          return { ...row, datos_json: JSON.stringify(datos) };
-        } catch {
-          return row;
-        }
-      });
-
-      cronograma = unirCronogramasCasino(filasCompactas);
-    }
-
     return res.json({
-      existe: Boolean(cronograma),
-      cronograma,
+      existe: importaciones.length > 0,
       importaciones
     });
   } catch (error) {
-    console.error('Error cargando cronograma persistente:', error);
-    return res.status(500).json({ error: 'No se pudo cargar el cronograma de casinos.' });
+    console.error('Error listando cronogramas Casino:', error);
+    return res.status(500).json({ error: 'No se pudieron listar los cronogramas de casinos.' });
+  }
+});
+
+app.get('/api/admin/casinos/cronograma/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'Cronograma no válido.' });
+    }
+
+    const meta = await dbGetAsync(`
+      SELECT id, nombre_archivo, fecha_inicio, fecha_fin, datos_json, creado_en
+      FROM casino_cronogramas
+      WHERE id = ?
+      LIMIT 1
+    `, [id]);
+    if (!meta) return res.status(404).json({ error: 'Cronograma no encontrado.' });
+
+    // Los pedidos internos se consultan solo para ESTA importación.
+    let cronograma = await construirCronogramaCasinoDesdePedidos({ cronogramaId: id });
+
+    // Importaciones antiguas sin pedidos internos siguen siendo visibles sin
+    // hacer una migración costosa al abrir la tarjeta.
+    if (!cronograma) {
+      try {
+        cronograma = JSON.parse(meta.datos_json);
+      } catch {
+        return res.status(500).json({ error: 'El cronograma guardado está dañado.' });
+      }
+    }
+
+    cronograma = {
+      ...cronograma,
+      id,
+      cronograma_id: id,
+      nombre_archivo: meta.nombre_archivo,
+      fecha_inicio: cronograma.fecha_inicio || meta.fecha_inicio,
+      fecha_fin: cronograma.fecha_fin || meta.fecha_fin,
+      creado_en: meta.creado_en
+    };
+
+    return res.json({ cronograma });
+  } catch (error) {
+    console.error('Error cargando cronograma Casino individual:', error);
+    return res.status(500).json({ error: 'No se pudo cargar este cronograma.' });
   }
 });
 
@@ -1694,7 +1704,10 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
       pedidos_casino_creados: pedidosCreados,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
-      ...resultado
+      casinos_detectados: resultado.casinos?.length || 0,
+      dias_detectados: resultado.dias?.length || 0,
+      advertencias: resultado.advertencias || [],
+      productos_no_reconocidos: resultado.productos_no_reconocidos || []
     });
   } catch (error) {
     if (transaccion) await dbRunAsync('ROLLBACK').catch(() => {});
@@ -1995,11 +2008,15 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
     const desde = String(req.query.desde || '').trim();
     const hasta = String(req.query.hasta || '').trim();
     const casino = String(req.query.casino || '').trim();
+    const cronogramaId = Number(req.query.cronograma_id);
 
     if (!desde || !hasta || !/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || desde > hasta) {
       return res.status(400).json({ error: 'Rango de fechas inválido.' });
     }
     if (!casino) return res.status(400).json({ error: 'Casino requerido.' });
+    if (!Number.isInteger(cronogramaId) || cronogramaId <= 0) {
+      return res.status(400).json({ error: 'Cronograma requerido.' });
+    }
 
     const cargarPedidosCasinoSemana = () => dbAllAsync(`
       SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
@@ -2008,12 +2025,13 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
              casino_nombre, casino_semana, registrado_en, despachado_por
       FROM pedidos
       WHERE origen = 'casino'
+        AND cronograma_casino_id = ?
         AND fecha_recoge >= ?
         AND fecha_recoge <= ?
         AND LOWER(TRIM(COALESCE(NULLIF(casino_nombre, ''), cliente_nombre))) = LOWER(TRIM(?))
         AND COALESCE(estado, 'Registrado') <> 'Cancelado'
       ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
-    `, [desde, hasta, casino]);
+    `, [cronogramaId, desde, hasta, casino]);
 
     let pedidos = await cargarPedidosCasinoSemana();
 
@@ -2021,10 +2039,11 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
       const cronogramasLegacy = await dbAllAsync(`
         SELECT id, datos_json
         FROM casino_cronogramas
-        WHERE fecha_inicio <= ? AND fecha_fin >= ?
-        ORDER BY id DESC
-        LIMIT 5
-      `, [hasta, desde]);
+        WHERE id = ?
+          AND fecha_inicio <= ?
+          AND fecha_fin >= ?
+        LIMIT 1
+      `, [cronogramaId, hasta, desde]);
 
       const claveCasino = normalizarProducto(casino);
       for (const row of cronogramasLegacy) {
