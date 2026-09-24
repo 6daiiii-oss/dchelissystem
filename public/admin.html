@@ -4300,6 +4300,9 @@
                 <button type="button" class="casino-print-btn" onclick="editarSemanaCasino(${indice}, ${semana.indice})">
                   Editar semana
                 </button>
+                <button type="button" class="casino-print-btn" onclick="imprimirCasinoIndividual(${indice})">
+                  Imprimir este casino
+                </button>
 
               </div>
             </div>
@@ -4337,8 +4340,7 @@
             </div>
             <div class="casino-cronograma-actions">
               <button type="button" class="btn btn-ghost" onclick="abrirCronogramaCasino(${id})">Abrir</button>
-              <button type="button" class="btn btn-warning" onclick="imprimirCronogramaCasino(${id})">Imprimir</button>
-              <button type="button" class="btn btn-ghost" onclick="descargarExcelCronogramaCasino(${id})">Excel</button>
+              <button type="button" class="btn btn-warning" onclick="imprimirCronogramaCasino(${id})">Imprimir todos</button>
             </div>
           </article>
         `;
@@ -4409,17 +4411,6 @@
       imprimirHojaCasinos();
     }
 
-    async function descargarExcelCronogramaCasino(id) {
-      const cargado = await abrirCronogramaCasino(id);
-      if (!cargado) return;
-      const semanas = Array.isArray(window.__casinoSemanas) ? window.__casinoSemanas : [];
-      const semana = semanas[Number(window.__casinoSemanaIndex)];
-      if (!semana) {
-        alert('No hay una semana disponible para exportar.');
-        return;
-      }
-      window.location.href = `/api/admin/casinos/cronograma/${Number(id)}/excel?desde=${encodeURIComponent(semana.inicio)}&hasta=${encodeURIComponent(semana.fin)}`;
-    }
 
     async function cargarCronogramaCasinoPersistido(abrirId = null) {
       const estado = document.getElementById('casinoEstado');
