@@ -81,6 +81,91 @@ function inicioSemanaCasino(fechaIso) {
 async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones = {}) {
   if (!cronogramaId || !Array.isArray(datos?.dias)) return 0;
   const omitirVerificacionExistencia = Boolean(opciones.omitirVerificacionExistencia);
+
+  // Importaciones nuevas/reemplazos: insertar todo el cronograma en bloque.
+  // Evita cientos de viajes secuenciales a PostgreSQL.
+  if (omitirVerificacionExistencia) {
+    const registros = [];
+
+    for (const dia of datos.dias) {
+      if (!dia?.fecha) continue;
+      const casinos = Array.isArray(dia.casinos) && dia.casinos.length ? dia.casinos : (datos.casinos || []);
+      for (const casinoOriginal of casinos) {
+        const casino = String(casinoOriginal || '').trim();
+        if (!casino) continue;
+
+        const items = (dia.productos || []).map((producto) => ({
+          producto_nombre: resolverProductoProduccion(producto?.nombre || ''),
+          cantidad: Number(producto?.por_casino?.[casino] || 0)
+        })).filter((item) => item.producto_nombre && Number.isFinite(item.cantidad) && item.cantidad > 0);
+        if (!items.length) continue;
+
+        const casinoUid = `cronograma:${cronogramaId}:${dia.fecha}:${normalizarProducto(casino)}`;
+        const hash = crypto.createHash('sha1').update(casinoUid).digest('hex').slice(0, 8).toUpperCase();
+        registros.push({
+          codigo: `CAS-${String(dia.fecha).replace(/-/g, '')}-${hash}`,
+          casino,
+          fecha: dia.fecha,
+          semana: inicioSemanaCasino(dia.fecha),
+          casinoUid,
+          items
+        });
+      }
+    }
+
+    if (!registros.length) return 0;
+
+    const valoresPedidos = [];
+    const parametrosPedidos = [];
+    for (const registro of registros) {
+      valoresPedidos.push(`(?, 'Casino', ?, 'CASINO', 0, 0, 'Cuenta Casino', ?, '12:00', '', '', '', '', '',
+        'Registrado', CURRENT_TIMESTAMP, 'casino', ?, ?, ?, ?)`);
+      parametrosPedidos.push(
+        registro.codigo,
+        registro.casino,
+        registro.fecha,
+        Number(cronogramaId),
+        registro.casino,
+        registro.semana,
+        registro.casinoUid
+      );
+    }
+
+    const pedidosInsertados = await dbAllAsync(`
+      INSERT INTO pedidos (
+        codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
+        fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento,
+        nro_operacion, estado, fecha_emision, origen, cronograma_casino_id,
+        casino_nombre, casino_semana, casino_uid
+      ) VALUES ${valoresPedidos.join(', ')}
+      RETURNING id, casino_uid
+    `, parametrosPedidos);
+
+    const idsPorUid = new Map(
+      (pedidosInsertados || []).map((pedido) => [String(pedido.casino_uid || ''), Number(pedido.id)])
+    );
+    const valoresDetalles = [];
+    const parametrosDetalles = [];
+
+    for (const registro of registros) {
+      const pedidoId = idsPorUid.get(registro.casinoUid);
+      if (!pedidoId) continue;
+      for (const item of registro.items) {
+        valoresDetalles.push("(?, ?, ?, 0, '{}', '')");
+        parametrosDetalles.push(pedidoId, item.producto_nombre, item.cantidad);
+      }
+    }
+
+    if (valoresDetalles.length) {
+      await dbRunAsync(`
+        INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta)
+        VALUES ${valoresDetalles.join(', ')}
+      `, parametrosDetalles);
+    }
+
+    return registros.length;
+  }
+
   let creados = 0;
 
   for (const dia of datos.dias) {
