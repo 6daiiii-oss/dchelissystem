@@ -1564,6 +1564,20 @@
       color:#166534;
       font-weight:900;
     }
+    .casino-day-table .casino-name-head {
+      background:#f3f4f6;
+      color:#111;
+      font-size:12px;
+      font-weight:900;
+      text-transform:uppercase;
+    }
+    .casino-day-table .casino-total-row td {
+      background:#eef0f2;
+      color:#111;
+      font-weight:900;
+      border-top:2px solid #111;
+    }
+    .casino-day-table .casino-total-row .casino-product-col { background:#e7e9ec; }
     .casino-day-table td.casino-qty { font-size:10px; font-weight:800; }
     .casino-day-table td.casino-qty,
     .casino-day-table .casino-total-col {
@@ -1778,6 +1792,23 @@
         padding:var(--casino-pad-y-mm) 0.75mm !important;
         font-size:var(--casino-font-px) !important;
         line-height:1 !important;
+      }
+
+      body.printing-casinos .casino-day-table .casino-total-row td {
+        background:#e9e9e9 !important;
+        color:#111 !important;
+        font-weight:900 !important;
+        border-top:1.8px solid #111 !important;
+        -webkit-print-color-adjust:exact;
+        print-color-adjust:exact;
+      }
+      body.printing-casinos .casino-day-table .casino-name-head {
+        background:#f2f2f2 !important;
+        color:#111 !important;
+        font-weight:900 !important;
+        text-transform:uppercase !important;
+        -webkit-print-color-adjust:exact;
+        print-color-adjust:exact;
       }
 
       body.printing-casinos .casino-day-table .casino-product-col {
@@ -4305,6 +4336,7 @@
             <div class="casino-cronograma-actions">
               <button type="button" class="btn btn-ghost" onclick="abrirCronogramaCasino(${id})">Abrir</button>
               <button type="button" class="btn btn-warning" onclick="imprimirCronogramaCasino(${id})">Imprimir</button>
+              <button type="button" class="btn btn-ghost" onclick="descargarExcelCronogramaCasino(${id})">Excel</button>
             </div>
           </article>
         `;
@@ -4373,6 +4405,18 @@
       if (!cargado) return;
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       imprimirHojaCasinos();
+    }
+
+    async function descargarExcelCronogramaCasino(id) {
+      const cargado = await abrirCronogramaCasino(id);
+      if (!cargado) return;
+      const semanas = Array.isArray(window.__casinoSemanas) ? window.__casinoSemanas : [];
+      const semana = semanas[Number(window.__casinoSemanaIndex)];
+      if (!semana) {
+        alert('No hay una semana disponible para exportar.');
+        return;
+      }
+      window.location.href = `/api/admin/casinos/cronograma/${Number(id)}/excel?desde=${encodeURIComponent(semana.inicio)}&hasta=${encodeURIComponent(semana.fin)}`;
     }
 
     async function cargarCronogramaCasinoPersistido(abrirId = null) {
