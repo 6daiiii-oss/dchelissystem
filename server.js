@@ -2470,13 +2470,59 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       });
     }
 
+    const clientesEmbalaje = await dbAllAsync(`
+      SELECT id, codigo, cliente_nombre, tipo_cliente, origen, fecha_recoge, hora_recoge,
+             fecha_emision, cronograma_casino_id,
+             CASE WHEN hora_recoge >= '15:00' THEN TRUE ELSE FALSE END AS es_urgente
+      FROM pedidos
+      WHERE fecha_recoge = ?
+        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
+      ORDER BY
+        CASE WHEN hora_recoge >= '15:00' THEN 1 ELSE 0 END,
+        hora_recoge ASC, id ASC
+    `, [fecha]);
+
+    const idsEmbalaje = clientesEmbalaje.map((item) => Number(item.id)).filter(Boolean);
+    let detallesEmbalaje = [];
+    if (idsEmbalaje.length) {
+      const placeholders = idsEmbalaje.map(() => '?').join(',');
+      const rows = await dbAllAsync(
+        `SELECT p.id AS pedido_id, p.origen, p.tipo_cliente, p.fecha_recoge, p.hora_recoge,
+                dp.producto_nombre, dp.cantidad, dp.paquetes, dp.foto_torta
+         FROM detalles_pedido dp
+         JOIN pedidos p ON dp.pedido_id = p.id
+         WHERE p.id IN (${placeholders})
+         ORDER BY p.id ASC, dp.id ASC`,
+        idsEmbalaje
+      );
+
+      detallesEmbalaje = (rows || []).map((det) => ({
+        pedido_id: det.pedido_id,
+        origen: det.origen || 'pg',
+        tipo_cliente: det.tipo_cliente || 'Cliente',
+        fecha_recoge: det.fecha_recoge,
+        hora_recoge: det.hora_recoge,
+        es_urgente: String(det.hora_recoge || '') >= '15:00',
+        producto_nombre: resolverProductoProduccion(det.producto_nombre),
+        producto_nombre_original: det.producto_nombre,
+        cantidad: Number(det.cantidad || 0),
+        paquetes: det.paquetes ? JSON.parse(det.paquetes) : {},
+        foto_torta: det.foto_torta || ''
+      }));
+    }
+
     return res.json({
       fecha,
       fecha_siguiente: fechaSiguiente,
       ventana: { desde: `${fecha} 15:00`, hasta: `${fechaSiguiente} 15:00` },
       productos: PRODUCTOS_COCINA,
       clientes,
-      detalles
+      detalles,
+      embalaje: {
+        fecha,
+        clientes: clientesEmbalaje,
+        detalles: detallesEmbalaje
+      }
     });
   } catch (error) {
     console.error('Error cargando producción:', error);
@@ -2605,20 +2651,16 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
   try {
     const fecha = String(req.query.fecha || '').trim();
     if (!fecha) return res.status(400).send('Fecha requerida');
-    const fechaSiguiente = sumarDiasIso(fecha, 1);
-    if (!fechaSiguiente) return res.status(400).send('Fecha inválida');
-
     const clientes = await dbAllAsync(`
       SELECT id, cliente_nombre, origen, fecha_recoge, hora_recoge,
-             CASE WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN TRUE ELSE FALSE END AS es_urgente
+             CASE WHEN hora_recoge >= '15:00' THEN TRUE ELSE FALSE END AS es_urgente
       FROM pedidos
-      WHERE ((fecha_recoge = ? AND hora_recoge >= '15:00') OR (fecha_recoge = ? AND hora_recoge < '15:00'))
+      WHERE fecha_recoge = ?
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
       ORDER BY
-        CASE WHEN fecha_recoge = ? AND hora_recoge >= '15:00' THEN 0
-             ELSE 1 END,
-        fecha_recoge, hora_recoge, id
-    `, [fecha, fecha, fechaSiguiente, fecha]);
+        CASE WHEN hora_recoge >= '15:00' THEN 1 ELSE 0 END,
+        hora_recoge, id
+    `, [fecha]);
 
     const ids = clientes.map((c) => c.id);
     let detalles = [];
@@ -2678,14 +2720,14 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
       const worksheet = workbook.addWorksheet(grupo.nombre, {
         pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
       });
-      worksheet.getCell('A1').value = `${grupo.nombre.toUpperCase()} · ${fecha} 15:00 → ${fechaSiguiente} 15:00`;
+      worksheet.getCell('A1').value = `${grupo.nombre.toUpperCase()} · RECOJOS ${fecha}`;
       worksheet.getCell('A1').font = { bold: true, size: 12 };
 
       clientesGrupo.forEach((cli, idx) => {
         const cell = worksheet.getCell(2, idx + 2);
         cell.value = `${String(cli.cliente_nombre || '').toUpperCase()}${cli.origen === 'casino' ? ' · CASINO' : ''}`;
         cell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
-        cell.font = { bold: true, color: { argb: cli.es_urgente ? 'FFCC0000' : (cli.origen === 'casino' ? 'FF0B7431' : 'FF111111') } };
+        cell.font = { bold: true, color: { argb: cli.es_urgente ? 'FFCC0000' : 'FF111111' } };
       });
 
       const colTotalIdx = Math.max(clientesGrupo.length + 2, 3);
@@ -2700,7 +2742,7 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
           if (cantidad > 0) {
             const cell = worksheet.getCell(rowNum, cIdx + 2);
             cell.value = cantidad;
-            cell.font = { bold: true, color: { argb: cli.es_urgente ? 'FFCC0000' : (cli.origen === 'casino' ? 'FF0B7431' : 'FF111111') } };
+            cell.font = { bold: true, color: { argb: cli.es_urgente ? 'FFCC0000' : 'FF111111' } };
           }
         });
         const desde = worksheet.getColumn(2).letter;
