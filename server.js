@@ -52,6 +52,19 @@ function resolverProductoProduccion(nombre) {
     || nombre;
 }
 
+// PALANCA TEMPORAL: cambiar a true para volver a incluir NEWPORT en Producción y Embalaje.
+const INCLUIR_NEWPORT_EN_PRODUCCION_EMBALAJE = false;
+const FILTRO_NEWPORT_HOJAS_SQL = INCLUIR_NEWPORT_EN_PRODUCCION_EMBALAJE ? '' : `
+  AND NOT (
+    origen = 'casino'
+    AND cronograma_casino_id IN (
+      SELECT id
+      FROM casino_cronogramas
+      WHERE UPPER(COALESCE(nombre_archivo, '')) LIKE '%NEWPORT%'
+    )
+  )
+`;
+
 async function cargarCasinosProduccion(fecha) {
   const cronogramas = await dbAllAsync(`
     SELECT id, datos_json FROM casino_cronogramas
@@ -2899,6 +2912,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         (fecha_recoge = ? AND hora_recoge < '15:00')
       )
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
+        ${FILTRO_NEWPORT_HOJAS_SQL}
       ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
     `, [fecha, fechaSiguiente]);
 
@@ -2950,6 +2964,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       FROM pedidos
       WHERE fecha_recoge = ?
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
+        ${FILTRO_NEWPORT_HOJAS_SQL}
       ORDER BY hora_recoge ASC, id ASC
     `, [fecha]);
 
@@ -3136,6 +3151,7 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
       FROM pedidos
       WHERE fecha_recoge = ?
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Cancelado')
+        ${FILTRO_NEWPORT_HOJAS_SQL}
       ORDER BY hora_recoge, id
     `, [fecha]);
     const clientes = clientesBase
