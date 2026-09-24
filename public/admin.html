@@ -4048,6 +4048,60 @@
       if (window.__casinoProduccionData) renderizarProduccionCasinos(window.__casinoProduccionData);
     }
 
+    async function editarSemanaCasino(indiceCasino, indiceSemana) {
+      const data = window.__casinoProduccionData;
+      const semanas = Array.isArray(window.__casinoSemanas) ? window.__casinoSemanas : [];
+      const semana = semanas[Number(indiceSemana)];
+      if (!data || !semana) return;
+
+      const dataSemana = { ...data, dias: semana.dias };
+      const cronogramas = construirCronogramaPorCasino(dataSemana).filter((cronograma) => cronograma.productos.length > 0);
+      const casino = cronogramas[Number(indiceCasino)]?.casino;
+      if (!casino) return;
+
+      try {
+        const respuesta = await fetch(`/api/admin/pedidos?desde=${semana.inicio}&hasta=${semana.fin}&resumen=1`, {
+          credentials:'same-origin',
+          cache:'no-store'
+        });
+        const resultado = await respuesta.json().catch(() => ({}));
+        if (!respuesta.ok) throw new Error(resultado.error || 'No se pudieron cargar los pedidos Casino.');
+
+        const claveCasino = normalizarNombreProducto(casino);
+        const pedidos = (resultado.pedidos || []).filter((pedido) =>
+          pedido.origen === 'casino'
+          && normalizarNombreProducto(pedido.casino_nombre || pedido.cliente_nombre || '') === claveCasino
+        );
+        if (!pedidos.length) throw new Error('No se encontraron pedidos editables para este casino y semana.');
+
+        pedidos.forEach((pedido) => pedidosDisponibles.set(Number(pedido.id), pedido));
+        const modal = document.getElementById('pedidoDetalleModal');
+        const codigo = document.getElementById('detallePedidoCodigo');
+        const contenido = document.getElementById('detallePedidoContenido');
+        if (!modal || !codigo || !contenido) return;
+
+        codigo.textContent = `CASINO · SEMANA ${semana.numero}`;
+        contenido.innerHTML = `
+          <div class="pedido-modal-section">
+            <h4>${escapeHtmlAdmin(casino)} · ${escapeHtmlAdmin(semana.rango)}</h4>
+            <p style="color:var(--muted);margin:0 0 12px;">Cada fecha es un pedido CASINO independiente. Editar cantidades o agregar productos actualiza Producción y Embalaje.</p>
+            <div class="cards-grid">
+              ${pedidos.map((pedido) => `
+                <button type="button" class="btn btn-ghost" style="text-align:left;display:block;width:100%;margin-bottom:7px;"
+                  onclick="abrirDetallePedido(${Number(pedido.id)})">
+                  <strong>${formatearFecha(pedido.fecha_recoge)}</strong> · ${pedido.hora_recoge || '12:00'} ·
+                  ${(pedido.detalles || []).length} producto(s)
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        modal.classList.add('active');
+      } catch (error) {
+        alert(error.message || 'No se pudo abrir la edición semanal del casino.');
+      }
+    }
+
     function renderizarProduccionCasinos(data) {
       const contenedor = document.getElementById('casinosProduccion');
       const botonImprimir = document.getElementById('imprimirCasinosBtn');
@@ -4093,6 +4147,9 @@
               </div>
               <div class="casino-heading-actions">
                 <small>Semana ${semana.numero} · ${escapeHtmlAdmin(semana.rango)} · ${cronograma.productos.length} producto(s)</small>
+                <button type="button" class="casino-print-btn" onclick="editarSemanaCasino(${indice}, ${semana.indice})">
+                  Editar semana
+                </button>
                 <button type="button" class="casino-print-btn" onclick="imprimirCasinoIndividual(${indice})">
                   Imprimir este casino
                 </button>
@@ -4376,6 +4433,7 @@
       if (tab === 'general') await cargarPedidosGenerales();
       if (tab === 'historial') await cargarHistorialPedidos();
       if (tab === 'cocina') await cargarMatriz();
+      if (tab === 'casinos') await cargarCronogramaCasinoPersistido();
     }
 
     document.getElementById('buscarPedidosGenerales')?.addEventListener('input', (event) => {
@@ -4807,7 +4865,7 @@
           data = await response.json().catch(() => ({}));
         }
         if (!response.ok) throw new Error(data.error || 'No se pudo guardar el pedido.');
-        await cargarPedidosGenerales();
+        await refrescarVistasTrasCambioPedido();
         const pedidoActualizado = pedidosDisponibles.get(id);
         if (pedidoActualizado) abrirDetallePedido(id);
         else document.getElementById('pedidoDetalleModal').classList.remove('active');
