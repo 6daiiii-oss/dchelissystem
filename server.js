@@ -298,7 +298,7 @@ async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '', c
     dia.casinos.add(casino);
     casinos.add(casino);
 
-    const nombre = resolverProductoCasinoOperacion(row.producto_nombre) || row.producto_nombre;
+    const nombre = resolverPyePorCantidad(resolverProductoCasinoOperacion(row.producto_nombre) || row.producto_nombre, Number(row.cantidad || 0), normalizarProducto);
     const clave = normalizarProducto(nombre);
     if (!clave) continue;
     if (!dia.productos.has(clave)) {
