@@ -1589,7 +1589,26 @@ app.get('/api/admin/casinos/cronograma', requireAdminAuth, async (req, res) => {
         ORDER BY id DESC
         LIMIT 5
       `);
-      cronograma = unirCronogramasCasino(filasJson);
+
+      const filasCompactas = filasJson.map((row) => {
+        try {
+          const datos = JSON.parse(row.datos_json);
+          const fechas = (Array.isArray(datos?.dias) ? datos.dias : [])
+            .map((dia) => String(dia?.fecha || ''))
+            .filter((fecha) => /^\d{4}-\d{2}-\d{2}$/.test(fecha))
+            .sort();
+          const ultimaFecha = fechas.at(-1) || '';
+          const desdeArchivo = ultimaFecha ? sumarDiasIso(ultimaFecha, -45) : '';
+          if (desdeArchivo) {
+            datos.dias = (datos.dias || []).filter((dia) => String(dia?.fecha || '') >= desdeArchivo);
+          }
+          return { ...row, datos_json: JSON.stringify(datos) };
+        } catch {
+          return row;
+        }
+      });
+
+      cronograma = unirCronogramasCasino(filasCompactas);
     }
 
     return res.json({
@@ -1982,7 +2001,7 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
     }
     if (!casino) return res.status(400).json({ error: 'Casino requerido.' });
 
-    const pedidos = await dbAllAsync(`
+    const cargarPedidosCasinoSemana = () => dbAllAsync(`
       SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
              fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento,
              estado, fecha_registro, fecha_emision, origen, cronograma_casino_id,
@@ -1995,6 +2014,49 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
         AND COALESCE(estado, 'Registrado') <> 'Cancelado'
       ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
     `, [desde, hasta, casino]);
+
+    let pedidos = await cargarPedidosCasinoSemana();
+
+    if (!pedidos.length) {
+      const cronogramasLegacy = await dbAllAsync(`
+        SELECT id, datos_json
+        FROM casino_cronogramas
+        WHERE fecha_inicio <= ? AND fecha_fin >= ?
+        ORDER BY id DESC
+        LIMIT 5
+      `, [hasta, desde]);
+
+      const claveCasino = normalizarProducto(casino);
+      for (const row of cronogramasLegacy) {
+        let datos;
+        try { datos = JSON.parse(row.datos_json); } catch { continue; }
+        const diasFiltrados = (Array.isArray(datos?.dias) ? datos.dias : [])
+          .filter((dia) => dia?.fecha >= desde && dia?.fecha <= hasta)
+          .map((dia) => ({
+            ...dia,
+            casinos: (dia.casinos || []).filter((nombre) => normalizarProducto(nombre) === claveCasino),
+            productos: (dia.productos || []).map((producto) => {
+              const porCasino = {};
+              for (const [nombre, cantidad] of Object.entries(producto?.por_casino || {})) {
+                if (normalizarProducto(nombre) === claveCasino && Number(cantidad || 0) > 0) {
+                  porCasino[nombre] = Number(cantidad);
+                }
+              }
+              return { ...producto, por_casino: porCasino };
+            }).filter((producto) => Object.keys(producto.por_casino || {}).length)
+          }))
+          .filter((dia) => dia.casinos.length && dia.productos.length);
+
+        if (!diasFiltrados.length) continue;
+        await sincronizarPedidosCasinoCronograma(row.id, {
+          ...datos,
+          casinos: [casino],
+          dias: diasFiltrados
+        });
+      }
+
+      pedidos = await cargarPedidosCasinoSemana();
+    }
 
     if (!pedidos.length) return res.json({ pedidos: [] });
 
