@@ -52,6 +52,21 @@ function resolverProductoProduccion(nombre) {
     || nombre;
 }
 
+function resolverProductoCasinoOperacion(nombre) {
+  const original = String(nombre || '').trim();
+  const clave = normalizarProducto(original);
+  const esPullman = /\b(PULLMAN|PULMAN)\b/.test(clave)
+    || /^PAN DE MOLDE (?:INTEGRAL|MARMOLEADO|MARMOLADO)$/.test(clave);
+
+  if (esPullman) {
+    if (/\b(MARMOLEADO|MARMOLADO)\b/.test(clave)) return 'Pullman marmoleado';
+    if (/\bINTEGRAL\b/.test(clave)) return 'Pullman integral';
+    return 'Pullman blanco';
+  }
+
+  return resolverProductoProduccion(original);
+}
+
 // PALANCA TEMPORAL: cambiar a true para volver a incluir NEWPORT en Producción y Embalaje.
 const INCLUIR_NEWPORT_EN_PRODUCCION_EMBALAJE = false;
 const FILTRO_NEWPORT_HOJAS_SQL = INCLUIR_NEWPORT_EN_PRODUCCION_EMBALAJE ? '' : `
@@ -108,7 +123,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
         if (!casino) continue;
 
         const items = (dia.productos || []).map((producto) => ({
-          producto_nombre: resolverProductoProduccion(producto?.nombre || ''),
+          producto_nombre: resolverProductoCasinoOperacion(producto?.nombre || ''),
           cantidad: Number(producto?.por_casino?.[casino] || 0)
         })).filter((item) => item.producto_nombre && Number.isFinite(item.cantidad) && item.cantidad > 0);
         if (!items.length) continue;
@@ -189,7 +204,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
       if (!casino) continue;
 
       const items = (dia.productos || []).map((producto) => ({
-        producto_nombre: resolverProductoProduccion(producto?.nombre || ''),
+        producto_nombre: resolverProductoCasinoOperacion(producto?.nombre || ''),
         cantidad: Number(producto?.por_casino?.[casino] || 0)
       })).filter((item) => item.producto_nombre && Number.isFinite(item.cantidad) && item.cantidad > 0);
       if (!items.length) continue;
@@ -283,7 +298,7 @@ async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '', c
     dia.casinos.add(casino);
     casinos.add(casino);
 
-    const nombre = resolverProductoProduccion(row.producto_nombre) || row.producto_nombre;
+    const nombre = resolverProductoCasinoOperacion(row.producto_nombre) || row.producto_nombre;
     const clave = normalizarProducto(nombre);
     if (!clave) continue;
     if (!dia.productos.has(clave)) {
@@ -1156,12 +1171,20 @@ function resolverVariantePetipanCasino(nombre) {
 const CASINO_ALIAS_EXACTOS = Object.fromEntries(Object.entries({
   'PAN CIABATTA CHICO X 100UND': 'Mini Ciabatta',
   'PAN PETIPAN CHICO X 100UND': 'Petipan',
-  'PAN PULLMAN 10 TAPAS': 'Pan de Molde (Pullman)',
-  'PAN PULLMAN 10 TAPAS INTEGRAL': 'Pan de Molde Integral',
-  'PULMAN BLANCO': 'Pan de Molde (Pullman)',
-  'PULLMAN BLANCO': 'Pan de Molde (Pullman)',
-  'PULMAN MARMOLEADO': 'Pan de Molde Marmoleado',
-  'PULLMAN MARMOLEADO': 'Pan de Molde Marmoleado',
+  'PAN PULLMAN 10 TAPAS': 'Pullman blanco',
+  'PAN PULLMAN 10 TAPAS INTEGRAL': 'Pullman integral',
+  'PULMAN BLANCO': 'Pullman blanco',
+  'PULLMAN BLANCO': 'Pullman blanco',
+  'PULMAN MARMOLEADO': 'Pullman marmoleado',
+  'PULLMAN MARMOLEADO': 'Pullman marmoleado',
+  'PULMAN MARMOLADO': 'Pullman marmoleado',
+  'PULLMAN MARMOLADO': 'Pullman marmoleado',
+  'PULMAN INTEGRAL': 'Pullman integral',
+  'PULLMAN INTEGRAL': 'Pullman integral',
+  'PAN PULLMAN INTEGRAL': 'Pullman integral',
+  'PAN PULMAN INTEGRAL': 'Pullman integral',
+  'PAN PULLMAN BLANCO': 'Pullman blanco',
+  'PAN PULMAN BLANCO': 'Pullman blanco',
   'MINNI PETIPAN': 'Petipan',
   'MINI PETIPAN': 'Petipan',
   'MINNI CROISANT': 'Mini Croissant',
