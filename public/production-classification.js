@@ -30,9 +30,11 @@ function resolverPetipanNombre(nombre) {
 function resolverCiabattaNombre(nombre) {
   const original = String(nombre || '').trim();
   const clave = normalizarBaseProduccion(original);
-  if (!/\bCIABATTA\b/.test(clave)) return null;
-  if (/\bCIABATTA\b.*\bHOT\s*DOG\b/.test(clave)) return 'Ciabatta con hotdog';
-  if (/^(?:(?:MINI|MINNI)\s+CIABATTA|CIABATTA|PAN\s+CIABATTA\s+(?:MINI|CHICO)(?:\s+X\s*\d+\s*UND)?)$/.test(clave)) {
+  const esCiabatta = /\bCIABAT[A-Z]*\b/.test(clave);
+  if (!esCiabatta) return null;
+  if (/\bCIABAT[A-Z]*\b.*\bHOT\s*DOG\b/.test(clave)) return 'Ciabatta con hotdog';
+  if (/\bCIABAT[A-Z]*\b.*\bCHORIZO\b/.test(clave)) return 'Ciabatta con chorizo';
+  if (/^(?:(?:MINI|MINNI)\s+CIABAT[A-Z]*|CIABAT[A-Z]*|PAN\s+CIABAT[A-Z]*\s+(?:MINI|CHICO)(?:\s+X\s*\d+\s*UND)?)$/.test(clave)) {
     return 'Mini Ciabatta';
   }
   return original;
@@ -42,12 +44,15 @@ function grupoProductoProduccion(nombre, normalizar) {
   const clave = normalizar(nombre);
   if (/\bEMPANADA\b.*\bBODA\b/.test(clave)) return 'Bocaditos';
 
-  if (/\b(BROCHETAS?|ALITAS?\s+BOUCHET|GUINDONES?|ESPARRAGOS?|HOJARASCAS?|TEQUENOS?|VOULEVANS?|CANAPES?)\b/.test(clave)
-      || /\bPIONONIT(?:O|OS)\b.*\bESPINACA\b/.test(clave)) {
-    return 'Piqueos';
+  // Excepciones operativas que deben conservar su propia familia.
+  if (/\bENROLLADO\b.*\bJAMON\b.*\bESPARRAGOS?\b/.test(clave)
+      || /\bPIONON(?:O|ITO|ITOS)\b.*\bESPINACA\b/.test(clave)) {
+    return 'Triples';
   }
 
   if (/^TRIPLE(?:S)?\b/.test(clave)) return 'Triples';
+
+  if (/\bMAIZ\b.*\bLOMO\b/.test(clave) || /^YEMITAS?\b/.test(clave)) return 'Panes';
 
   if (/^(?:PETIPAN|PETIT PAN|PETITPAN|PETI PAN)(?:\s|$)/.test(clave)) {
     return /^(?:PETIPAN|PETIT PAN|PETITPAN|PETI PAN)(?:\s+MINI)?$/.test(clave) ? 'Panes' : 'Sándwiches';
@@ -55,12 +60,17 @@ function grupoProductoProduccion(nombre, normalizar) {
 
   if (/\b(SANDWICH|SANGUCHE|BUTIFARRA|CAPRESE|CAPRECCE)\b/.test(clave)
       || /\bCROISSANT\b.*\b(POLLO|MIXTO|JAMON|QUESO)\b/.test(clave)
-      || /\b(?:FRANCES|ARABE|CIABATTA)\b.*\b(POLLO|ASADO|LOMITO|HAMBURGUESA)\b/.test(clave)) {
+      || /\b(?:FRANCES|ARABE)\b.*\b(POLLO|ASADO|LOMITO|HAMBURGUESA)\b/.test(clave)
+      || /\bCIABAT[A-Z]*\b.*\b(POLLO|ASADO|LOMITO|HAMBURGUESA|HOT\s*DOG|CHORIZO)\b/.test(clave)) {
     return 'Sándwiches';
   }
 
-  if (/\bCIABATTA\b/.test(clave) && !/^(?:SANDWICH|SANGUCHE|TRIPLE)\b/.test(clave)) return 'Panes';
-  if (/^(PAN|MINI|MINNI|BAGUETINA|BAGUETTE|BAGUETINO|CIABATTA|CROISSANT|FRANCES|ARABE|PULLMAN|PULMAN|ROSETA)\b/.test(clave)) return 'Panes';
+  if (/\b(BROCHETAS?|ALITAS?\s+BOUCHET|GUINDONES?|ESPARRAGOS?|HOJARASCAS?|TEQUENOS?|VOULEVANS?|CANAPES?)\b/.test(clave)) {
+    return 'Piqueos';
+  }
+
+  if (/\bCIABAT[A-Z]*\b/.test(clave) && !/^(?:SANDWICH|SANGUCHE|TRIPLE)\b/.test(clave)) return 'Panes';
+  if (/^(PAN|MINI|MINNI|BAGUETINA|BAGUETTE|BAGUETINO|CIABAT[A-Z]*|CROISSANT|FRANCES|ARABE|PULLMAN|PULMAN|ROSETA)\b/.test(clave)) return 'Panes';
 
   return 'Bocaditos';
 }
@@ -94,9 +104,21 @@ function resolverPyePorCantidad(nombre, cantidad, normalizar) {
 function tipoItemCocina(nombre, cantidad, normalizar) {
   const nombreAjustado = resolverPyePorCantidad(nombre, cantidad, normalizar);
   const clave = normalizar(nombreAjustado);
+  const unidades = Number(cantidad || 0);
   const esKeke = /\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave);
-  const esPastel = /\b(TORTA|TORTITAS?|PIE|PYE|MOUSSE|CREMA|TRES LECHES)\b/.test(clave);
-  const esTorta = /^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave);
+  const esPastel = /^TORTA\b/.test(clave)
+    || /^TORTITAS?\b/.test(clave)
+    || /^MOUSSE\b/.test(clave)
+    || /^CREMA\s+VOLTEADA\b/.test(clave)
+    || /^TRES\s+LECHES\b/.test(clave)
+    || /\b(PIE|PYE)\b/.test(clave);
+  const esPostreEnteroPorCantidad = unidades > 0 && unidades <= 5 && (
+    /^TORTITAS?\b/.test(clave)
+    || /^MOUSSE\b/.test(clave)
+    || /^CREMA\s+VOLTEADA\b/.test(clave)
+    || /^TRES\s+LECHES\b/.test(clave)
+  );
+  const esTorta = (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave)) || esPostreEnteroPorCantidad;
   return { esKeke, esTorta, esPastel, grupo: grupoProductoProduccion(nombreAjustado, normalizar), nombreAjustado };
 }
 
@@ -130,7 +152,7 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
     if (!Number.isFinite(cantidad) || cantidad <= 0) continue;
     const nombreBase = String(
       resolverPetipanNombre(detalle.producto_nombre)
-      || resolverCiabattaNombre(detalle.producto_nombre)
+      || resolverNombreEspecialProduccion(detalle.producto_nombre)
       || resolver(detalle.producto_nombre)
       || detalle.producto_nombre
       || 'Producto'
@@ -184,7 +206,18 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
   };
 }
 
+function resolverNombreEspecialProduccion(nombre) {
+  const original = String(nombre || '').trim();
+  const clave = normalizarBaseProduccion(original);
+  if (/\bENROLLADO\b.*\bJAMON\b.*\bESPARRAGOS?\b/.test(clave)) return 'Enrollado de jamón con espárragos';
+  if (/\bPIONON(?:O|ITO|ITOS)\b.*\bESPINACA\b/.test(clave)) return 'Pionono con espinaca';
+  if (/\bMAIZ\b.*\bLOMO\b/.test(clave)) return 'Maíz lomo';
+  if (/^YEMITAS?\b/.test(clave)) return 'Yemita';
+  return resolverCiabattaNombre(original);
+}
+
 if (typeof module !== 'undefined') module.exports = {
   clasificarHojaProduccion, resolverPetipanNombre, resolverCiabattaNombre,
-  grupoProductoProduccion, tipoItemCocina, filtrarItemsEmbalaje, resolverPyePorCantidad
+  grupoProductoProduccion, tipoItemCocina, filtrarItemsEmbalaje, resolverPyePorCantidad,
+  resolverNombreEspecialProduccion
 };
