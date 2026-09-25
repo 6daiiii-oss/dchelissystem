@@ -7,7 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="digitacion-config.js"></script>
-<script src="production-classification.js?v=5"></script>
+<script src="production-classification.js?v=6"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -3919,13 +3919,17 @@
 
         diasCasino.forEach((dia) => {
           (Array.isArray(dia.productos) ? dia.productos : []).forEach((producto) => {
-            const cantidad = Number(producto?.por_casino?.[casino] || 0);
-            if (!(cantidad > 0)) return;
+            const cantidadOperativa = Number(producto?.por_casino?.[casino] || 0);
+            if (!(cantidadOperativa > 0)) return;
 
-            const clave = normalizarNombreProducto(producto.nombre || '') || String(producto.nombre || '');
+            const multiplicador = Number(producto?.multiplicador_unidades || 1);
+            const cantidad = multiplicador > 1 ? cantidadOperativa / multiplicador : cantidadOperativa;
+            const nombreBase = producto.nombre || 'Producto';
+            const nombreVisible = multiplicador > 1 ? `${nombreBase} X${multiplicador}` : nombreBase;
+            const clave = normalizarNombreProducto(nombreVisible) || String(nombreVisible || '');
             if (!productosMap.has(clave)) {
               productosMap.set(clave, {
-                nombre: producto.nombre || 'Producto',
+                nombre: nombreVisible,
                 grupo: producto.grupo === 'extra' ? 'extra' : 'principal',
                 por_fecha: {},
                 total: 0
@@ -5777,8 +5781,8 @@
   function obtenerProductoResolucion(nombre) {
     const petipan = resolverPetipanNombre(nombre);
     if (petipan) return petipan;
-    const ciabatta = resolverCiabattaNombre(nombre);
-    if (ciabatta) return ciabatta;
+    const especial = resolverNombreEspecialProduccion(nombre);
+    if (especial) return especial;
     const clave = normalizarNombreProducto(nombre);
     const extras = obtenerProductosExtraParaProduccion();
 
