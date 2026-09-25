@@ -3821,7 +3821,7 @@
       const celular = document.getElementById('quickCustomerPhone')?.value.trim();
       const tipoComprobante = document.getElementById('quickTipoComprobante')?.value || '';
       const numeroDocumento = document.getElementById('quickNumeroDocumento')?.value.trim() || '';
-      const fechaRecoge = document.getElementById('quickPickupDate')?.value || new Date().toISOString().slice(0, 10);
+      const fechaRecoge = document.getElementById('quickPickupDate')?.value || fechaHoyPeru();
       const horaRecoge = document.getElementById('quickPickupTime')?.value || '18:00';
       const adelantoInput = Number(document.getElementById('quickAdelanto')?.value || 0);
       const texto = document.getElementById('quickEntryInput')?.value || '';
@@ -3936,8 +3936,11 @@
         if (fotosTorta) fotosTorta.innerHTML = '';
         document.getElementById('quickRestante').value = 'S/. 0.00';
         renderQuickEntryPreview();
-        await refrescarVistasTrasCambioPedido();
-        alert(`Pedido ${resultado.codigo || 'registrado'} generado correctamente.`);
+        const visibleEnPG = await mostrarPedidoDigitadoEnPG(resultado.id, resultado.pedido?.fecha_recoge || fechaRecoge);
+        if (!visibleEnPG) {
+          throw new Error('El pedido se guardó en la base de datos, pero no apareció en Pedidos generales. Revisa la fecha de recojo.');
+        }
+        alert(`Pedido ${resultado.codigo || 'registrado'} registrado y visible en Pedidos generales.`);
       } catch (error) {
         alert(error.message || 'No se pudo registrar el pedido rápido.');
       } finally {
@@ -4819,6 +4822,35 @@
       }
     }
 
+    async function mostrarPedidoDigitadoEnPG(pedidoId, fechaRecoge) {
+      const hoy = fechaHoyPeru();
+      diaBasePedidosGenerales = hoy;
+      bloquesAdicionalesPedidosGenerales = 0;
+      ultimoDiaPedidosGenerales = sumarDiasFecha(hoy, 3);
+      if (fechaRecoge && fechaRecoge >= hoy && fechaRecoge > ultimoDiaPedidosGenerales) {
+        ultimoDiaPedidosGenerales = fechaRecoge;
+      }
+
+      filtroPedidosGenerales = '';
+      const buscador = document.getElementById('buscarPedidosGenerales');
+      if (buscador) buscador.value = '';
+      firmaPedidosGenerales = '';
+      pedidosConocidos = null;
+
+      document.querySelectorAll('.tab-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === 'general'));
+      document.querySelectorAll('.tab-panel').forEach((panel) => panel.classList.toggle('active', panel.id === 'panel-general'));
+      localStorage.setItem(ADMIN_TAB_KEY, 'general');
+
+      await cargarPedidosGenerales();
+
+      const tarjeta = document.querySelector(`[data-pedido-id="${Number(pedidoId)}"]`);
+      if (tarjeta) {
+        tarjeta.classList.add('order-card-new');
+        tarjeta.scrollIntoView({ behavior:'smooth', block:'center' });
+      }
+      return Boolean(tarjeta);
+    }
+
     document.getElementById('buscarPedidosGenerales')?.addEventListener('input', (event) => {
       filtroPedidosGenerales = event.target.value || '';
       clearTimeout(buscarPedidosTimer);
@@ -4871,8 +4903,8 @@
       selector.value = valorPorDefecto;
     }
 
-    document.getElementById('fecha_filtro').value = new Date().toISOString().slice(0, 10);
-    document.getElementById('quickPickupDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('fecha_filtro').value = fechaHoyPeru();
+    document.getElementById('quickPickupDate').value = fechaHoyPeru();
     poblarHorasSelector('quickPickupTime', '18:00');
     document.getElementById('quickAdelanto').addEventListener('input', renderQuickEntryPreview);
     document.getElementById('quickEntryInput').addEventListener('input', renderQuickEntryPreview);
