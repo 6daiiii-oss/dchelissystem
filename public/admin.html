@@ -2224,6 +2224,68 @@
     .production-special-turns .urgent { color:#c40000; font-weight:900; }
     .production-compact .production-main-table td { padding:2px 4px; font-size:9px; line-height:1.08; }
     .production-paper + .production-paper { margin-top:16px; }
+
+    .distribution-paper {
+      width:min(100%, 210mm);
+      margin:0 auto 16px;
+      padding:9mm 8mm;
+      box-sizing:border-box;
+      background:#fff;
+      border:1px solid #d7dde3;
+      color:#111;
+      font-family:Arial,Helvetica,sans-serif;
+    }
+    .distribution-paper-title {
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap:10px;
+      margin-bottom:5mm;
+      padding-bottom:2.5mm;
+      border-bottom:2px solid #111;
+    }
+    .distribution-paper-title h4 { margin:0; font:900 17px/1.05 Arial,sans-serif; }
+    .distribution-paper-title span { font:800 10px Arial,sans-serif; color:#333; text-align:right; }
+    .distribution-columns {
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:0 8mm;
+      align-items:start;
+    }
+    .distribution-column { min-width:0; }
+    .distribution-client {
+      padding:0 0 4mm;
+      margin:0 0 4mm;
+      border-bottom:1px solid #d5d7da;
+      break-inside:avoid;
+      page-break-inside:avoid;
+    }
+    .distribution-client:last-child { margin-bottom:0; }
+    .distribution-client-head {
+      display:flex;
+      align-items:baseline;
+      gap:5px;
+      margin-bottom:1.5mm;
+      font:900 10.5px/1.15 Arial,sans-serif;
+      text-transform:uppercase;
+    }
+    .distribution-client-head.urgent { color:#c40000; }
+    .distribution-client-number { flex:0 0 auto; min-width:20px; }
+    .distribution-client-time { margin-left:auto; white-space:nowrap; font-size:9px; }
+    .distribution-items { display:grid; gap:1px; }
+    .distribution-item {
+      display:grid;
+      grid-template-columns:36px minmax(0,1fr);
+      gap:4px;
+      align-items:baseline;
+      font:800 9.5px/1.2 Arial,sans-serif;
+      text-transform:uppercase;
+    }
+    .distribution-item strong { text-align:right; font-weight:900; }
+    .distribution-empty { padding:16mm 0; text-align:center; color:#667085; font:800 11px Arial,sans-serif; }
+    @media screen and (max-width:700px) {
+      .distribution-columns { grid-template-columns:1fr; gap:6mm; }
+    }
     @media screen and (max-width:700px) { .production-layout { grid-template-columns:1fr; } .production-blank-space { min-height:12mm; } }
     @media print {
       body.printing-cocina.printing-embalaje #productionPaperWrapper { display:none !important; }
@@ -2247,6 +2309,26 @@
       }
       body.printing-cocina.printing-embalaje #embalajeWrapper { display:block !important; }
       body.printing-cocina.printing-embalaje .kitchen-doc-heading { display:none !important; }
+      body.printing-cocina.printing-embalaje .distribution-paper {
+        display:block !important;
+        width:210mm !important;
+        min-height:297mm !important;
+        margin:0 !important;
+        padding:8mm !important;
+        border:0 !important;
+        box-sizing:border-box !important;
+        page-break-after:always !important;
+        break-after:page !important;
+        page-break-inside:avoid !important;
+      }
+      body.printing-cocina.printing-embalaje .distribution-paper:last-child {
+        page-break-after:auto !important;
+        break-after:auto !important;
+      }
+      body.printing-cocina.printing-embalaje .distribution-columns {
+        grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+        gap:0 7mm !important;
+      }
       body.printing-cocina.printing-embalaje .client-header.kitchen-urgent,
       body.printing-cocina.printing-embalaje .qty-cell.kitchen-urgent {
         color:#c40000 !important;
@@ -5849,9 +5931,7 @@
     limpiarModoImpresionCocina();
     const estilo = document.createElement('style');
     estilo.id = 'kitchenPrintPageStyle';
-    estilo.textContent = tipo === 'produccion'
-      ? '@media print { @page { size: A4 portrait; margin: 0; } }'
-      : '@media print { @page { size: A4 landscape; margin: 0; } }';
+    estilo.textContent = '@media print { @page { size: A4 portrait; margin: 0; } }';
     document.head.appendChild(estilo);
     document.body.classList.add('printing-cocina', tipo === 'produccion' ? 'printing-produccion' : 'printing-embalaje');
     window.addEventListener('afterprint', limpiarModoImpresionCocina, { once:true });
@@ -6007,6 +6087,104 @@
     }).join('');
   }
 
+
+  function formatearHoraDistribucion(hora) {
+    const match = String(hora || '').match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return String(hora || '--:--');
+    let h = Number(match[1]);
+    const min = match[2];
+    const sufijo = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${min} ${sufijo}`;
+  }
+
+  function renderizarHojasEmbalajePorHora(dataEmbalaje) {
+    const contenedor = document.getElementById('hojaProduccion');
+    if (!contenedor) return;
+
+    const clientes = [...(Array.isArray(dataEmbalaje?.clientes) ? dataEmbalaje.clientes : [])]
+      .sort((a, b) =>
+        String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
+        || Number(a.id) - Number(b.id)
+      );
+    const detalles = filtrarDetallesEmbalaje(Array.isArray(dataEmbalaje?.detalles) ? dataEmbalaje.detalles : []);
+    const porPedido = new Map();
+
+    for (const detalle of detalles) {
+      const pedidoId = Number(detalle.pedido_id);
+      const cantidad = Number(detalle.cantidad || 0);
+      if (!pedidoId || !(cantidad > 0)) continue;
+      const nombre = obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre || 'Producto';
+      const grupo = grupoProductoProduccion(nombre, normalizarNombreProducto);
+      if (!porPedido.has(pedidoId)) porPedido.set(pedidoId, []);
+      porPedido.get(pedidoId).push({ nombre, grupo, cantidad });
+    }
+
+    const configuraciones = [
+      { titulo:'SÁNDWICHES / PIQUEOS', grupos:new Set(['Sándwiches', 'Piqueos']) },
+      { titulo:'TRIPLES', grupos:new Set(['Triples']) },
+      { titulo:'PANES', grupos:new Set(['Panes']) }
+    ];
+    const fecha = dataEmbalaje?.fecha || document.getElementById('fecha_filtro')?.value || '';
+
+    const renderHoja = ({ titulo, grupos }) => {
+      const bloques = [];
+      clientes.forEach((cliente) => {
+        const agregados = new Map();
+        for (const item of porPedido.get(Number(cliente.id)) || []) {
+          if (!grupos.has(item.grupo)) continue;
+          const clave = normalizarNombreProducto(item.nombre) || item.nombre;
+          if (!agregados.has(clave)) agregados.set(clave, { nombre:item.nombre, cantidad:0 });
+          agregados.get(clave).cantidad += Number(item.cantidad || 0);
+        }
+        const items = [...agregados.values()];
+        if (!items.length) return;
+        bloques.push({ cliente, items });
+      });
+
+      const mitad = Math.ceil(bloques.length / 2);
+      const columnas = [bloques.slice(0, mitad), bloques.slice(mitad)];
+      const renderColumna = (lista, offset) => `
+        <div class="distribution-column">
+          ${lista.map(({ cliente, items }, indice) => `
+            <section class="distribution-client">
+              <div class="distribution-client-head${cliente.es_urgente ? ' urgent' : ''}">
+                <span class="distribution-client-number">${offset + indice + 1}.-</span>
+                <span>${escapeHtmlAdmin((cliente.cliente_nombre || 'Cliente').toUpperCase())}${cliente.origen === 'casino' ? ' · CASINO' : ''}</span>
+                <span class="distribution-client-time">${escapeHtmlAdmin(formatearHoraDistribucion(cliente.hora_recoge))}</span>
+              </div>
+              <div class="distribution-items">
+                ${items.map((item) => `
+                  <div class="distribution-item">
+                    <strong>${escapeHtmlAdmin(formatearCantidadCasino(item.cantidad))}</strong>
+                    <span>${escapeHtmlAdmin(String(item.nombre || '').toUpperCase())}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </section>
+          `).join('')}
+        </div>
+      `;
+
+      return `
+        <section class="distribution-paper kitchen-page">
+          <div class="distribution-paper-title">
+            <h4>${escapeHtmlAdmin(titulo)}</h4>
+            <span>EMBALAJE · ${escapeHtmlAdmin(formatearFecha(fecha).toUpperCase())}</span>
+          </div>
+          ${bloques.length ? `
+            <div class="distribution-columns">
+              ${renderColumna(columnas[0], 0)}
+              ${renderColumna(columnas[1], columnas[0].length)}
+            </div>
+          ` : '<div class="distribution-empty">Sin pedidos para esta hoja.</div>'}
+        </section>
+      `;
+    };
+
+    contenedor.innerHTML = configuraciones.map(renderHoja).join('');
+  }
+
   function renderizarHojaProduccionCocina(data) {
     const contenedor = document.getElementById('hojaProduccionCocina');
     if (!contenedor) return;
@@ -6016,41 +6194,32 @@
       detalles, data.clientes || [], obtenerProductoResolucion, normalizarNombreProducto, ordenReferencia
     );
 
-    const paginas = [];
-    const agregarPaginas = (titulo, productos, acompanantes = [], anchoCompleto = false) => {
-      if (!productos.length && !acompanantes.length) return;
-      const maxProductos = anchoCompleto ? 34 : 28;
-      const maxAcompanantes = 18;
-      const cantidadPaginas = Math.max(
-        1,
-        Math.ceil(productos.length / maxProductos),
-        Math.ceil(acompanantes.length / maxAcompanantes)
-      );
-      for (let i = 0; i < cantidadPaginas; i += 1) {
-        paginas.push({
-          titulo,
-          bloque: productos.slice(i * maxProductos, (i + 1) * maxProductos),
-          especiales: acompanantes.slice(i * maxAcompanantes, (i + 1) * maxAcompanantes),
-          anchoCompleto,
-          continuacion: i > 0
-        });
+    const paginas = [
+      {
+        titulo:'Bocaditos dulces y salados',
+        bloque:filas.filter((item) => item.grupo === 'Bocaditos'),
+        especiales,
+        anchoCompleto:false
+      },
+      {
+        titulo:'Sándwiches · Piqueos · Triples',
+        bloque:filas.filter((item) => ['Sándwiches', 'Piqueos', 'Triples'].includes(item.grupo)),
+        especiales:[],
+        anchoCompleto:true
+      },
+      {
+        titulo:'Panes',
+        bloque:filas.filter((item) => item.grupo === 'Panes'),
+        especiales:[],
+        anchoCompleto:true
       }
-    };
+    ];
 
-    const bocaditos = filas.filter((item) => item.grupo === 'Bocaditos');
-    const produccionPanaderia = filas.filter((item) =>
-      ['Sándwiches', 'Triples', 'Piqueos', 'Panes'].includes(item.grupo)
-    );
-
-    agregarPaginas('Bocaditos dulces y salados', bocaditos, especiales, false);
-    agregarPaginas('Sándwiches · Triples · Piqueos · Panes', produccionPanaderia, [], true);
-    if (!paginas.length) paginas.push({ titulo:'Bocaditos dulces y salados', bloque:[], especiales:[], anchoCompleto:false, continuacion:false });
-
-    contenedor.innerHTML = paginas.map(({ titulo, bloque, especiales: acompanantes, anchoCompleto, continuacion }, pagina) => `
+    contenedor.innerHTML = paginas.map(({ titulo, bloque, especiales: acompanantes, anchoCompleto }, pagina) => `
       <section class="production-paper${bloque.length > 32 ? ' production-compact' : ''}">
         <div class="production-paper-title">
-          <h4>${formatearFecha(data.fecha).toUpperCase()}${continuacion ? ' · CONTINUACIÓN' : ''}</h4>
-          <span>${escapeHtmlAdmin(titulo)} · ${pagina + 1}/${paginas.length}</span>
+          <h4>${formatearFecha(data.fecha).toUpperCase()}</h4>
+          <span>${escapeHtmlAdmin(titulo)} · ${pagina + 1}/3</span>
         </div>
         <div class="production-layout${anchoCompleto ? ' production-layout-wide' : ''}">
           <table class="production-main-table">
@@ -6070,7 +6239,7 @@
                 <td class="production-normal">${item.normal > 0 ? item.normal : ''}</td>
                 <td class="production-total">${item.total}</td>
               </tr>
-            `).join('') : '<tr><td colspan="4">Sin producción en esta ventana.</td></tr>'}</tbody>
+            `).join('') : '<tr><td colspan="4">Sin producción en esta hoja.</td></tr>'}</tbody>
           </table>
           <aside>
             <div class="production-blank-space"></div>
@@ -6123,15 +6292,7 @@
 
       renderizarHojaProduccionCocina(data);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const detallesEmbalaje = filtrarDetallesEmbalaje(data.embalaje?.detalles || []);
-      const listasEmbalaje = obtenerListasEmbalaje(detallesEmbalaje);
-      renderizarMatrizProducto([
-        { titulo:'BOCADITOS', productosLista:listasEmbalaje.bocaditos },
-        { titulo:'SÁNGUCHES / PETIPANES', productosLista:listasEmbalaje.sandwiches },
-        { titulo:'TRIPLES', productosLista:listasEmbalaje.triples },
-        { titulo:'PIQUEOS', productosLista:listasEmbalaje.piqueos },
-        { titulo:'PANES', productosLista:listasEmbalaje.panes }
-      ], detallesEmbalaje);
+      renderizarHojasEmbalajePorHora(data.embalaje || {});
       const paginasCocina = [...document.querySelectorAll('#embalajeWrapper .kitchen-page')];
       paginasCocina.forEach((pagina) => pagina.classList.remove('last-kitchen-page'));
       paginasCocina.at(-1)?.classList.add('last-kitchen-page');
