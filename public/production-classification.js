@@ -139,7 +139,7 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
   const principales = new Map();
   const especiales = new Map();
   const orden = new Map((ordenReferencia || []).map((nombre, indice) => [normalizar(nombre), indice]));
-  const grupos = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes'];
+  const grupos = ['Bocaditos', 'Sándwiches', 'Piqueos', 'Triples', 'Panes'];
 
   const acumularTurno = (destino, detalle, cantidad) => {
     if (detalle?.es_urgente) destino.urgente += cantidad;
