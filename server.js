@@ -2349,121 +2349,140 @@ app.post('/api/pedidos', protectDigitacionOrigin, async (req, res) => {
     }
   }
 
-  db.serialize(() => {
-    db.run('BEGIN TRANSACTION');
+  const pagoPendiente = String(metodo_pago || '').includes('verificación pendiente');
+  const estadoInicial = pagoPendiente ? 'Pendiente de verificación de pago' : 'Registrado';
+  const origenPedido = String(origen || '').trim().toLowerCase() === 'digitacion' ? 'digitacion' : 'web';
+  const queryPedido = `INSERT INTO pedidos (
+    codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
+    fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento,
+    nro_operacion, estado, fecha_emision, origen
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)`;
 
-    const pagoPendiente = String(metodo_pago || '').includes('verificación pendiente');
-    // Digitación es un registro interno válido aunque el adelanto sea 0.
-    // El saldo se representa con los montos, no ocultando el pedido como "Pendiente de pago".
-    const estadoInicial = pagoPendiente ? 'Pendiente de verificación de pago' : 'Registrado';
-    const origenPedido = String(origen || '').trim().toLowerCase() === 'digitacion' ? 'digitacion' : 'web';
-    const queryPedido = `INSERT INTO pedidos (codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento, nro_operacion, estado, fecha_emision, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)`;
+  const fechaCodigo = String(fecha_recoge || '').replace(/-/g, '');
+  const sufijoUnico = crypto.randomBytes(4).toString('hex').toUpperCase();
+  const codigoPedido = `PED-${fechaCodigo}-${sufijoUnico}`;
+  let transaccion = false;
 
-    const fechaCodigo = String(fecha_recoge || '').replace(/-/g, '');
-    const sufijoUnico = crypto.randomBytes(4).toString('hex').toUpperCase();
-    const codigoPedido = `PED-${fechaCodigo}-${sufijoUnico}`;
-    db.run(queryPedido, [codigoPedido, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago, fecha_recoge, hora_recoge, String(dedicatoria || '').trim(), String(foto_torta || ''), String(tipo_comprobante || '').trim(), String(numero_documento || '').trim(), '', estadoInicial, origenPedido], function (err) {
-      if (err) {
-        db.run('ROLLBACK');
-        return res.status(500).json({ error: err.message });
-      }
+  try {
+    await dbRunAsync('BEGIN TRANSACTION');
+    transaccion = true;
 
-      const pedidoId = this.lastID;
-      const queryDetalle = `INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta) VALUES (?, ?, ?, ?, ?, ?)`;
-      const stmt = db.prepare(queryDetalle);
-      detalles.forEach((det) => {
-        const paquetes = det.paquetes && typeof det.paquetes === 'object' ? JSON.stringify(det.paquetes) : '{}';
-        const cantidad = Number(det.cantidad || 0);
-        const nombreProducto = resolverPyePorCantidad(det.producto_nombre, cantidad, normalizarProducto);
-        stmt.run(pedidoId, nombreProducto, cantidad, det.subtotal, paquetes, String(det.foto_torta || ''));
-      });
+    const pedidoInsertado = await dbRunAsync(queryPedido, [
+      codigoPedido,
+      tipo_cliente,
+      cliente_nombre,
+      celular,
+      Number(monto_total || 0),
+      Number(adelanto || 0),
+      metodo_pago,
+      fecha_recoge,
+      hora_recoge,
+      String(dedicatoria || '').trim(),
+      String(foto_torta || ''),
+      String(tipo_comprobante || '').trim(),
+      String(numero_documento || '').trim(),
+      '',
+      estadoInicial,
+      origenPedido
+    ]);
 
-      stmt.finalize(async (err) => {
-        if (err) {
-          db.run('ROLLBACK');
-          return res.status(500).json({ error: err.message });
-        }
+    const pedidoId = Number(pedidoInsertado.lastID);
+    if (!pedidoId) throw new Error('La base de datos no devolvió el ID del pedido.');
 
-        db.run('COMMIT', async (err) => {
-          if (err) {
-            return res.status(500).json({ error: err.message });
-          }
+    const detallesValidos = detalles
+      .map((det) => {
+        const cantidad = Number(det?.cantidad || 0);
+        if (!(cantidad > 0)) return null;
+        return {
+          producto_nombre: resolverPyePorCantidad(det.producto_nombre, cantidad, normalizarProducto),
+          cantidad,
+          subtotal: Number(det?.subtotal || 0),
+          paquetes: det?.paquetes && typeof det.paquetes === 'object' ? JSON.stringify(det.paquetes) : '{}',
+          foto_torta: String(det?.foto_torta || '')
+        };
+      })
+      .filter(Boolean);
 
-          try {
-            const pedidoVerificado = await dbGetAsync(`
-              SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto,
-                     metodo_pago, fecha_recoge, hora_recoge, dedicatoria, tipo_comprobante,
-                     numero_documento, estado, fecha_registro, fecha_emision, origen
-              FROM pedidos
-              WHERE id = ?
-              LIMIT 1
-            `, [pedidoId]);
-            const detalleVerificado = await dbGetAsync(`
-              SELECT COUNT(*)::INTEGER AS total
-              FROM detalles_pedido
-              WHERE pedido_id = ?
-            `, [pedidoId]);
+    if (!detallesValidos.length) throw new Error('El pedido no contiene detalles válidos.');
 
-            const esperados = detalles.filter((det) => Number(det?.cantidad || 0) > 0).length;
-            const guardados = Number(detalleVerificado?.total || 0);
-            if (!pedidoVerificado || guardados !== esperados) {
-              console.error('Verificación de Digitación falló:', {
-                pedidoId,
-                codigoPedido,
-                pedidoExiste: Boolean(pedidoVerificado),
-                detallesEsperados: esperados,
-                detallesGuardados: guardados
-              });
-              return res.status(500).json({
-                error: 'El pedido no quedó guardado correctamente. No se confirmó el registro.',
-                codigo: codigoPedido
-              });
-            }
+    const queryDetalle = `
+      INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+    for (const det of detallesValidos) {
+      await dbRunAsync(queryDetalle, [
+        pedidoId,
+        det.producto_nombre,
+        det.cantidad,
+        det.subtotal,
+        det.paquetes,
+        det.foto_torta
+      ]);
+    }
 
-            const url = process.env.MACRODROID_URL;
-            if (url) {
-              try {
-                const [nombre, ...restApellido] = String(cliente_nombre || '').trim().split(/\s+/);
-                const apellido = restApellido.join(' ');
-                await fetch(url, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    event: 'dchelis_pedido',
-                    codigo: codigoPedido,
-                    tipo: 'explode',
-                    ttlSeconds: 600,
-                    nombre,
-                    apellido,
-                    telefono: celular,
-                    monto: Number(monto_total || adelanto || 0)
-                  })
-                });
-              } catch (e) {
-                console.warn('Macrodroid signal ignored:', e.message);
-              }
-            }
+    const pedidoVerificado = await dbGetAsync(`
+      SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto,
+             metodo_pago, fecha_recoge, hora_recoge, dedicatoria, tipo_comprobante,
+             numero_documento, estado, fecha_registro, fecha_emision, origen
+      FROM pedidos
+      WHERE id = ?
+      LIMIT 1
+    `, [pedidoId]);
+    const detalleVerificado = await dbGetAsync(`
+      SELECT COUNT(*)::INTEGER AS total
+      FROM detalles_pedido
+      WHERE pedido_id = ?
+    `, [pedidoId]);
 
-            return res.status(201).json({
-              message: 'Pedido registrado con éxito',
-              id: pedidoId,
-              codigo: codigoPedido,
-              pedido: {
-                ...pedidoVerificado,
-                detalles_guardados: guardados
-              }
-            });
-          } catch (verifyError) {
-            console.error('No se pudo verificar el pedido recién registrado:', verifyError);
-            return res.status(500).json({
-              error: 'El pedido fue procesado pero no se pudo verificar en la base de datos. Revisa antes de volver a registrarlo.',
-              codigo: codigoPedido
-            });
-          }
+    const guardados = Number(detalleVerificado?.total || 0);
+    if (!pedidoVerificado || guardados !== detallesValidos.length) {
+      throw new Error(`Verificación incompleta: ${guardados}/${detallesValidos.length} detalles guardados.`);
+    }
+
+    await dbRunAsync('COMMIT');
+    transaccion = false;
+
+    const url = process.env.MACRODROID_URL;
+    if (url) {
+      try {
+        const [nombre, ...restApellido] = String(cliente_nombre || '').trim().split(/\s+/);
+        const apellido = restApellido.join(' ');
+        await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'dchelis_pedido',
+            codigo: codigoPedido,
+            tipo: 'explode',
+            ttlSeconds: 600,
+            nombre,
+            apellido,
+            telefono: celular,
+            monto: Number(monto_total || adelanto || 0)
+          })
         });
-      });
+      } catch (e) {
+        console.warn('Macrodroid signal ignored:', e.message);
+      }
+    }
+
+    return res.status(201).json({
+      message: 'Pedido registrado con éxito',
+      id: pedidoId,
+      codigo: codigoPedido,
+      pedido: {
+        ...pedidoVerificado,
+        detalles_guardados: guardados
+      }
     });
-  });
+  } catch (error) {
+    if (transaccion) await dbRunAsync('ROLLBACK').catch(() => {});
+    console.error('Error registrando pedido:', error);
+    return res.status(500).json({
+      error: 'No se pudo guardar el pedido completo en la base de datos.',
+      detalle: String(error?.message || '').slice(0, 180)
+    });
+  }
 });
 
 app.post('/api/pedidos/:codigo/cancelar', (req, res) => {
