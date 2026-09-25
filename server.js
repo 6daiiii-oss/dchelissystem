@@ -2389,31 +2389,77 @@ app.post('/api/pedidos', protectDigitacionOrigin, async (req, res) => {
             return res.status(500).json({ error: err.message });
           }
 
-          const url = process.env.MACRODROID_URL;
-          if (url) {
-            try {
-              const [nombre, ...restApellido] = String(cliente_nombre || '').trim().split(/\s+/);
-              const apellido = restApellido.join(' ');
-              await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  event: 'dchelis_pedido',
-                  codigo: codigoPedido,
-                  tipo: 'explode',
-                  ttlSeconds: 600,
-                  nombre,
-                  apellido,
-                  telefono: celular,
-                  monto: Number(monto_total || adelanto || 0)
-                })
-              });
-            } catch (e) {
-              console.warn('Macrodroid signal ignored:', e.message);
-            }
-          }
+          try {
+            const pedidoVerificado = await dbGetAsync(`
+              SELECT id, codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto,
+                     metodo_pago, fecha_recoge, hora_recoge, dedicatoria, tipo_comprobante,
+                     numero_documento, estado, fecha_registro, fecha_emision, origen
+              FROM pedidos
+              WHERE id = ?
+              LIMIT 1
+            `, [pedidoId]);
+            const detalleVerificado = await dbGetAsync(`
+              SELECT COUNT(*)::INTEGER AS total
+              FROM detalles_pedido
+              WHERE pedido_id = ?
+            `, [pedidoId]);
 
-          return res.status(201).json({ message: 'Pedido registrado con éxito', id: pedidoId, codigo: codigoPedido });
+            const esperados = detalles.filter((det) => Number(det?.cantidad || 0) > 0).length;
+            const guardados = Number(detalleVerificado?.total || 0);
+            if (!pedidoVerificado || guardados !== esperados) {
+              console.error('Verificación de Digitación falló:', {
+                pedidoId,
+                codigoPedido,
+                pedidoExiste: Boolean(pedidoVerificado),
+                detallesEsperados: esperados,
+                detallesGuardados: guardados
+              });
+              return res.status(500).json({
+                error: 'El pedido no quedó guardado correctamente. No se confirmó el registro.',
+                codigo: codigoPedido
+              });
+            }
+
+            const url = process.env.MACRODROID_URL;
+            if (url) {
+              try {
+                const [nombre, ...restApellido] = String(cliente_nombre || '').trim().split(/\s+/);
+                const apellido = restApellido.join(' ');
+                await fetch(url, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    event: 'dchelis_pedido',
+                    codigo: codigoPedido,
+                    tipo: 'explode',
+                    ttlSeconds: 600,
+                    nombre,
+                    apellido,
+                    telefono: celular,
+                    monto: Number(monto_total || adelanto || 0)
+                  })
+                });
+              } catch (e) {
+                console.warn('Macrodroid signal ignored:', e.message);
+              }
+            }
+
+            return res.status(201).json({
+              message: 'Pedido registrado con éxito',
+              id: pedidoId,
+              codigo: codigoPedido,
+              pedido: {
+                ...pedidoVerificado,
+                detalles_guardados: guardados
+              }
+            });
+          } catch (verifyError) {
+            console.error('No se pudo verificar el pedido recién registrado:', verifyError);
+            return res.status(500).json({
+              error: 'El pedido fue procesado pero no se pudo verificar en la base de datos. Revisa antes de volver a registrarlo.',
+              codigo: codigoPedido
+            });
+          }
         });
       });
     });
