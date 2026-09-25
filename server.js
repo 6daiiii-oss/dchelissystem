@@ -3397,137 +3397,82 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
     }
 
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = "D'chelis";
     const visibles = filtrarItemsEmbalaje(detalles, (nombre) => nombre, normalizarProducto);
-    const clientesPorHora = [...clientes].sort((a, b) =>
-      String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
-      || Number(a.id) - Number(b.id)
-    );
-
-    const porPedido = new Map();
-    for (const det of visibles) {
-      const pedidoId = Number(det.pedido_id);
-      const cantidad = Number(det.cantidad || 0);
-      if (!pedidoId || !(cantidad > 0)) continue;
-      const nombre = resolverProductoProduccion(det.producto_nombre) || det.producto_nombre;
-      const grupo = grupoProductoProduccion(nombre, normalizarProducto);
-      if (!porPedido.has(pedidoId)) porPedido.set(pedidoId, []);
-      porPedido.get(pedidoId).push({ nombre, grupo, cantidad });
-    }
-
-    const configuraciones = [
-      { nombre: 'Sandwiches', titulo: 'SÁNDWICHES / PIQUEOS', grupos: new Set(['Sándwiches', 'Piqueos']) },
-      { nombre: 'Triples', titulo: 'TRIPLES', grupos: new Set(['Triples']) },
-      { nombre: 'Panes', titulo: 'PANES', grupos: new Set(['Panes']) }
+    const grupos = [
+      { nombre: 'Embalaje', filtro: (nombre) => grupoProductoProduccion(nombre, normalizarProducto) !== 'Panes' },
+      { nombre: 'Panes', filtro: (nombre) => grupoProductoProduccion(nombre, normalizarProducto) === 'Panes' }
     ];
 
-    const bordeFino = {
-      top: { style:'thin', color:{ argb:'FFB7B7B7' } },
-      left: { style:'thin', color:{ argb:'FFB7B7B7' } },
-      bottom: { style:'thin', color:{ argb:'FFB7B7B7' } },
-      right: { style:'thin', color:{ argb:'FFB7B7B7' } }
-    };
-
-    const hora12 = (hora) => {
-      const match = String(hora || '').match(/^(\d{1,2}):(\d{2})/);
-      if (!match) return String(hora || '');
-      let h = Number(match[1]);
-      const min = match[2];
-      const sufijo = h >= 12 ? 'PM' : 'AM';
-      h = h % 12 || 12;
-      return `${h}:${min} ${sufijo}`;
-    };
-
-    for (const config of configuraciones) {
-      const bloques = [];
-      for (const cliente of clientesPorHora) {
-        const agregados = new Map();
-        for (const item of porPedido.get(Number(cliente.id)) || []) {
-          if (!config.grupos.has(item.grupo)) continue;
-          const clave = normalizarProducto(item.nombre) || item.nombre;
-          if (!agregados.has(clave)) agregados.set(clave, { nombre:item.nombre, cantidad:0 });
-          agregados.get(clave).cantidad += Number(item.cantidad || 0);
-        }
-        const items = [...agregados.values()];
-        if (items.length) bloques.push({ cliente, items });
+    for (const grupo of grupos) {
+      const datosGrupo = visibles.filter((det) => grupo.filtro(det.producto_nombre));
+      if (grupo.nombre === 'Panes' && !datosGrupo.length) continue;
+      const idClientes = new Set(datosGrupo.map((det) => Number(det.pedido_id)));
+      const clientesGrupo = clientes.filter((cli) => idClientes.has(Number(cli.id)));
+      const porProducto = new Map();
+      for (const det of datosGrupo) {
+        const clave = normalizarProducto(det.producto_nombre);
+        if (!porProducto.has(clave)) porProducto.set(clave, { nombre: det.producto_nombre, porCliente: new Map() });
+        const fila = porProducto.get(clave);
+        const id = Number(det.pedido_id);
+        fila.porCliente.set(id, (fila.porCliente.get(id) || 0) + Number(det.cantidad || 0));
       }
-
-      const ws = workbook.addWorksheet(config.nombre, {
-        pageSetup: {
-          paperSize: 9,
-          orientation: 'portrait',
-          fitToPage: true,
-          fitToWidth: 1,
-          fitToHeight: 1,
-          margins: { left:0.22, right:0.22, top:0.25, bottom:0.25, header:0, footer:0 }
-        }
+      const ordenGrupos = new Map([
+        ['Bocaditos', 0],
+        ['Sándwiches', 1],
+        ['Triples', 2],
+        ['Piqueos', 3],
+        ['Panes', 4]
+      ]);
+      const ordenCatalogo = new Map(
+        [...PRODUCTOS_COCINA, ...PRODUCTOS_COCINA_EXTRA]
+          .map((nombre, indice) => [normalizarProducto(nombre), indice])
+      );
+      const productosGrupo = [...porProducto.values()].sort((a, b) => {
+        const grupoA = grupoProductoProduccion(a.nombre, normalizarProducto);
+        const grupoB = grupoProductoProduccion(b.nombre, normalizarProducto);
+        const rangoA = ordenGrupos.get(grupoA) ?? 99;
+        const rangoB = ordenGrupos.get(grupoB) ?? 99;
+        const ordenA = ordenCatalogo.get(normalizarProducto(a.nombre)) ?? 9999;
+        const ordenB = ordenCatalogo.get(normalizarProducto(b.nombre)) ?? 9999;
+        return rangoA - rangoB || ordenA - ordenB || a.nombre.localeCompare(b.nombre, 'es');
       });
-      ws.views = [{ showGridLines:false }];
-      ws.getColumn(1).width = 5.5;
-      ws.getColumn(2).width = 38;
-      ws.getColumn(3).width = 3.2;
-      ws.getColumn(4).width = 5.5;
-      ws.getColumn(5).width = 38;
+      const worksheet = workbook.addWorksheet(grupo.nombre, {
+        pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+      });
+      worksheet.getCell('A1').value = `${grupo.nombre.toUpperCase()} · RECOJOS ${fecha}`;
+      worksheet.getCell('A1').font = { bold: true, size: 12 };
 
-      ws.mergeCells('A1:E1');
-      const titulo = ws.getCell('A1');
-      titulo.value = `${config.titulo} · ${fecha}`;
-      titulo.font = { bold:true, size:12 };
-      titulo.alignment = { horizontal:'center', vertical:'middle' };
-      titulo.border = { bottom:{ style:'medium', color:{ argb:'FF111111' } } };
-      ws.getRow(1).height = 24;
+      clientesGrupo.forEach((cli, idx) => {
+        const cell = worksheet.getCell(2, idx + 2);
+        cell.value = `${String(cli.cliente_nombre || '').toUpperCase()}${cli.origen === 'casino' ? ' · CASINO' : ''}`;
+        cell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
+        cell.font = { bold: true, color: { argb: cli.es_urgente ? 'FFCC0000' : 'FF111111' } };
+      });
 
-      const mitad = Math.ceil(bloques.length / 2);
-      const columnas = [
-        { lista: bloques.slice(0, mitad), numCol:1, textoCol:2, offset:0 },
-        { lista: bloques.slice(mitad), numCol:4, textoCol:5, offset:mitad }
-      ];
-
-      let maxFila = 3;
-      for (const columna of columnas) {
-        let fila = 3;
-        columna.lista.forEach(({ cliente, items }, indice) => {
-          const numero = columna.offset + indice + 1;
-          const numCell = ws.getCell(fila, columna.numCol);
-          const headCell = ws.getCell(fila, columna.textoCol);
-          numCell.value = `${numero}.-`;
-          headCell.value = `${String(cliente.cliente_nombre || 'Cliente').toUpperCase()}${cliente.origen === 'casino' ? ' · CASINO' : ''} · ${hora12(cliente.hora_recoge)}`;
-          numCell.font = { bold:true, size:9, color:{ argb: cliente.es_urgente ? 'FFCC0000' : 'FF111111' } };
-          headCell.font = { bold:true, size:9, color:{ argb: cliente.es_urgente ? 'FFCC0000' : 'FF111111' } };
-          numCell.alignment = { horizontal:'right', vertical:'middle' };
-          headCell.alignment = { horizontal:'left', vertical:'middle', wrapText:true };
-          numCell.border = { bottom:{ style:'thin', color:{ argb:'FF777777' } } };
-          headCell.border = { bottom:{ style:'thin', color:{ argb:'FF777777' } } };
-          ws.getRow(fila).height = 18;
-          fila += 1;
-
-          items.forEach((item) => {
-            const cell = ws.getCell(fila, columna.textoCol);
-            const cantidad = Math.abs(item.cantidad - Math.round(item.cantidad)) < 0.0001
-              ? String(Math.round(item.cantidad))
-              : String(Number(item.cantidad.toFixed(2)));
-            cell.value = `${cantidad}  ${String(item.nombre || '').toUpperCase()}`;
-            cell.font = { bold:false, size:9 };
-            cell.alignment = { horizontal:'left', vertical:'middle', wrapText:true };
-            cell.border = bordeFino;
-            ws.getCell(fila, columna.numCol).border = bordeFino;
-            ws.getRow(fila).height = 17;
-            fila += 1;
-          });
-
-          fila += 1;
+      const colTotalIdx = Math.max(clientesGrupo.length + 2, 3);
+      worksheet.getCell(2, colTotalIdx).value = 'TOTAL';
+      worksheet.getCell(2, colTotalIdx).font = { bold: true };
+      productosGrupo.forEach((producto, pIdx) => {
+        const rowNum = pIdx + 3;
+        worksheet.getCell(rowNum, 1).value = producto.nombre;
+        worksheet.getCell(rowNum, 1).font = { bold: true };
+        clientesGrupo.forEach((cli, cIdx) => {
+          const cantidad = producto.porCliente.get(Number(cli.id)) || 0;
+          if (cantidad > 0) {
+            const cell = worksheet.getCell(rowNum, cIdx + 2);
+            cell.value = cantidad;
+            cell.font = { bold: true, color: { argb: cli.es_urgente ? 'FFCC0000' : 'FF111111' } };
+          }
         });
-        maxFila = Math.max(maxFila, fila);
-      }
-
-      if (!bloques.length) {
-        ws.mergeCells('A3:E5');
-        ws.getCell('A3').value = 'SIN PEDIDOS PARA ESTA HOJA';
-        ws.getCell('A3').alignment = { horizontal:'center', vertical:'middle' };
-        ws.getCell('A3').font = { bold:true, size:10, color:{ argb:'FF667085' } };
-        maxFila = 5;
-      }
-      ws.pageSetup.printArea = `A1:E${Math.max(5, maxFila)}`;
+        const desde = worksheet.getColumn(2).letter;
+        const hasta = worksheet.getColumn(colTotalIdx - 1).letter;
+        worksheet.getCell(rowNum, colTotalIdx).value = { formula: `SUM(${desde}${rowNum}:${hasta}${rowNum})` };
+        worksheet.getCell(rowNum, colTotalIdx).font = { bold: true };
+      });
+      worksheet.getColumn(1).width = 30;
+      for (let i = 2; i <= colTotalIdx; i += 1) worksheet.getColumn(i).width = i === colTotalIdx ? 10 : 8;
+      worksheet.getRow(2).height = 115;
+      worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
     }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
