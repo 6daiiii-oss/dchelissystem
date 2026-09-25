@@ -6252,28 +6252,47 @@
   function renderizarHojaProduccionCocina(data) {
     const contenedor = document.getElementById('hojaProduccionCocina');
     if (!contenedor) return;
-    const detalles = Array.isArray(data?.detalles) ? data.detalles : [];
+
     const ordenReferencia = [...resolverProductoNombres(), ...obtenerProductosExtraParaProduccion()];
-    const { filas, especiales } = clasificarHojaProduccion(
-      detalles, data.clientes || [], obtenerProductoResolucion, normalizarNombreProducto, ordenReferencia
+
+    // Producción anticipada: bocaditos, tortas, kekes y por ahora panes.
+    // Mantiene la ventana 15:00 del día elegido → 15:00 del día siguiente.
+    const detallesAnticipados = Array.isArray(data?.detalles) ? data.detalles : [];
+    const clasificacionAnticipada = clasificarHojaProduccion(
+      detallesAnticipados,
+      data.clientes || [],
+      obtenerProductoResolucion,
+      normalizarNombreProducto,
+      ordenReferencia
+    );
+
+    // Producción del mismo día: sánguches, piqueos y triples.
+    // Usa exactamente los pedidos cuyo fecha_recoge es la fecha seleccionada.
+    const detallesMismoDia = Array.isArray(data?.embalaje?.detalles) ? data.embalaje.detalles : [];
+    const clasificacionMismoDia = clasificarHojaProduccion(
+      detallesMismoDia,
+      data?.embalaje?.clientes || [],
+      obtenerProductoResolucion,
+      normalizarNombreProducto,
+      ordenReferencia
     );
 
     const paginas = [
       {
         titulo:'Bocaditos dulces y salados',
-        bloque:filas.filter((item) => item.grupo === 'Bocaditos'),
-        especiales,
+        bloque:clasificacionAnticipada.filas.filter((item) => item.grupo === 'Bocaditos'),
+        especiales:clasificacionAnticipada.especiales,
         anchoCompleto:false
       },
       {
         titulo:'Sándwiches · Piqueos · Triples',
-        bloque:filas.filter((item) => ['Sándwiches', 'Piqueos', 'Triples'].includes(item.grupo)),
+        bloque:clasificacionMismoDia.filas.filter((item) => ['Sándwiches', 'Piqueos', 'Triples'].includes(item.grupo)),
         especiales:[],
         anchoCompleto:true
       },
       {
         titulo:'Panes',
-        bloque:filas.filter((item) => item.grupo === 'Panes'),
+        bloque:clasificacionAnticipada.filas.filter((item) => item.grupo === 'Panes'),
         especiales:[],
         anchoCompleto:true
       }
