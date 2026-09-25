@@ -6,7 +6,7 @@ const ExcelJS = require('exceljs');
 const db = require('./db');
 const { extraerPedidosCasino } = require('./casino-production');
 const { unirCronogramasCasino } = require('./casino-archive');
-const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion, resolverPyePorCantidad } = require('./public/production-classification');
+const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion, resolverPyePorCantidad, resolverNombreEspecialProduccion } = require('./public/production-classification');
 
 const app = express();
 
@@ -47,7 +47,8 @@ function dbRunAsync(sql, params = []) {
 }
 
 function resolverProductoProduccion(nombre) {
-  return resolverNombreCocina(nombre)
+  return resolverNombreEspecialProduccion(nombre)
+    || resolverNombreCocina(nombre)
     || PRODUCTOS_COCINA_EXTRA.find((producto) => normalizarProducto(producto) === normalizarProducto(nombre))
     || nombre;
 }
@@ -1594,11 +1595,13 @@ async function procesarCronogramaCasinos(buffer) {
               nombre: nombreProducto,
               grupo,
               por_casino: {},
-              total: 0
+              total: 0,
+              multiplicador_unidades: multiplicadorUnidades > 1 ? multiplicadorUnidades : 1
             });
           }
 
           const producto = dia.productos.get(claveProducto);
+          if (multiplicadorUnidades > 1) producto.multiplicador_unidades = multiplicadorUnidades;
           producto.por_casino[casino] = Number(producto.por_casino[casino] || 0) + cantidad;
           producto.total += cantidad;
           if (producto.grupo !== 'extra' && grupo === 'extra') producto.grupo = 'extra';
