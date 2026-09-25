@@ -2288,10 +2288,19 @@
     }
     @media screen and (max-width:700px) { .production-layout { grid-template-columns:1fr; } .production-blank-space { min-height:12mm; } }
     @media print {
+      body.printing-cocina.printing-embalaje #distributionPaperWrapper,
       body.printing-cocina.printing-embalaje #productionPaperWrapper { display:none !important; }
-      body.printing-cocina.printing-produccion #embalajeWrapper { display:none !important; }
-      body.printing-cocina.printing-produccion .kitchen-doc-heading { display:none !important; }
-      body.printing-cocina.printing-produccion #hojaProduccionCocina { display:block !important; }
+
+      body.printing-cocina.printing-distribucion #embalajeWrapper,
+      body.printing-cocina.printing-distribucion #productionPaperWrapper { display:none !important; }
+
+      body.printing-cocina.printing-produccion #embalajeWrapper,
+      body.printing-cocina.printing-produccion #distributionPaperWrapper { display:none !important; }
+
+      body.printing-cocina.printing-produccion .kitchen-doc-heading,
+      body.printing-cocina.printing-distribucion .kitchen-doc-heading { display:none !important; }
+      body.printing-cocina.printing-produccion #hojaProduccionCocina,
+      body.printing-cocina.printing-distribucion #hojaDistribucionCocina { display:block !important; }
       body.printing-cocina.printing-produccion .production-paper {
         width:210mm !important;
         min-height:0 !important;
@@ -2309,7 +2318,7 @@
       }
       body.printing-cocina.printing-embalaje #embalajeWrapper { display:block !important; }
       body.printing-cocina.printing-embalaje .kitchen-doc-heading { display:none !important; }
-      body.printing-cocina.printing-embalaje .distribution-paper {
+      body.printing-cocina.printing-distribucion .distribution-paper {
         display:block !important;
         width:210mm !important;
         min-height:297mm !important;
@@ -2321,11 +2330,11 @@
         break-after:page !important;
         page-break-inside:avoid !important;
       }
-      body.printing-cocina.printing-embalaje .distribution-paper:last-child {
+      body.printing-cocina.printing-distribucion .distribution-paper:last-child {
         page-break-after:auto !important;
         break-after:auto !important;
       }
-      body.printing-cocina.printing-embalaje .distribution-columns {
+      body.printing-cocina.printing-distribucion .distribution-columns {
         grid-template-columns:repeat(2,minmax(0,1fr)) !important;
         gap:0 7mm !important;
       }
@@ -2510,6 +2519,16 @@
             <div><span>HOJA DE EMBALAJE</span></div>
           </div>
           <div id="hojaProduccion" class="table-container"></div>
+        </div>
+
+        <div id="distributionPaperWrapper" class="kitchen-document-block" style="margin-bottom:26px;">
+          <div class="kitchen-doc-heading">
+            <div><span>HOJA DE EMBALAJE / PRODUCCIÓN</span></div>
+          </div>
+          <div id="hojaDistribucionCocina"></div>
+          <div class="no-print" style="display:flex; justify-content:flex-end; margin-top:14px;">
+            <button class="btn btn-warning" type="button" onclick="imprimirHojaDistribucion()">Imprimir embalaje / producción</button>
+          </div>
         </div>
 
         <div id="productionPaperWrapper" class="kitchen-document-block">
@@ -5923,7 +5942,7 @@
   }
 
   function limpiarModoImpresionCocina() {
-    document.body.classList.remove('printing-cocina', 'printing-embalaje', 'printing-produccion');
+    document.body.classList.remove('printing-cocina', 'printing-embalaje', 'printing-distribucion', 'printing-produccion');
     document.getElementById('kitchenPrintPageStyle')?.remove();
   }
 
@@ -5931,9 +5950,17 @@
     limpiarModoImpresionCocina();
     const estilo = document.createElement('style');
     estilo.id = 'kitchenPrintPageStyle';
-    estilo.textContent = '@media print { @page { size: A4 portrait; margin: 0; } }';
+    const esEmbalajeOriginal = tipo === 'embalaje';
+    estilo.textContent = esEmbalajeOriginal
+      ? '@media print { @page { size: A4 landscape; margin: 0; } }'
+      : '@media print { @page { size: A4 portrait; margin: 0; } }';
     document.head.appendChild(estilo);
-    document.body.classList.add('printing-cocina', tipo === 'produccion' ? 'printing-produccion' : 'printing-embalaje');
+    const clase = tipo === 'produccion'
+      ? 'printing-produccion'
+      : tipo === 'distribucion'
+        ? 'printing-distribucion'
+        : 'printing-embalaje';
+    document.body.classList.add('printing-cocina', clase);
     window.addEventListener('afterprint', limpiarModoImpresionCocina, { once:true });
     window.print();
   }
@@ -5955,6 +5982,11 @@
   function imprimirHojaEmbalaje() {
     if (!document.getElementById('fecha_filtro')?.value) return alert('Selecciona una fecha primero.');
     marcarPedidosVentanaEnPreparacion().finally(() => setTimeout(() => prepararImpresionCocina('embalaje'), 120));
+  }
+
+  function imprimirHojaDistribucion() {
+    if (!document.getElementById('fecha_filtro')?.value) return alert('Selecciona una fecha primero.');
+    prepararImpresionCocina('distribucion');
   }
 
   function imprimirHojaProduccion() {
@@ -6099,7 +6131,7 @@
   }
 
   function renderizarHojasEmbalajePorHora(dataEmbalaje) {
-    const contenedor = document.getElementById('hojaProduccion');
+    const contenedor = document.getElementById('hojaDistribucionCocina');
     if (!contenedor) return;
 
     const clientes = [...(Array.isArray(dataEmbalaje?.clientes) ? dataEmbalaje.clientes : [])]
@@ -6292,7 +6324,18 @@
 
       renderizarHojaProduccionCocina(data);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const detallesEmbalaje = filtrarDetallesEmbalaje(data.embalaje?.detalles || []);
+      const listasEmbalaje = obtenerListasEmbalaje(detallesEmbalaje);
+      renderizarMatrizProducto([
+        { titulo:'BOCADITOS', productosLista:listasEmbalaje.bocaditos },
+        { titulo:'SÁNGUCHES / PETIPANES', productosLista:listasEmbalaje.sandwiches },
+        { titulo:'TRIPLES', productosLista:listasEmbalaje.triples },
+        { titulo:'PIQUEOS', productosLista:listasEmbalaje.piqueos },
+        { titulo:'PANES', productosLista:listasEmbalaje.panes }
+      ], detallesEmbalaje);
+
       renderizarHojasEmbalajePorHora(data.embalaje || {});
+
       const paginasCocina = [...document.querySelectorAll('#embalajeWrapper .kitchen-page')];
       paginasCocina.forEach((pagina) => pagina.classList.remove('last-kitchen-page'));
       paginasCocina.at(-1)?.classList.add('last-kitchen-page');
