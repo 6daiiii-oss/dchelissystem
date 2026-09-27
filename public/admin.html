@@ -7,7 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="digitacion-config.js"></script>
-<script src="production-classification.js?v=6"></script>
+<script src="production-classification.js?v=7"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -3628,24 +3628,38 @@
       });
 
       const ganador = candidatos[0]?.producto;
-      if (!ganador) return null;
+      if (!ganador || Number(candidatos[0]?.score || 0) < 75) return null;
       const coincidencias = candidatos.filter((item) => item.score === candidatos[0].score && item.producto === ganador);
       return coincidencias.length ? ganador : candidatos[0].producto;
     }
 
+    function limpiarNombreProductoLibreDigitacion(texto) {
+      return String(texto || '')
+        .replace(/[<>]/g, '')
+        .replace(/[\u0000-\u001F\u007F]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 160);
+    }
+
     function resolverProductoDigitadoPorCantidad(texto, cantidad) {
-      const base = resolverProductoDigitado(texto);
-      if (!base) return null;
+      const original = limpiarNombreProductoLibreDigitacion(texto);
+      if (!original) return null;
 
-      const textoNormalizado = normalizarNombreProducto(texto || '');
-      if (!/\b(PIE|PYE)\b/.test(textoNormalizado)) return base;
+      const conocido = resolverProductoDigitado(original);
+      const textoNormalizado = normalizarNombreProducto(original);
 
-      const ajustado = resolverPyePorCantidad(texto, cantidad, normalizarNombreProducto);
-      const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
-      const exacto = catalogo.find((item) =>
-        normalizarNombreProducto(item?.nombre || '') === normalizarNombreProducto(ajustado)
-      );
-      return exacto?.nombre || ajustado;
+      if (/\b(PIE|PYE)\b/.test(textoNormalizado)) {
+        const ajustado = resolverPyePorCantidad(original, cantidad, normalizarNombreProducto);
+        const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
+        const exacto = catalogo.find((item) =>
+          normalizarNombreProducto(item?.nombre || '') === normalizarNombreProducto(ajustado)
+        );
+        return exacto?.nombre || ajustado;
+      }
+
+      // Si no existe en catálogo/aliases, se conserva como producto personalizado.
+      return conocido || original;
     }
 
     function renderQuickEntryPreview() {
@@ -3664,7 +3678,7 @@
         const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
         const item = buscarItemCatalogoDigitacion(catalogo, producto);
         const subtotal = calcularSubtotalCatalogo(item, Math.max(1, cantidad || 1));
-        const priceText = item ? ` • S/. ${subtotal.toFixed(2)}` : '';
+        const priceText = item ? ` • S/. ${subtotal.toFixed(2)}` : ' • personalizado';
         return `<li><span>${cantidad ? `${cantidad} • ${nombre}${priceText}` : linea}</span><strong>${cantidad || 1}</strong></li>`;
       });
 
@@ -3718,8 +3732,9 @@
           ? resolverProductoDigitadoPorCantidad(match[2], cantidad)
           : resolverProductoDigitado(linea);
         const item = (window.__quickCatalog || []).find((entry) => normalizarNombreProducto(entry.nombre) === normalizarNombreProducto(producto || ''));
-        return item?.categoria === 'Torta Chantilly'
-          ? { indice, producto: item.nombre, key: obtenerClaveFotoTorta(indice, item.nombre) }
+        const tipo = tipoItemCocina(producto || '', cantidad, normalizarNombreProducto);
+        return tipo.esTorta
+          ? { indice, producto: item?.nombre || producto, key: obtenerClaveFotoTorta(indice, item?.nombre || producto) }
           : null;
       }).filter(Boolean);
 
@@ -3761,11 +3776,8 @@
 
     function buscarItemCatalogoDigitacion(catalogo, producto) {
       const analizado = normalizarNombreProducto(producto || '');
-      return catalogo.find((entry) => normalizarNombreProducto(entry.nombre || '') === analizado)
-        || catalogo.find((entry) => {
-          const nombre = normalizarNombreProducto(entry.nombre || '');
-          return nombre.includes(analizado) || analizado.includes(nombre);
-        });
+      if (!analizado) return null;
+      return catalogo.find((entry) => normalizarNombreProducto(entry.nombre || '') === analizado) || null;
     }
 
     function obtenerPreciosCatalogo(item) {
@@ -3850,15 +3862,16 @@
           return;
         }
 
-        const precioItem = buscarItemCatalogoDigitacion(catalogo, producto) || catalogo[0];
+        const precioItem = buscarItemCatalogoDigitacion(catalogo, producto);
         const subtotal = calcularSubtotalCatalogo(precioItem, cantidad);
         const fotoKey = obtenerClaveFotoTorta(indice, producto);
+        const tipoProducto = tipoItemCocina(producto, cantidad, normalizarNombreProducto);
         detalles.push({
           producto_nombre: producto,
           cantidad,
           subtotal: Number(subtotal.toFixed(2)),
           paquetes: {},
-          foto_torta: precioItem?.categoria === 'Torta Chantilly' ? (window.__quickCakePhotos.get(fotoKey) || '') : ''
+          foto_torta: tipoProducto.esTorta ? (window.__quickCakePhotos.get(fotoKey) || '') : ''
         });
       }
 
