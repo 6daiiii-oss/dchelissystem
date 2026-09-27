@@ -994,6 +994,15 @@ function normalizarProducto(nombre) {
     .trim();
 }
 
+function limpiarNombreProductoEntrada(nombre) {
+  return String(nombre || '')
+    .replace(/[<>]/g, '')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+}
+
 function productoEsCocina(nombre) {
   return !!resolverNombreCocina(nombre);
 }
@@ -2394,7 +2403,7 @@ app.post('/api/pedidos', protectDigitacionOrigin, async (req, res) => {
         const cantidad = Number(det?.cantidad || 0);
         if (!(cantidad > 0)) return null;
         return {
-          producto_nombre: resolverPyePorCantidad(det.producto_nombre, cantidad, normalizarProducto),
+          producto_nombre: resolverPyePorCantidad(limpiarNombreProductoEntrada(det.producto_nombre), cantidad, normalizarProducto),
           cantidad,
           subtotal: Number(det?.subtotal || 0),
           paquetes: det?.paquetes && typeof det.paquetes === 'object' ? JSON.stringify(det.paquetes) : '{}',
@@ -3119,7 +3128,7 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
 
       const stmt = db.prepare(`INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta) VALUES (?, ?, ?, ?, ?, ?)`);
       detalles.forEach((item) => {
-        const nombre = String(item.producto_nombre || '').trim();
+        const nombre = limpiarNombreProductoEntrada(item.producto_nombre);
         const cantidad = Number(item.cantidad || 0);
         const subtotal = Number(item.subtotal || 0);
         if (!nombre || cantidad <= 0) return;
