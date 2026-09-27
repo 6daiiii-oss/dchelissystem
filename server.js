@@ -475,7 +475,7 @@ async function resolveSessionUser(req, cookieName, allowedRoles) {
   if (!session) return null;
 
   const user = await dbGetAsync(
-    `SELECT id, usuario, nombre, rol, activo FROM usuarios WHERE id = ? LIMIT 1`,
+    `SELECT id, usuario, nombre, rol, activo, preferencia_tema FROM usuarios WHERE id = ? LIMIT 1`,
     [Number(session.uid)]
   );
   if (!user || !user.activo || !allowedRoles.includes(String(user.rol))) return null;
@@ -596,7 +596,7 @@ async function authenticateUser(req, res, roles, cookieName, rateScope) {
   const password = String(req.body?.password || '');
   const user = usuario
     ? await dbGetAsync(
-        `SELECT id, usuario, nombre, password_hash, rol, activo FROM usuarios WHERE LOWER(usuario) = LOWER(?) LIMIT 1`,
+        `SELECT id, usuario, nombre, password_hash, rol, activo, preferencia_tema FROM usuarios WHERE LOWER(usuario) = LOWER(?) LIMIT 1`,
         [usuario]
       )
     : null;
@@ -621,7 +621,14 @@ async function authenticateUser(req, res, roles, cookieName, rateScope) {
   });
 
   res.setHeader('Set-Cookie', buildSessionCookie(req, cookieName, token, Math.floor(SESSION_MS / 1000)));
-  return res.json({ ok: true, usuario: user.usuario, nombre: user.nombre, rol: user.rol, expira: expiresAt });
+  return res.json({
+    ok: true,
+    usuario: user.usuario,
+    nombre: user.nombre,
+    rol: user.rol,
+    preferencia_tema: ['light', 'dark', 'system'].includes(String(user.preferencia_tema)) ? user.preferencia_tema : 'system',
+    expira: expiresAt
+  });
 }
 
 function clearSessionCookie(req, res, cookieName) {
@@ -1713,8 +1720,32 @@ app.get('/api/admin/auth/session', requireAdminAuth, (req, res) => {
     authenticated: true,
     usuario: req.authUser.usuario,
     nombre: req.authUser.nombre,
-    rol: req.authUser.rol
+    rol: req.authUser.rol,
+    preferencia_tema: ['light', 'dark', 'system'].includes(String(req.authUser.preferencia_tema))
+      ? req.authUser.preferencia_tema
+      : 'system'
   });
+});
+
+app.put('/api/admin/preferences', requireAdminAuth, async (req, res) => {
+  try {
+    const preferenciaTema = String(req.body?.preferencia_tema || '').trim().toLowerCase();
+    if (!['light', 'dark', 'system'].includes(preferenciaTema)) {
+      return res.status(400).json({ error: 'Tema no válido.' });
+    }
+
+    await dbRunAsync(
+      `UPDATE usuarios
+       SET preferencia_tema = ?, actualizado_en = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [preferenciaTema, Number(req.authUser.id)]
+    );
+
+    return res.json({ ok: true, preferencia_tema: preferenciaTema });
+  } catch (error) {
+    console.error('Error guardando preferencias del usuario:', error);
+    return res.status(500).json({ error: 'No se pudo guardar la configuración de la cuenta.' });
+  }
 });
 
 app.post('/api/admin/auth/logout', (req, res) => {
