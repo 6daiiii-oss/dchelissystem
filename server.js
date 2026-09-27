@@ -3108,7 +3108,7 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
     hora_recoge = ?,
     dedicatoria = ?,
     foto_torta = ?,
-    fecha_emision = COALESCE(NULLIF(?, ''), fecha_emision, CURRENT_TIMESTAMP)
+    fecha_emision = COALESCE(CAST(NULLIF(?, '') AS TIMESTAMP), fecha_emision, CURRENT_TIMESTAMP)
     WHERE id = ?`, [clienteNombre, celular, montoTotal, adelanto, metodoPago, tipoComprobante, numeroDocumento, fechaRecoge, horaRecoge, dedicatoria, fotoTorta, fechaEmision, id], function (err) {
     if (err) {
       db.run('ROLLBACK');
