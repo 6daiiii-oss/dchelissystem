@@ -8,6 +8,20 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="digitacion-config.js"></script>
 <script src="production-classification.js?v=7"></script>
+<script>
+  (() => {
+    try {
+      const preferencia = localStorage.getItem('dchelis_admin_theme_v1') || 'system';
+      const oscuro = preferencia === 'dark'
+        || (preferencia === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = oscuro ? 'dark' : 'light';
+      document.documentElement.dataset.themePreference = preferencia;
+    } catch (_) {
+      document.documentElement.dataset.theme = 'light';
+      document.documentElement.dataset.themePreference = 'system';
+    }
+  })();
+</script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -2739,6 +2753,191 @@
       }
     }
 
+
+    @media screen {
+      .topbar-actions { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+      .settings-wrap { position:relative; }
+      .settings-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; }
+      .settings-button svg { flex:0 0 auto; }
+      .settings-menu {
+        position:absolute;
+        top:calc(100% + 9px);
+        right:0;
+        z-index:60;
+        width:min(250px, calc(100vw - 24px));
+        padding:8px;
+        border:1px solid #d9e2dc;
+        border-radius:14px;
+        background:#fff;
+        box-shadow:0 18px 44px rgba(20,42,29,.16);
+      }
+      .settings-menu[hidden] { display:none !important; }
+      .settings-menu-head { padding:8px 9px 10px; border-bottom:1px solid #edf1ee; }
+      .settings-menu-head strong { display:block; color:var(--text); font-size:.86rem; }
+      .settings-menu-head small { display:block; margin-top:2px; color:var(--muted); font-size:.68rem; }
+      .theme-options { display:grid; gap:3px; padding-top:6px; }
+      .theme-choice {
+        width:100%;
+        display:grid;
+        grid-template-columns:28px 1fr;
+        gap:8px;
+        align-items:center;
+        padding:9px;
+        border:1px solid transparent;
+        border-radius:10px;
+        background:transparent;
+        color:var(--text);
+        text-align:left;
+        cursor:pointer;
+      }
+      .theme-choice:hover { background:#f4f7f5; }
+      .theme-choice.active { border-color:#b7d0bf; background:#edf7f0; }
+      .theme-choice > span:first-child { font-size:1rem; text-align:center; }
+      .theme-choice strong { display:block; font-size:.77rem; }
+      .theme-choice small { display:block; margin-top:1px; color:var(--muted); font-size:.64rem; }
+
+      html[data-theme="dark"] {
+        color-scheme:dark;
+        --bg:#0d1410;
+        --panel:#131c17;
+        --panel-alt:#17221b;
+        --brand:#7dcc99;
+        --brand-strong:#9bdeb2;
+        --brand-soft:#173524;
+        --accent:#e1846d;
+        --text:#edf4ef;
+        --muted:#9faea5;
+        --line:#293a30;
+        --line-strong:#384b40;
+        --shadow:0 12px 34px rgba(0,0,0,.28);
+        --shadow-soft:0 5px 18px rgba(0,0,0,.22);
+      }
+      html[data-theme="dark"] body {
+        background:
+          radial-gradient(circle at 8% -10%, rgba(62,135,88,.13), transparent 28rem),
+          radial-gradient(circle at 96% 4%, rgba(181,71,47,.06), transparent 24rem),
+          var(--bg);
+      }
+      html[data-theme="dark"] .auth-shell { background:linear-gradient(135deg,#0b120e,#111a15); }
+      html[data-theme="dark"] .auth-card,
+      html[data-theme="dark"] .panel,
+      html[data-theme="dark"] .topbar,
+      html[data-theme="dark"] .pedido-modal-card,
+      html[data-theme="dark"] .digitacion-box,
+      html[data-theme="dark"] .casino-upload-card,
+      html[data-theme="dark"] .casino-cronograma-card,
+      html[data-theme="dark"] .user-admin-card,
+      html[data-theme="dark"] .pedido-editor-section,
+      html[data-theme="dark"] .kitchen-document-block {
+        background:#131c17 !important;
+        border-color:#2a3a31 !important;
+        color:var(--text);
+      }
+      html[data-theme="dark"] .topbar {
+        background:
+          linear-gradient(120deg, rgba(54,126,79,.12), rgba(19,28,23,0) 44%),
+          rgba(19,28,23,.97) !important;
+      }
+      html[data-theme="dark"] .brand-logo-wrap { background:#fff; border-color:#d7e3da; }
+      html[data-theme="dark"] .tab-nav {
+        background:rgba(15,23,18,.94);
+        border-color:#2a3a31;
+        box-shadow:0 5px 16px rgba(0,0,0,.18);
+      }
+      html[data-theme="dark"] .tab-btn { color:#a8b6ad; }
+      html[data-theme="dark"] .tab-btn:hover { background:#1a2820; color:#d8e7dc; }
+      html[data-theme="dark"] .tab-btn.active {
+        background:#203128;
+        border-color:#40564a;
+        color:#a7dfba;
+        box-shadow:0 3px 10px rgba(0,0,0,.17);
+      }
+      html[data-theme="dark"] .header-row { border-bottom-color:#26352d; }
+      html[data-theme="dark"] .btn-ghost,
+      html[data-theme="dark"] .topbar .btn-ghost {
+        background:#1b2821;
+        border-color:#33463a;
+        color:#dce8df;
+      }
+      html[data-theme="dark"] .btn-warning { background:#33463b; border-color:#405648; }
+      html[data-theme="dark"] input,
+      html[data-theme="dark"] select,
+      html[data-theme="dark"] textarea,
+      html[data-theme="dark"] .form-control,
+      html[data-theme="dark"] .search-input,
+      html[data-theme="dark"] .status-select {
+        background:#101813 !important;
+        border-color:#33443a !important;
+        color:#edf4ef !important;
+      }
+      html[data-theme="dark"] input::placeholder,
+      html[data-theme="dark"] textarea::placeholder { color:#74847a; }
+      html[data-theme="dark"] input:focus,
+      html[data-theme="dark"] select:focus,
+      html[data-theme="dark"] textarea:focus,
+      html[data-theme="dark"] .form-control:focus,
+      html[data-theme="dark"] .search-input:focus,
+      html[data-theme="dark"] .status-select:focus {
+        border-color:#68b886 !important;
+        box-shadow:0 0 0 3px rgba(91,179,123,.16) !important;
+      }
+      html[data-theme="dark"] .order-card {
+        background:linear-gradient(180deg,#162019,#121a15);
+        border-color:#2c3c33;
+        box-shadow:0 4px 13px rgba(0,0,0,.2);
+      }
+      html[data-theme="dark"] .order-card:hover { box-shadow:0 10px 24px rgba(0,0,0,.3); }
+      html[data-theme="dark"] .order-schedule,
+      html[data-theme="dark"] .payment-summary,
+      html[data-theme="dark"] .history-locked-note,
+      html[data-theme="dark"] .casino-cronograma-active {
+        background:#18231d;
+        border-color:#2c3c33;
+      }
+      html[data-theme="dark"] .history-order-card { background:#121a15; filter:none; opacity:.82; }
+      html[data-theme="dark"] .order-request li,
+      html[data-theme="dark"] .items-list li,
+      html[data-theme="dark"] .digitacion-summary li { border-color:#2a3830; }
+      html[data-theme="dark"] .table-container { background:#111914; border-color:#33443a; }
+      html[data-theme="dark"] table { color:#e7f0ea; }
+      html[data-theme="dark"] th { background:#1e2b23; color:#d7e5dc; }
+      html[data-theme="dark"] td { background:#131c17; border-color:#3a4a40; }
+      html[data-theme="dark"] th { border-color:#3a4a40; }
+      html[data-theme="dark"] .pedido-modal { background:rgba(0,0,0,.62); }
+      html[data-theme="dark"] .pedido-modal-head {
+        background:rgba(19,28,23,.96);
+        border-bottom-color:#2b3a31;
+      }
+      html[data-theme="dark"] .pedido-modal-close:hover { background:#1f2c24; }
+      html[data-theme="dark"] .settings-menu {
+        background:#162019;
+        border-color:#34463a;
+        box-shadow:0 18px 44px rgba(0,0,0,.38);
+      }
+      html[data-theme="dark"] .settings-menu-head { border-bottom-color:#293930; }
+      html[data-theme="dark"] .theme-choice:hover { background:#1d2b23; }
+      html[data-theme="dark"] .theme-choice.active { background:#1d3928; border-color:#42664f; }
+      html[data-theme="dark"] .date-group-title { color:#aebbb2; }
+      html[data-theme="dark"] .date-group-title::after { background:#2a3930; }
+      html[data-theme="dark"] .pedido-item-editor { background:#17221b; border-color:#2c3d33; }
+      html[data-theme="dark"] .external-order-status,
+      html[data-theme="dark"] .label,
+      html[data-theme="dark"] .field label { color:#9faea5; }
+
+      @media (max-width:760px) {
+        .topbar-actions { gap:5px; }
+        .settings-button span { display:none; }
+        .settings-button { min-width:40px !important; width:40px; padding:0 !important; }
+        .logout-button { padding-inline:9px !important; }
+        .settings-menu { position:fixed; top:74px; right:10px; }
+      }
+    }
+
+    @media print {
+      html[data-theme="dark"] { color-scheme:light; }
+      html[data-theme="dark"] body { background:#fff !important; color:#000 !important; }
+    }
+
 </style>
 </head>
 <body>
@@ -2772,7 +2971,35 @@
           <div class="meta">Producción · pedidos · cocina</div>
         </div>
       </div>
-      <button class="btn btn-ghost" id="logoutBtn">Cerrar sesión</button>
+      <div class="topbar-actions">
+        <div class="settings-wrap">
+          <button class="btn btn-ghost settings-button" id="settingsBtn" type="button" onclick="alternarAjustesAdmin(event)" aria-haspopup="true" aria-expanded="false" aria-controls="settingsMenu">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V9.6h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1A1.7 1.7 0 0 0 15.4 4a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.2.38.52.7.9.9.34.18.72.28 1.1.3h.1v4h-.1a1.7 1.7 0 0 0-1.1.4c-.38.2-.7.52-.9.9Z"></path>
+            </svg>
+            <span>Ajustes</span>
+          </button>
+          <div class="settings-menu" id="settingsMenu" hidden>
+            <div class="settings-menu-head">
+              <strong>Apariencia</strong>
+              <small>Elige cómo ver el sistema</small>
+            </div>
+            <div class="theme-options" role="radiogroup" aria-label="Tema">
+              <button type="button" class="theme-choice" data-theme-choice="light" onclick="seleccionarTemaAdmin('light')">
+                <span>☀️</span><span><strong>Claro</strong><small>Siempre claro</small></span>
+              </button>
+              <button type="button" class="theme-choice" data-theme-choice="dark" onclick="seleccionarTemaAdmin('dark')">
+                <span>🌙</span><span><strong>Oscuro</strong><small>Siempre oscuro</small></span>
+              </button>
+              <button type="button" class="theme-choice" data-theme-choice="system" onclick="seleccionarTemaAdmin('system')">
+                <span>◐</span><span><strong>Sistema</strong><small>Sigue tu dispositivo</small></span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-ghost logout-button" id="logoutBtn">Cerrar sesión</button>
+      </div>
     </header>
 
     <nav class="tab-nav no-print" aria-label="Navegación">
@@ -3075,6 +3302,65 @@
   </div>
 
   <script>
+    const ADMIN_THEME_KEY = 'dchelis_admin_theme_v1';
+
+    function temaEfectivoAdmin(preferencia) {
+      if (preferencia === 'dark' || preferencia === 'light') return preferencia;
+      return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function actualizarEstadoTemaAdmin() {
+      const preferencia = document.documentElement.dataset.themePreference
+        || localStorage.getItem(ADMIN_THEME_KEY)
+        || 'system';
+      document.querySelectorAll('[data-theme-choice]').forEach((boton) => {
+        const activo = boton.dataset.themeChoice === preferencia;
+        boton.classList.toggle('active', activo);
+        boton.setAttribute('aria-checked', activo ? 'true' : 'false');
+      });
+    }
+
+    function seleccionarTemaAdmin(preferencia) {
+      const valor = ['light', 'dark', 'system'].includes(preferencia) ? preferencia : 'system';
+      localStorage.setItem(ADMIN_THEME_KEY, valor);
+      document.documentElement.dataset.themePreference = valor;
+      document.documentElement.dataset.theme = temaEfectivoAdmin(valor);
+      actualizarEstadoTemaAdmin();
+      cerrarAjustesAdmin();
+    }
+
+    function alternarAjustesAdmin(event) {
+      event?.stopPropagation?.();
+      const menu = document.getElementById('settingsMenu');
+      const boton = document.getElementById('settingsBtn');
+      if (!menu || !boton) return;
+      const abrir = menu.hidden;
+      menu.hidden = !abrir;
+      boton.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+      if (abrir) actualizarEstadoTemaAdmin();
+    }
+
+    function cerrarAjustesAdmin() {
+      const menu = document.getElementById('settingsMenu');
+      const boton = document.getElementById('settingsBtn');
+      if (menu) menu.hidden = true;
+      if (boton) boton.setAttribute('aria-expanded', 'false');
+    }
+
+    document.addEventListener('click', (event) => {
+      const wrap = document.querySelector('.settings-wrap');
+      if (wrap && !wrap.contains(event.target)) cerrarAjustesAdmin();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') cerrarAjustesAdmin();
+    });
+    window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => {
+      const preferencia = localStorage.getItem(ADMIN_THEME_KEY) || 'system';
+      if (preferencia === 'system') {
+        document.documentElement.dataset.theme = temaEfectivoAdmin('system');
+      }
+    });
+
     const ADMIN_TAB_KEY = 'dchelis_admin_tab_v1';
     const ADMIN_FORM_KEY = 'dchelis_admin_digitacion_v1';
 
