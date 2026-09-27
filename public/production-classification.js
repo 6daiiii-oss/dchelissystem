@@ -65,7 +65,8 @@ function grupoProductoProduccion(nombre, normalizar) {
     return 'Sándwiches';
   }
 
-  if (/\b(BROCHETAS?|ALITAS?\s+BOUCHET|GUINDONES?|ESPARRAGOS?|HOJARASCAS?|TEQUENOS?|VOULEVANS?|CANAPES?)\b/.test(clave)) {
+  if (/^PIQUEOS?\b/.test(clave)
+      || /\b(BROCHETAS?|ALITAS?\s+BOUCHET|GUINDONES?|ESPARRAGOS?|HOJARASCAS?|TEQUENOS?|VOULEVANS?|CANAPES?)\b/.test(clave)) {
     return 'Piqueos';
   }
 
@@ -111,12 +112,16 @@ function tipoItemCocina(nombre, cantidad, normalizar) {
     || /^MOUSSE\b/.test(clave)
     || /^CREMA\s+VOLTEADA\b/.test(clave)
     || /^TRES\s+LECHES\b/.test(clave)
+    || /^CHEESE\s*CAKE\b/.test(clave)
+    || /^CHEESECAKE\b/.test(clave)
     || /\b(PIE|PYE)\b/.test(clave);
   const esPostreEnteroPorCantidad = unidades > 0 && unidades <= 5 && (
     /^TORTITAS?\b/.test(clave)
     || /^MOUSSE\b/.test(clave)
     || /^CREMA\s+VOLTEADA\b/.test(clave)
     || /^TRES\s+LECHES\b/.test(clave)
+    || /^CHEESE\s*CAKE\b/.test(clave)
+    || /^CHEESECAKE\b/.test(clave)
   );
   const esTorta = (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave)) || esPostreEnteroPorCantidad;
   return { esKeke, esTorta, esPastel, grupo: grupoProductoProduccion(nombreAjustado, normalizar), nombreAjustado };
