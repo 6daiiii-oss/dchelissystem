@@ -161,6 +161,8 @@ async function initializeDatabase() {
     actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS usuarios_usuario_lower_uidx ON usuarios (LOWER(usuario))`);
+  await pool.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS preferencia_tema TEXT NOT NULL DEFAULT 'system'`);
+  await pool.query(`UPDATE usuarios SET preferencia_tema = 'system' WHERE preferencia_tema IS NULL OR preferencia_tema NOT IN ('light', 'dark', 'system')`);
 
   const bootstrapUsuario = String(process.env.ADMIN_USERNAME || 'dchelis').trim();
   const bootstrapNombre = String(process.env.ADMIN_NAME || 'Administrador').trim() || 'Administrador';
