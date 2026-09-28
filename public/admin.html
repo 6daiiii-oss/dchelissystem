@@ -6326,6 +6326,107 @@
       await refrescarVistasTrasCambioPedido();
     }
 
+    function obtenerNumeroOrdenPedido(pedido) {
+      const codigo = String(pedido?.codigo || '').trim();
+      if (codigo) {
+        const partes = codigo.split('-').filter(Boolean);
+        return partes[partes.length - 1] || codigo;
+      }
+      return String(pedido?.id || '').padStart(6, '0');
+    }
+
+    function dividirFechaOrden(fechaIso) {
+      const partes = String(fechaIso || '').split('-');
+      if (partes.length !== 3) return { dia:'', mes:'', anio:'' };
+      return { dia:partes[2], mes:partes[1], anio:partes[0] };
+    }
+
+    function filasOrdenPedido(pedido, minimo = 20) {
+      const filas = (pedido?.detalles || []).map((item) => {
+        const cantidad = Number(item?.cantidad || 0);
+        const total = Number(item?.subtotal || 0);
+        const unitario = cantidad > 0 ? total / cantidad : 0;
+        return [
+          cantidad > 0 ? (Number.isInteger(cantidad) ? String(cantidad) : String(Number(cantidad.toFixed(2)))) : '',
+          String(item?.producto_nombre || ''),
+          total > 0 ? `S/. ${unitario.toFixed(2)}` : '',
+          total > 0 ? `S/. ${total.toFixed(2)}` : ''
+        ];
+      });
+      while (filas.length < minimo) filas.push(['', '', '', '']);
+      return filas;
+    }
+
+    function dibujarCabeceraOrdenA4(pdf, pedido) {
+      const verde = [77, 132, 73];
+      const rojo = [179, 72, 66];
+      const gris = [103, 117, 107];
+      const x = 15;
+      const y = 14;
+      const ancho = 180;
+
+      pdf.setTextColor(...verde);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(12);
+      pdf.text('PANADERÍA - BAGUETERÍA - PASTELERÍA', x + 2, y + 3);
+      pdf.setFontSize(25);
+      pdf.text("D'chelis", x + 24, y + 20);
+      pdf.setFontSize(7.6);
+      pdf.setTextColor(...gris);
+      pdf.text('Jr. Prolongación Ayacucho N° 964 · Urb. Santa Florencia', x + 2, y + 27);
+      pdf.text('San Miguel - Lima · 946 227 035', x + 18, y + 32);
+
+      const cajaX = x + 118;
+      pdf.setDrawColor(...verde);
+      pdf.setLineWidth(0.45);
+      pdf.roundedRect(cajaX, y - 2, 62, 25, 2, 2);
+      pdf.setTextColor(...verde);
+      pdf.setFontSize(13);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('ORDEN DE PEDIDO', cajaX + 31, y + 6, { align:'center' });
+      pdf.line(cajaX, y + 9, cajaX + 62, y + 9);
+      pdf.setTextColor(...rojo);
+      pdf.setFontSize(11.5);
+      pdf.text(`N° ${obtenerNumeroOrdenPedido(pedido)}`, cajaX + 31, y + 18, { align:'center' });
+
+      const fecha = dividirFechaOrden(pedido?.fecha_recoge);
+      pdf.setFillColor(...verde);
+      pdf.rect(cajaX, y + 27, 20, 8, 'F');
+      pdf.setTextColor(255,255,255);
+      pdf.setFontSize(9);
+      pdf.text('FECHA', cajaX + 10, y + 32.5, { align:'center' });
+      pdf.setDrawColor(...verde);
+      pdf.rect(cajaX + 20, y + 27, 42, 8);
+      pdf.setTextColor(55,65,58);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.text(`${fecha.dia || '--'} / ${fecha.mes || '--'} / ${fecha.anio || '----'}`, cajaX + 41, y + 32.5, { align:'center' });
+
+      pdf.setDrawColor(...verde);
+      pdf.roundedRect(x, y + 38, ancho, 18, 1.5, 1.5);
+      pdf.setTextColor(...verde);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8.8);
+      pdf.text('SEÑOR:', x + 4, y + 45);
+      pdf.text('TELF.:', x + 126, y + 45);
+      pdf.setTextColor(45,52,47);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9.2);
+      pdf.text(String(pedido?.cliente_nombre || '-'), x + 20, y + 45);
+      pdf.text(String(pedido?.celular || '-'), x + 140, y + 45);
+      if (pedido?.hora_recoge) {
+        pdf.setTextColor(...gris);
+        pdf.setFontSize(7.8);
+        pdf.text(`Hora de recojo: ${pedido.hora_recoge}`, x + 4, y + 52);
+      }
+
+      pdf.setTextColor(...verde);
+      pdf.setFont('helvetica', 'bolditalic');
+      pdf.setFontSize(9.2);
+      pdf.text('REMITIMOS A UD. EN BUENAS CONDICIONES LO SIGUIENTE', x + 4, y + 62);
+      return y + 66;
+    }
+
     async function descargarBoletaAdmin(id) {
       const pedido = pedidosDisponibles.get(Number(id));
       if (!pedido || !window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
@@ -6333,47 +6434,43 @@
         return;
       }
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
-      const margen = 14;
-      const ancho = pdf.internal.pageSize.getWidth();
-      pdf.setTextColor(0, 92, 39);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(18);
-      pdf.text("PASTELERIA D'CHELIS", ancho / 2, 18, { align: 'center' });
-      pdf.setFontSize(10);
-      pdf.text(`Código: ${pedido.codigo || `PED-${pedido.id}`}`, margen, 32);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(`Cliente: ${pedido.cliente_nombre || '-'}`, margen, 39);
-      pdf.text(`Teléfono: ${pedido.celular || '-'}`, margen, 45);
-      pdf.text(`Recojo: ${pedido.fecha_recoge || '-'} ${pedido.hora_recoge || ''}`, margen, 51);
-      if (pedido.tipo_comprobante) pdf.text(`${pedido.tipo_comprobante === 'factura' ? 'Factura - RUC' : 'Boleta - DNI'}: ${pedido.numero_documento || '-'}`, margen, 57);
-      const montoPagado = Number(pedido.adelanto || 0);
-      const montoTotal = Number(pedido.monto_total || 0);
-      const saldoRestante = Math.max(0, montoTotal - montoPagado);
-      pdf.text(`Monto pagado: S/. ${montoPagado.toFixed(2)}`, margen, 57);
-      pdf.text(`Saldo restante: S/. ${saldoRestante.toFixed(2)}`, margen, 63);
-      if (pedido.dedicatoria) pdf.text(`Dedicatoria: ${pedido.dedicatoria}`, margen, pedido.tipo_comprobante ? 75 : 69);
-      const filas = (pedido.detalles || []).map(item => [
-        String(item.cantidad || 0),
-        item.producto_nombre || '-',
-        `S/. ${Number(item.subtotal || 0).toFixed(2)}`
-      ]);
+      const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
+      const verde = [77,132,73];
+      const startY = dibujarCabeceraOrdenA4(pdf, pedido);
+      const filas = filasOrdenPedido(pedido, 20);
       pdf.autoTable({
-        startY: pedido.dedicatoria ? (pedido.tipo_comprobante ? 82 : 76) : (pedido.tipo_comprobante ? 70 : 70),
-        margin: { left: margen, right: margen },
-        head: [['Cant.', 'Descripción', 'Subtotal']],
-        body: filas,
-        theme: 'grid',
-        styles: { fontSize: 9 },
-        columnStyles: { 0: { cellWidth: 20, halign: 'center' }, 2: { cellWidth: 30, halign: 'right' } }
+        startY,
+        margin:{ left:15, right:15 },
+        tableWidth:180,
+        head:[['CANT.', 'ARTÍCULO', 'UNITARIO', 'TOTAL']],
+        body:filas,
+        theme:'grid',
+        styles:{ font:'helvetica', fontSize:8.5, minCellHeight:7.4, cellPadding:{ top:1.2, right:1.4, bottom:1.2, left:1.4 }, lineColor:verde, lineWidth:0.18, textColor:[35,43,38], valign:'middle' },
+        headStyles:{ fillColor:[244,248,244], textColor:verde, fontStyle:'bold', halign:'center', lineColor:verde, lineWidth:0.25, minCellHeight:8 },
+        columnStyles:{ 0:{ cellWidth:18, halign:'center' }, 1:{ cellWidth:104 }, 2:{ cellWidth:28, halign:'right' }, 3:{ cellWidth:30, halign:'right' } }
       });
+
+      const montoTotal = Number(pedido.monto_total || 0);
+      const pagado = Math.min(montoTotal, Math.max(0, Number(pedido.adelanto || 0)));
+      const saldo = Math.max(0, montoTotal - pagado);
+      const resumenY = Math.min(275, pdf.lastAutoTable.finalY + 5);
+      pdf.setDrawColor(...verde);
+      pdf.setLineWidth(.25);
+      pdf.roundedRect(124, resumenY, 71, 18, 1.2, 1.2);
       pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(0, 92, 39);
-      pdf.text(`Total del pedido: S/. ${montoTotal.toFixed(2)}`, ancho - margen, pdf.lastAutoTable.finalY + 10, { align: 'right' });
-      pdf.text(`Monto pagado: S/. ${montoPagado.toFixed(2)}`, ancho - margen, pdf.lastAutoTable.finalY + 17, { align: 'right' });
-      pdf.text(`Saldo restante: S/. ${saldoRestante.toFixed(2)}`, ancho - margen, pdf.lastAutoTable.finalY + 24, { align: 'right' });
-      pdf.save(`Boleta_${pedido.codigo || pedido.id}.pdf`);
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(...verde);
+      pdf.text(`TOTAL: S/. ${montoTotal.toFixed(2)}`, 191, resumenY + 5, { align:'right' });
+      pdf.text(`PAGADO: S/. ${pagado.toFixed(2)}`, 191, resumenY + 10, { align:'right' });
+      pdf.text(`SALDO: S/. ${saldo.toFixed(2)}`, 191, resumenY + 15, { align:'right' });
+      if (pedido.dedicatoria) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(78,88,81);
+        const nota = pdf.splitTextToSize(`Indicaciones: ${pedido.dedicatoria}`, 102);
+        pdf.text(nota, 15, resumenY + 5);
+      }
+      pdf.save(`Orden_${pedido.codigo || pedido.id}.pdf`);
     }
 
     function imprimirOrdenPedido(id) {
