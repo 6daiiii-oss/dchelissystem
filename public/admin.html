@@ -4557,13 +4557,22 @@
       const vistos = new Set();
 
       for (const detalle of detalles) {
-        if (!detalle?.producto_nombre || buscarItemCatalogoDigitacion(catalogo, detalle.producto_nombre)) continue;
+        if (!detalle?.producto_nombre) continue;
+        const existente = buscarItemCatalogoDigitacion(catalogo, detalle.producto_nombre);
+        const categoriaNueva = normalizarCategoriaOperativa(detalle.categoria_operativa || '');
+        const categoriaExistente = normalizarCategoriaOperativa(existente?.categoria_operativa || '');
+
+        // Catálogo principal: no se reescribe desde Digitación.
+        if (existente && !existente.personalizado) continue;
+        // Personalizado ya aprendido con la misma categoría: no hace ningún viaje a BD.
+        if (existente?.personalizado && categoriaNueva && categoriaNueva === categoriaExistente) continue;
+
         const clave = normalizarNombreProducto(detalle.producto_nombre);
         if (!clave || vistos.has(clave)) continue;
         vistos.add(clave);
         nuevos.push({
           nombre: detalle.producto_nombre,
-          categoria_operativa: detalle.categoria_operativa
+          categoria_operativa: categoriaNueva || sugerirCategoriaOperativa(detalle.producto_nombre, detalle.cantidad)
         });
       }
 
@@ -6253,6 +6262,8 @@
       }
 
       try {
+        await aprenderProductosPersonalizados(detalles);
+
         let response = await fetch(`/api/admin/pedidos/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
