@@ -3200,6 +3200,10 @@
                   <label style="margin:0;"><input id="quickExtraChocolate" type="checkbox"> Extra Chocolate (S/.10)</label>
                   <label style="margin:0;"><input id="quickExtraSelva" type="checkbox"> Extra Selva Negra (S/.10)</label>
                 </div>
+                <div class="field" style="margin-top:10px;">
+                  <label for="quickIndicacionesTorta">Indicaciones de la torta</label>
+                  <textarea id="quickIndicacionesTorta" rows="3" placeholder="Ej.: mensaje, decoración, colores, nombre, detalle especial..."></textarea>
+                </div>
                 <div id="quickFotosTorta" style="display:grid; gap:10px; width:100%;"></div>
               </div>
             </div>
@@ -3236,7 +3240,7 @@
         <div class="header-row">
           <div>
             <h3>Embalaje y producción</h3>
-            <div id="kitchenWindowLabel" style="margin-top:5px;color:var(--muted);font-size:.8rem;font-weight:700;">Ventana diaria: 3:00 p. m. a 3:00 p. m. del día siguiente.</div>
+            <div id="kitchenWindowLabel" style="margin-top:5px;color:var(--muted);font-size:.8rem;font-weight:700;">Producción anticipada: día anterior si el pedido fue registrado con 2 días de anticipación; pedidos tardíos pasan al día del recojo.</div>
           </div>
           <div class="controls no-print">
             <label><strong>Fecha de hojas:</strong></label>
@@ -4121,7 +4125,7 @@
     function cargarEstadoDigitacion() {
       try {
         const estado = JSON.parse(localStorage.getItem(ADMIN_FORM_KEY) || '{}');
-        ['quickCustomerName', 'quickCustomerSurname', 'quickCustomerPhone', 'quickTipoComprobante', 'quickNumeroDocumento', 'quickPickupDate', 'quickPickupTime', 'quickAdelanto', 'quickEntryInput'].forEach((id) => {
+        ['quickCustomerName', 'quickCustomerSurname', 'quickCustomerPhone', 'quickTipoComprobante', 'quickNumeroDocumento', 'quickPickupDate', 'quickPickupTime', 'quickAdelanto', 'quickEntryInput', 'quickIndicacionesTorta'].forEach((id) => {
           const campo = document.getElementById(id);
           if (campo && estado[id] !== undefined) campo.value = estado[id];
         });
@@ -4132,7 +4136,7 @@
 
     function guardarEstadoDigitacion() {
       const estado = {};
-      ['quickCustomerName', 'quickCustomerSurname', 'quickCustomerPhone', 'quickTipoComprobante', 'quickNumeroDocumento', 'quickPickupDate', 'quickPickupTime', 'quickAdelanto', 'quickEntryInput'].forEach((id) => {
+      ['quickCustomerName', 'quickCustomerSurname', 'quickCustomerPhone', 'quickTipoComprobante', 'quickNumeroDocumento', 'quickPickupDate', 'quickPickupTime', 'quickAdelanto', 'quickEntryInput', 'quickIndicacionesTorta'].forEach((id) => {
         const campo = document.getElementById(id);
         if (campo) estado[id] = campo.value;
       });
@@ -4717,6 +4721,8 @@
       if (!contieneTorta) {
         document.getElementById('quickExtraChocolate').checked = false;
         document.getElementById('quickExtraSelva').checked = false;
+        const indicaciones = document.getElementById('quickIndicacionesTorta');
+        if (indicaciones) indicaciones.value = '';
         if (fotos) fotos.innerHTML = '';
         return;
       }
@@ -4855,7 +4861,7 @@
       if (document.getElementById('quickExtraChocolate')?.checked) detalles.push({ producto_nombre: 'Extra de Chocolate', cantidad: 1, subtotal: 10, paquetes: {} });
       if (document.getElementById('quickExtraSelva')?.checked) detalles.push({ producto_nombre: 'Extra de Selva Negra', cantidad: 1, subtotal: 10, paquetes: {} });
       const fotoTorta = detalles.find((item) => item.foto_torta)?.foto_torta || await leerFotoDigitacion();
-      const montoConExtras = Math.round(detalles.reduce((sum, item) => sum + Number(item.subtotal || 0), 0));
+      const montoConExtras = Number(detalles.reduce((sum, item) => sum + Number(item.subtotal || 0), 0).toFixed(2));
       const adelanto = Number.isFinite(adelantoInput) ? Math.max(0, adelantoInput) : 0;
       if (adelanto > montoConExtras) {
         mostrarErrorAdmin('El adelanto no puede ser mayor que el total del pedido.', 'quickAdelanto');
@@ -4879,7 +4885,7 @@
           hora_recoge: horaRecoge,
           tipo_comprobante: tipoComprobante,
           numero_documento: numeroDocumento,
-          dedicatoria: '',
+          dedicatoria: document.getElementById('quickIndicacionesTorta')?.value.trim() || '',
           foto_torta: fotoTorta,
           origen: 'digitacion',
           detalles
@@ -4922,6 +4928,8 @@
         document.getElementById('quickAdelanto').value = '0';
         document.getElementById('quickExtraChocolate').checked = false;
         document.getElementById('quickExtraSelva').checked = false;
+        const indicacionesTorta = document.getElementById('quickIndicacionesTorta');
+        if (indicacionesTorta) indicacionesTorta.value = '';
         window.__quickCakePhotos.clear();
         window.__quickCustomCategorySelections.clear();
         const customPanel = document.getElementById('quickCustomProducts');
@@ -5933,7 +5941,7 @@
         if (!visible) campo.value = '';
       }
     });
-    ['quickCustomerName', 'quickCustomerSurname', 'quickCustomerPhone', 'quickPickupDate', 'quickPickupTime', 'quickAdelanto', 'quickEntryInput'].forEach((id) => {
+    ['quickCustomerName', 'quickCustomerSurname', 'quickCustomerPhone', 'quickPickupDate', 'quickPickupTime', 'quickAdelanto', 'quickEntryInput', 'quickIndicacionesTorta'].forEach((id) => {
       document.getElementById(id)?.addEventListener('input', guardarEstadoDigitacion);
       document.getElementById(id)?.addEventListener('change', guardarEstadoDigitacion);
     });
@@ -6367,6 +6375,43 @@
       return filas;
     }
 
+    function calcularTotalOrdenPedido(pedido) {
+      const detalles = Array.isArray(pedido?.detalles) ? pedido.detalles : [];
+      if (detalles.length) {
+        return Number(detalles.reduce((suma, item) => suma + Number(item?.subtotal || 0), 0).toFixed(2));
+      }
+      return Number(Number(pedido?.monto_total || 0).toFixed(2));
+    }
+
+    function metodoPagoOrden(pedido) {
+      const valor = String(pedido?.metodo_pago || '').trim();
+      const clave = valor.toLowerCase();
+      if (clave.includes('yape') && clave.includes('plin')) return 'YAPE / PLIN';
+      if (clave.includes('yape')) return 'YAPE';
+      if (clave.includes('plin')) return 'PLIN';
+      if (clave.includes('efectivo')) return 'EFECTIVO';
+      return valor ? valor.replace(/\s*\([^)]*\)\s*/g, ' ').trim().toUpperCase() : 'EFECTIVO';
+    }
+
+    function formatearRecojoOrden(fechaIso, horaTexto) {
+      const partes = String(fechaIso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      const hora = String(horaTexto || '').match(/^(\d{1,2}):(\d{2})/);
+      let fechaVisible = String(fechaIso || '-');
+      if (partes) {
+        const fecha = new Date(Date.UTC(Number(partes[1]), Number(partes[2]) - 1, Number(partes[3]), 12));
+        const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+        const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+        fechaVisible = `${dias[fecha.getUTCDay()]} ${Number(partes[3])} de ${meses[Number(partes[2]) - 1]}`;
+      }
+      if (!hora) return fechaVisible;
+      const h24 = Number(hora[1]);
+      const minutos = hora[2];
+      const periodo = h24 >= 12 ? 'p. m.' : 'a. m.';
+      const h12 = h24 % 12 || 12;
+      const horaVisible = minutos === '00' ? `${h12} ${periodo}` : `${h12}:${minutos} ${periodo}`;
+      return `${fechaVisible} · ${horaVisible}`;
+    }
+
     function dibujarMarcaAguaOrden(pdf, centroX, centroY, anchoReferencia, escala = 1) {
       const tamano = Math.max(18, Math.min(54, anchoReferencia * 0.28)) * escala;
       pdf.setTextColor(232, 239, 232);
@@ -6422,7 +6467,7 @@
       pdf.text(`${fecha.dia || '--'} / ${fecha.mes || '--'} / ${fecha.anio || '----'}`, cajaX + 41, y + 32.5, { align:'center' });
 
       pdf.setDrawColor(...verde);
-      pdf.roundedRect(x, y + 38, ancho, 18, 1.5, 1.5);
+      pdf.roundedRect(x, y + 38, ancho, 24, 1.5, 1.5);
       pdf.setTextColor(...verde);
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(8.8);
@@ -6433,17 +6478,19 @@
       pdf.setFontSize(9.2);
       pdf.text(String(pedido?.cliente_nombre || '-'), x + 20, y + 45);
       pdf.text(String(pedido?.celular || '-'), x + 140, y + 45);
-      if (pedido?.hora_recoge) {
-        pdf.setTextColor(...gris);
-        pdf.setFontSize(7.8);
-        pdf.text(`Hora de recojo: ${pedido.hora_recoge}`, x + 4, y + 52);
-      }
+      const recojoVisible = formatearRecojoOrden(pedido?.fecha_recoge, pedido?.hora_recoge);
+      pdf.setFillColor(253, 244, 241);
+      pdf.roundedRect(x + 3, y + 49, ancho - 6, 9, 1, 1, 'F');
+      pdf.setTextColor(...rojo);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9.4);
+      pdf.text(`RECOJO: ${recojoVisible}`, x + (ancho / 2), y + 55, { align:'center' });
 
       pdf.setTextColor(...verde);
       pdf.setFont('helvetica', 'bolditalic');
       pdf.setFontSize(9.2);
-      pdf.text('REMITIMOS A UD. EN BUENAS CONDICIONES LO SIGUIENTE', x + 4, y + 62);
-      return y + 66;
+      pdf.text('REMITIMOS A UD. EN BUENAS CONDICIONES LO SIGUIENTE', x + 4, y + 68);
+      return y + 72;
     }
 
     async function descargarBoletaAdmin(id) {
@@ -6470,7 +6517,7 @@
         columnStyles:{ 0:{ cellWidth:18, halign:'center' }, 1:{ cellWidth:104 }, 2:{ cellWidth:28, halign:'right' }, 3:{ cellWidth:30, halign:'right' } }
       });
 
-      const montoTotal = Number(pedido.monto_total || 0);
+      const montoTotal = calcularTotalOrdenPedido(pedido);
       const pagado = Math.min(montoTotal, Math.max(0, Number(pedido.adelanto || 0)));
       const saldo = Math.max(0, montoTotal - pagado);
       const resumenY = Math.min(275, pdf.lastAutoTable.finalY + 5);
@@ -6481,7 +6528,9 @@
       pdf.setFontSize(8.5);
       pdf.setTextColor(...verde);
       pdf.text(`TOTAL: S/. ${montoTotal.toFixed(2)}`, 191, resumenY + 5, { align:'right' });
-      pdf.text(`PAGADO: S/. ${pagado.toFixed(2)}`, 191, resumenY + 10, { align:'right' });
+      pdf.setFontSize(7.6);
+      pdf.text(`PAGADO (${metodoPagoOrden(pedido)}): S/. ${pagado.toFixed(2)}`, 191, resumenY + 10, { align:'right' });
+      pdf.setFontSize(8.5);
       pdf.text(`SALDO: S/. ${saldo.toFixed(2)}`, 191, resumenY + 15, { align:'right' });
       if (pedido.dedicatoria) {
         pdf.setFont('helvetica', 'normal');
@@ -6504,7 +6553,7 @@
       const anchoPapel = 80;
       const margen = 4;
       const anchoContenido = anchoPapel - (margen * 2);
-      const montoTotal = Number(pedido.monto_total || 0);
+      const montoTotal = calcularTotalOrdenPedido(pedido);
       const montoPagado = Math.min(montoTotal, Math.max(0, Number(pedido.adelanto || 0)));
       const saldoRestante = Math.max(0, montoTotal - montoPagado);
       const filas = (pedido.detalles || []).map((item) => [
@@ -6535,7 +6584,12 @@
         escribirDato('Código', pedido.codigo || `PED-${pedido.id}`);
         escribirDato('Cliente', pedido.cliente_nombre || '-');
         escribirDato('Teléfono', pedido.celular || '-');
-        escribirDato('Recojo', `${pedido.fecha_recoge || '-'} ${pedido.hora_recoge || ''}`);
+        pdf.setFillColor(245,245,245);
+        pdf.rect(margen, y - 2.8, anchoContenido, 6.5, 'F');
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8.2);
+        pdf.text(`RECOJO: ${formatearRecojoOrden(pedido.fecha_recoge, pedido.hora_recoge)}`, margen + 1.5, y + 1.2);
+        y += 7;
         if (pedido.tipo_comprobante) {
           escribirDato(pedido.tipo_comprobante === 'factura' ? 'Factura - RUC' : 'Boleta - DNI', pedido.numero_documento || '-');
         }
@@ -6576,7 +6630,7 @@
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(8);
         pdf.text(`Total: S/. ${montoTotal.toFixed(2)}`, anchoPapel - margen, y + 1, { align: 'right' });
-        pdf.text(`Pagado: S/. ${montoPagado.toFixed(2)}`, anchoPapel - margen, y + 5.5, { align: 'right' });
+        pdf.text(`Pagado (${metodoPagoOrden(pedido)}): S/. ${montoPagado.toFixed(2)}`, anchoPapel - margen, y + 5.5, { align: 'right' });
         pdf.text(`Saldo: S/. ${saldoRestante.toFixed(2)}`, anchoPapel - margen, y + 10, { align: 'right' });
         y += 13;
 
@@ -6704,9 +6758,12 @@
         const cliente = pdf.splitTextToSize(String(pedido.cliente_nombre || '-'), 43);
         pdf.text(cliente.slice(0,1), izquierda + 13, 40);
         pdf.text(String(pedido.celular || '-'), izquierda + 68, 40);
-        pdf.setTextColor(96,108,100);
-        pdf.setFontSize(5.2);
-        pdf.text(`Recojo: ${pedido.fecha_recoge || '-'} ${pedido.hora_recoge || ''}`, izquierda + 2.5, 46);
+        pdf.setFillColor(253,244,241);
+        pdf.rect(izquierda + 2, 43, anchoUtil - 4, 5.2, 'F');
+        pdf.setTextColor(...rojo);
+        pdf.setFont('helvetica','bold');
+        pdf.setFontSize(5.5);
+        pdf.text(`RECOJO: ${formatearRecojoOrden(pedido.fecha_recoge, pedido.hora_recoge)}`, izquierda + (anchoUtil / 2), 46.6, { align:'center' });
 
         pdf.setTextColor(...verde);
         pdf.setFont('helvetica','bolditalic');
@@ -6728,7 +6785,7 @@
           columnStyles:{ 0:{ cellWidth:10, halign:'center' }, 1:{ cellWidth:50 }, 2:{ cellWidth:15, halign:'right' }, 3:{ cellWidth:anchoUtil - 75, halign:'right' } }
         });
 
-        const montoTotal = Number(pedido.monto_total || 0);
+        const montoTotal = calcularTotalOrdenPedido(pedido);
         const pagado = Math.min(montoTotal, Math.max(0, Number(pedido.adelanto || 0)));
         const saldo = Math.max(0, montoTotal - pagado);
         const yResumen = Math.min(193, pdf.lastAutoTable.finalY + 3.5);
@@ -6739,7 +6796,9 @@
         pdf.setTextColor(...verde);
         pdf.setFontSize(5.7);
         pdf.text(`TOTAL  S/. ${montoTotal.toFixed(2)}`, derecha - 2, yResumen + 4, { align:'right' });
-        pdf.text(`PAGADO S/. ${pagado.toFixed(2)}`, derecha - 2, yResumen + 8, { align:'right' });
+        pdf.setFontSize(5.1);
+        pdf.text(`PAGADO (${metodoPagoOrden(pedido)}) S/. ${pagado.toFixed(2)}`, derecha - 2, yResumen + 8, { align:'right' });
+        pdf.setFontSize(5.7);
         pdf.text(`SALDO   S/. ${saldo.toFixed(2)}`, derecha - 2, yResumen + 12, { align:'right' });
         if (pedido.dedicatoria) {
           pdf.setTextColor(87,99,91);
