@@ -6,7 +6,7 @@ const ExcelJS = require('exceljs');
 const db = require('./db');
 const { extraerPedidosCasino } = require('./casino-production');
 const { unirCronogramasCasino } = require('./casino-archive');
-const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion, resolverPyePorCantidad, resolverNombreEspecialProduccion } = require('./public/production-classification');
+const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion, resolverPyePorCantidad, resolverNombreEspecialProduccion, normalizarCategoriaOperativa } = require('./public/production-classification');
 
 const app = express();
 
@@ -187,7 +187,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
 
     if (valoresDetalles.length) {
       await dbRunAsync(`
-        INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta)
+        INSERT INTO detalles_pedido (pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta)
         VALUES ${valoresDetalles.join(', ')}
       `, parametrosDetalles);
     }
@@ -243,7 +243,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
           parametros.push(pedidoId, item.producto_nombre, item.cantidad);
         }
         await dbRunAsync(
-          `INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta)
+          `INSERT INTO detalles_pedido (pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta)
            VALUES ${valores.join(', ')}`,
           parametros
         );
@@ -2248,11 +2248,76 @@ app.get('/colaboradores.html', (req, res) => {
 });
 
 // Endpoint: Obtener Catálogo de Productos
-app.get('/api/productos', (req, res) => {
-  db.all(`SELECT id, nombre, categoria, precio, precio_x25, precio_x50, precio_x100, precio_unidad FROM productos ORDER BY categoria ASC, nombre ASC`, [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows || []);
-  });
+app.get('/api/productos', async (req, res) => {
+  try {
+    const base = await dbAllAsync(`
+      SELECT id, nombre, categoria, precio, precio_x25, precio_x50, precio_x100, precio_unidad,
+             ''::TEXT AS categoria_operativa, FALSE AS personalizado
+      FROM productos
+    `);
+    const personalizados = await dbAllAsync(`
+      SELECT ('custom-' || id::TEXT) AS id, nombre, 'Personalizado'::TEXT AS categoria,
+             precio, NULL::DOUBLE PRECISION AS precio_x25, NULL::DOUBLE PRECISION AS precio_x50,
+             NULL::DOUBLE PRECISION AS precio_x100, precio AS precio_unidad,
+             categoria_operativa, TRUE AS personalizado
+      FROM productos_personalizados
+    `);
+    const todos = [...base, ...personalizados].sort((a, b) =>
+      String(a.categoria || '').localeCompare(String(b.categoria || ''), 'es')
+      || String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es')
+    );
+    return res.json(todos);
+  } catch (error) {
+    console.error('Error cargando catálogo:', error);
+    return res.status(500).json({ error: 'No se pudo cargar el catálogo.' });
+  }
+});
+
+app.post('/api/admin/productos-personalizados', requireAdminAuth, async (req, res) => {
+  try {
+    const nombre = limpiarNombreProductoEntrada(req.body?.nombre);
+    const categoriaOperativa = normalizarCategoriaOperativa(req.body?.categoria_operativa);
+    if (!nombre) return res.status(400).json({ error: 'Nombre de producto requerido.' });
+    if (!categoriaOperativa) return res.status(400).json({ error: 'Selecciona qué tipo de producto es.' });
+
+    const nombreNormalizado = normalizarProducto(nombre);
+    const existenteBase = await dbGetAsync(
+      `SELECT id, nombre FROM productos WHERE UPPER(REGEXP_REPLACE(nombre, '[^A-Z0-9]+', ' ', 'g')) = ? LIMIT 1`,
+      [nombreNormalizado]
+    ).catch(() => null);
+
+    if (existenteBase) {
+      return res.status(409).json({ error: 'Ese producto ya existe en el catálogo principal.' });
+    }
+
+    const row = await dbGetAsync(`
+      INSERT INTO productos_personalizados
+        (nombre, nombre_normalizado, categoria_operativa, creado_por, actualizado_en)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT (nombre_normalizado)
+      DO UPDATE SET
+        nombre = EXCLUDED.nombre,
+        categoria_operativa = EXCLUDED.categoria_operativa,
+        actualizado_en = CURRENT_TIMESTAMP
+      RETURNING id, nombre, categoria_operativa, precio, usos
+    `, [nombre, nombreNormalizado, categoriaOperativa, Number(req.authUser.id)]);
+
+    return res.json({
+      ok: true,
+      producto: {
+        id: `custom-${row.id}`,
+        nombre: row.nombre,
+        categoria: 'Personalizado',
+        categoria_operativa: row.categoria_operativa,
+        precio: Number(row.precio || 0),
+        precio_unidad: Number(row.precio || 0),
+        personalizado: true
+      }
+    });
+  } catch (error) {
+    console.error('Error guardando producto personalizado:', error);
+    return res.status(500).json({ error: 'No se pudo guardar el producto personalizado.' });
+  }
 });
 
 function buildMacrodroidEventFromPayload(payload = {}) {
@@ -2429,35 +2494,53 @@ app.post('/api/pedidos', protectDigitacionOrigin, async (req, res) => {
     const pedidoId = Number(pedidoInsertado.lastID);
     if (!pedidoId) throw new Error('La base de datos no devolvió el ID del pedido.');
 
-    const detallesValidos = detalles
-      .map((det) => {
-        const cantidad = Number(det?.cantidad || 0);
-        if (!(cantidad > 0)) return null;
-        return {
-          producto_nombre: resolverPyePorCantidad(limpiarNombreProductoEntrada(det.producto_nombre), cantidad, normalizarProducto),
-          cantidad,
-          subtotal: Number(det?.subtotal || 0),
-          paquetes: det?.paquetes && typeof det.paquetes === 'object' ? JSON.stringify(det.paquetes) : '{}',
-          foto_torta: String(det?.foto_torta || '')
-        };
-      })
-      .filter(Boolean);
+    const detallesValidos = [];
+    for (const det of detalles) {
+      const cantidad = Number(det?.cantidad || 0);
+      if (!(cantidad > 0)) continue;
+      const productoNombre = resolverPyePorCantidad(limpiarNombreProductoEntrada(det.producto_nombre), cantidad, normalizarProducto);
+      let categoriaOperativa = normalizarCategoriaOperativa(det?.categoria_operativa);
+      if (!categoriaOperativa && productoNombre) {
+        const aprendido = await dbGetAsync(
+          `SELECT categoria_operativa FROM productos_personalizados WHERE nombre_normalizado = ? LIMIT 1`,
+          [normalizarProducto(productoNombre)]
+        );
+        categoriaOperativa = normalizarCategoriaOperativa(aprendido?.categoria_operativa);
+      }
+      detallesValidos.push({
+        producto_nombre: productoNombre,
+        categoria_operativa: categoriaOperativa,
+        cantidad,
+        subtotal: Number(det?.subtotal || 0),
+        paquetes: det?.paquetes && typeof det.paquetes === 'object' ? JSON.stringify(det.paquetes) : '{}',
+        foto_torta: String(det?.foto_torta || '')
+      });
+    }
 
     if (!detallesValidos.length) throw new Error('El pedido no contiene detalles válidos.');
 
     const queryDetalle = `
-      INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO detalles_pedido (pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     for (const det of detallesValidos) {
       await dbRunAsync(queryDetalle, [
         pedidoId,
         det.producto_nombre,
+        det.categoria_operativa || '',
         det.cantidad,
         det.subtotal,
         det.paquetes,
         det.foto_torta
       ]);
+      if (det.categoria_operativa) {
+        await dbRunAsync(
+          `UPDATE productos_personalizados
+           SET usos = usos + 1, actualizado_en = CURRENT_TIMESTAMP
+           WHERE nombre_normalizado = ?`,
+          [normalizarProducto(det.producto_nombre)]
+        );
+      }
     }
 
     const pedidoVerificado = await dbGetAsync(`
@@ -2652,7 +2735,7 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
     const ids = pedidos.map((pedido) => Number(pedido.id));
     const placeholders = ids.map(() => '?').join(',');
     const detalles = await dbAllAsync(`
-      SELECT pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta
+      SELECT pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta
       FROM detalles_pedido
       WHERE pedido_id IN (${placeholders})
       ORDER BY pedido_id ASC, id ASC
@@ -2715,7 +2798,7 @@ app.get('/api/admin/pedidos', requireAdminAuth, (req, res) => {
       const pedidosPorId = new Map(pedidosFinales.map((pedido) => [pedido.id, pedido]));
       const placeholders = pedidosFinales.map(() => '?').join(', ');
       db.all(`
-        SELECT pedido_id, producto_nombre, cantidad, subtotal, paquetes, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}
+        SELECT pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}
         FROM detalles_pedido
         WHERE pedido_id IN (${placeholders})
         ORDER BY pedido_id ASC, id ASC
@@ -2778,7 +2861,7 @@ app.get('/api/admin/historial-pedidos', requireAdminAuth, (req, res) => {
     const pedidosPorId = new Map(pedidosFinales.map((pedido) => [pedido.id, pedido]));
     const placeholders = pedidosFinales.map(() => '?').join(', ');
       db.all(`
-        SELECT pedido_id, producto_nombre, cantidad, subtotal, paquetes, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}
+        SELECT pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, ${resumen ? "CASE WHEN COALESCE(foto_torta, '') <> '' THEN 1 ELSE 0 END AS tiene_foto_torta" : 'foto_torta'}
         FROM detalles_pedido
         WHERE pedido_id IN (${placeholders})
         ORDER BY pedido_id ASC, id ASC
@@ -3157,7 +3240,7 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
         return res.status(500).json({ error: errDelete.message });
       }
 
-      const stmt = db.prepare(`INSERT INTO detalles_pedido (pedido_id, producto_nombre, cantidad, subtotal, paquetes, foto_torta) VALUES (?, ?, ?, ?, ?, ?)`);
+      const stmt = db.prepare(`INSERT INTO detalles_pedido (pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta) VALUES (?, ?, ?, ?, ?, ?, ?)`);
       detalles.forEach((item) => {
         const nombre = limpiarNombreProductoEntrada(item.producto_nombre);
         const cantidad = Number(item.cantidad || 0);
@@ -3165,7 +3248,8 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
         if (!nombre || cantidad <= 0) return;
         const nombreProducto = resolverPyePorCantidad(nombre, cantidad, normalizarProducto);
         const paquetes = item.paquetes && typeof item.paquetes === 'object' ? JSON.stringify(item.paquetes) : '{}';
-        stmt.run(id, nombreProducto, cantidad, subtotal, paquetes, String(item.foto_torta || ''));
+        const categoriaOperativa = normalizarCategoriaOperativa(item.categoria_operativa);
+        stmt.run(id, nombreProducto, categoriaOperativa || '', cantidad, subtotal, paquetes, String(item.foto_torta || ''));
       });
 
       stmt.finalize((finalizeErr) => {
@@ -3256,7 +3340,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       const rows = await dbAllAsync(
         `SELECT p.id AS pedido_id, p.origen, p.tipo_cliente, p.fecha_recoge, p.hora_recoge,
                 p.fecha_emision, p.fecha_registro,
-                dp.producto_nombre, dp.cantidad, dp.paquetes, dp.foto_torta
+                dp.producto_nombre, dp.categoria_operativa, dp.cantidad, dp.paquetes, dp.foto_torta
          FROM detalles_pedido dp
          JOIN pedidos p ON dp.pedido_id = p.id
          WHERE p.id IN (${placeholders})
@@ -3275,6 +3359,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
           es_urgente: esUrgentePorEmision(fecha, det),
           producto_nombre: resuelto,
           producto_nombre_original: det.producto_nombre,
+          categoria_operativa: det.categoria_operativa || '',
           cantidad: Number(det.cantidad || 0),
           paquetes: det.paquetes ? JSON.parse(det.paquetes) : {},
           foto_torta: det.foto_torta || ''
@@ -3307,7 +3392,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       const rows = await dbAllAsync(
         `SELECT p.id AS pedido_id, p.origen, p.tipo_cliente, p.fecha_recoge, p.hora_recoge,
                 p.fecha_emision, p.fecha_registro,
-                dp.producto_nombre, dp.cantidad, dp.paquetes, dp.foto_torta
+                dp.producto_nombre, dp.categoria_operativa, dp.cantidad, dp.paquetes, dp.foto_torta
          FROM detalles_pedido dp
          JOIN pedidos p ON dp.pedido_id = p.id
          WHERE p.id IN (${placeholders})
@@ -3324,6 +3409,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         es_urgente: esUrgentePorEmision(fecha, det),
         producto_nombre: resolverProductoProduccion(det.producto_nombre),
         producto_nombre_original: det.producto_nombre,
+        categoria_operativa: det.categoria_operativa || '',
         cantidad: Number(det.cantidad || 0),
         paquetes: det.paquetes ? JSON.parse(det.paquetes) : {},
         foto_torta: det.foto_torta || ''
@@ -3491,7 +3577,7 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
     if (ids.length) {
       const placeholders = ids.map(() => '?').join(',');
       detalles = await dbAllAsync(
-        `SELECT dp.pedido_id, dp.producto_nombre, dp.cantidad
+        `SELECT dp.pedido_id, dp.producto_nombre, dp.categoria_operativa, dp.cantidad
          FROM detalles_pedido dp WHERE dp.pedido_id IN (${placeholders})`,
         ids
       );
@@ -3503,13 +3589,14 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
 
     const workbook = new ExcelJS.Workbook();
     const visibles = filtrarItemsEmbalaje(detalles, (nombre) => nombre, normalizarProducto);
+    const grupoDetalle = (det) => normalizarCategoriaOperativa(det.categoria_operativa) || grupoProductoProduccion(det.producto_nombre, normalizarProducto);
     const grupos = [
-      { nombre: 'Embalaje', filtro: (nombre) => grupoProductoProduccion(nombre, normalizarProducto) !== 'Panes' },
-      { nombre: 'Panes', filtro: (nombre) => grupoProductoProduccion(nombre, normalizarProducto) === 'Panes' }
+      { nombre: 'Embalaje', filtro: (det) => grupoDetalle(det) !== 'Panes' },
+      { nombre: 'Panes', filtro: (det) => grupoDetalle(det) === 'Panes' }
     ];
 
     for (const grupo of grupos) {
-      const datosGrupo = visibles.filter((det) => grupo.filtro(det.producto_nombre));
+      const datosGrupo = visibles.filter((det) => grupo.filtro(det));
       if (grupo.nombre === 'Panes' && !datosGrupo.length) continue;
       const idClientes = new Set(datosGrupo.map((det) => Number(det.pedido_id)));
       const clientesGrupo = clientes.filter((cli) => idClientes.has(Number(cli.id)));
