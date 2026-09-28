@@ -7,6 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script src="config.js"></script>
 <script src="digitacion-config.js"></script>
+  <script src="production-classification.js"></script>
   <style>
     :root { --ink:#173c2b; --accent:#b75e36; --paper:#fffaf5; --line:#eadfd6; --muted:#766b64; }
     * { box-sizing:border-box; } body { margin:0; background:radial-gradient(circle at right top,#ffe5d1,transparent 28rem),var(--paper); color:#29221e; font-family:'Plus Jakarta Sans',sans-serif; }
@@ -133,6 +134,23 @@
       .session-box span { max-width: 100%; }
       .session-box button { width: 100%; }
     }
+
+    .digitacion-box label { display:block; margin:10px 0 5px; font-weight:700; }
+    .digitacion-box select { border:1px solid var(--line); background:#fff; border-radius:10px; padding:10px 12px; font:inherit; }
+    .digitacion-box textarea { border:1px solid var(--line); background:#fff; border-radius:10px; padding:11px 12px; font:inherit; }
+    .digitacion-mini-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 12px; }
+    .digitacion-mini-grid .full { grid-column:1/-1; }
+    .custom-product-learning { display:grid; gap:8px; margin-top:12px; }
+    .custom-product-learning-title { display:flex; justify-content:space-between; gap:10px; align-items:center; color:var(--ink); }
+    .custom-product-card { display:grid; grid-template-columns:minmax(0,1fr) minmax(145px,.5fr); gap:10px; align-items:center; padding:10px; border:1px solid var(--line); border-radius:12px; background:#fffaf5; }
+    .custom-product-name small { display:block; color:var(--muted); margin-top:3px; }
+    .cake-photo-control { display:grid; grid-template-columns:minmax(0,1fr) 90px; gap:10px; align-items:center; padding:10px; border:1px solid var(--line); border-radius:12px; margin-top:8px; }
+    .cake-photo-preview { width:90px; height:70px; object-fit:cover; border-radius:8px; border:1px solid var(--line); }
+    .external-order-tools { display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; align-items:center; }
+    .external-order-tools button { width:auto; margin:0; background:#fff; color:var(--ink); border:1px solid var(--line); }
+    .external-order-status { color:var(--muted); font-size:.78rem; }
+    .torta-options { margin-top:12px; padding:12px; border:1px solid var(--line); border-radius:14px; background:#fffaf5; }
+    @media(max-width:700px){.digitacion-mini-grid{grid-template-columns:1fr}.custom-product-card{grid-template-columns:1fr}.digitacion-preview-box{order:2}}
   </style>
 </head>
 <body>
@@ -158,24 +176,38 @@
     <section id="panelDigitacion" class="view-panel">
       <div class="digitacion-grid">
         <div class="digitacion-box">
-          <h2>Digitación</h2>
-          <label for="colNombre">Nombre</label><input id="colNombre">
-          <label for="colApellido">Apellido</label><input id="colApellido">
-          <label for="colCelular">Celular</label><input id="colCelular" type="tel">
-          <label for="colTipoComprobante">Comprobante electrónico</label><select id="colTipoComprobante"><option value="">Sin comprobante electrónico</option><option value="boleta">Boleta electrónica (DNI)</option><option value="factura">Factura electrónica (RUC)</option></select>
-          <label for="colNumeroDocumento" id="colNumeroDocumentoLabel" style="display:none;">Número de documento</label><input id="colNumeroDocumento" style="display:none;" inputmode="numeric" maxlength="8" placeholder="12345678">
-          <label for="colFecha">Fecha de recojo</label><input id="colFecha" type="date">
-          <label for="colHora">Hora de recojo</label><input id="colHora" type="time" value="18:00">
-          <label for="colAdelanto">Adelanto</label><input id="colAdelanto" type="number" min="0" step="0.01" value="0">
-          <label for="colDetalle">Productos, uno por línea</label><textarea id="colDetalle" placeholder="25 petipan de pollo&#10;30 brownies"></textarea>
-          <div id="colTortaOptions" class="hidden">
-            <label><input id="colExtraChocolate" type="checkbox" style="width:auto"> Extra Chocolate (S/.10)</label>
-            <label><input id="colExtraSelva" type="checkbox" style="width:auto"> Extra Selva Negra (S/.10)</label>
-            <label for="colFoto">Foto de torta</label><input id="colFoto" type="file" accept="image/*">
+          <h2>Digitación rápida</h2>
+          <div class="digitacion-mini-grid">
+            <div><label for="colNombre">Nombre</label><input id="colNombre" placeholder="Nombre del cliente"></div>
+            <div><label for="colApellido">Apellido</label><input id="colApellido" placeholder="Apellido del cliente"></div>
+            <div><label for="colCelular">Celular</label><input id="colCelular" type="tel" placeholder="987654321"></div>
+            <div><label for="colTipoComprobante">Comprobante electrónico</label><select id="colTipoComprobante"><option value="">Sin comprobante electrónico</option><option value="boleta">Boleta electrónica (DNI)</option><option value="factura">Factura electrónica (RUC)</option></select></div>
+            <div id="colDocumentoGroup" class="hidden"><label for="colNumeroDocumento" id="colNumeroDocumentoLabel">Número de documento</label><input id="colNumeroDocumento" inputmode="numeric" maxlength="8" placeholder="12345678"></div>
+            <div><label for="colFecha">Fecha</label><input id="colFecha" type="date"></div>
+            <div class="full"><label for="colHora">Hora</label><select id="colHora"></select></div>
+            <div><label for="colAdelanto">Adelanto (S/.)</label><input id="colAdelanto" type="number" min="0" step="0.01" value="0"></div>
+            <div><label for="colRestante">Restante (S/.)</label><input id="colRestante" value="S/. 0.00" readonly></div>
           </div>
-          <button id="registrarColaborador" type="button">Registrar pedido</button>
+          <div id="colTortaOptions" class="torta-options hidden">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+              <label style="margin:0;"><input id="colExtraChocolate" type="checkbox" style="width:auto"> Extra Chocolate (S/.10)</label>
+              <label style="margin:0;"><input id="colExtraSelva" type="checkbox" style="width:auto"> Extra Selva Negra (S/.10)</label>
+            </div>
+            <label for="colIndicacionesTorta">Indicaciones de la torta</label>
+            <textarea id="colIndicacionesTorta" rows="3" placeholder="Ej.: mensaje, decoración, colores, nombre, detalle especial..."></textarea>
+            <div id="colFotosTorta"></div>
+          </div>
+          <label for="colDetalle">Digitación rápida</label>
+          <textarea id="colDetalle" placeholder="Pega aquí un pedido de WhatsApp o escribe, por ejemplo:&#10;25 triple personal&#10;30 petipan pollo&#10;1 cheesecake fresa"></textarea>
+          <div class="external-order-tools">
+            <button id="colPegarPedido" type="button">Pegar desde WhatsApp</button>
+            <button id="colLimpiarPedido" type="button">Limpiar y corregir</button>
+            <span id="colExternalStatus" class="external-order-status">Los productos nuevos pedirán su tipo una sola vez.</span>
+          </div>
+          <div id="colCustomProducts" class="custom-product-learning hidden"></div>
+          <button id="registrarColaborador" type="button" style="width:100%;margin-top:14px;">Registrar pedido</button>
         </div>
-        <div class="digitacion-box"><h2>Vista previa</h2><ul id="colPreview" class="digitacion-summary"></ul></div>
+        <div class="digitacion-box digitacion-preview-box"><h2>Vista previa</h2><ul id="colPreview" class="digitacion-summary"></ul></div>
       </div>
     </section>
   </main><footer>Esta vista es solo de consulta. Los pedidos se administran desde el panel administrativo.</footer>
@@ -234,111 +266,132 @@
 
     let catalogoColaborador = [];
     const fotosTortaColaborador = new Map();
-    const normalizar = (texto) => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-    const resolverProducto = (texto) => {
-      const valor = normalizar(texto);
-      const aliases = window.DCHELIS_DIGITACION_ALIASES || {};
-      const clave = Object.keys(aliases).find((nombre) => aliases[nombre].some((alias) => normalizar(alias) === valor));
-      if (clave) {
-        const porAlias = catalogoColaborador.find((item) => normalizar(item.nombre) === normalizar(clave));
-        if (porAlias) return porAlias;
-      }
-      const exacto = catalogoColaborador.find((item) => normalizar(item.nombre) === valor);
-      if (exacto) return exacto;
-      return catalogoColaborador.find((item) => normalizar(item.nombre).includes(valor) || valor.includes(normalizar(item.nombre)));
-    };
-    const subtotalProducto = (item, cantidad) => { if (!item) return 0; const x25=Number(item.precio_x25||0), x50=Number(item.precio_x50||0), x100=Number(item.precio_x100||0); if (x25 || x50 || x100) { const precio=cantidad>=75?x100:cantidad>=50?x50:x25; const tamano=cantidad>=75?100:cantidad>=50?50:25; return Number((cantidad*(precio/tamano)).toFixed(2)); } return Number((cantidad*Number(item.precio_unidad ?? item.precio ?? 0)).toFixed(2)); };
-    async function cargarCatalogoColaborador() { const r=await fetch(api('/api/productos')); const data=await r.json(); if(!r.ok) throw new Error(data.error || 'No se pudo cargar el catálogo.'); catalogoColaborador=data.filter((item)=>item.categoria !== 'Extras para tortas' && item.categoria !== 'Pruebas' && item.categoria !== 'Producto de prueba'); }
-    function obtenerLineasColaborador() {
-      return String(document.getElementById('colDetalle').value || '').split(/\n|,/).map((linea)=>linea.trim()).filter(Boolean);
+    const categoriasPersonalizadasColaborador = new Map();
+    const CATEGORIAS_OPERATIVAS_COLABORADOR = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes', 'Tortas', 'Kekes'];
+    const normalizar = (texto) => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+
+    function limpiarNombreLibreColaborador(texto) {
+      return String(texto || '').replace(/[<>]/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').replace(/\s+/g,' ').trim().slice(0,160);
     }
-    function prepararDetallesColaborador() {
-      return obtenerLineasColaborador().map((linea, indice) => {
-        const match = linea.match(/^\s*(\d+)\s*(?:x|X)?\s*(.+?)\s*$/i);
-        const cantidad = match ? Number(match[1]) : 0;
-        const item = resolverProducto(match ? match[2] : linea);
-        return { linea, indice, cantidad, item, subtotal: subtotalProducto(item, cantidad) };
+    function buscarItemCatalogoColaborador(producto) {
+      const clave=normalizar(producto);
+      return clave ? (catalogoColaborador.find((item)=>normalizar(item?.nombre||'')===clave)||null) : null;
+    }
+    function resolverProductoColaborador(texto) {
+      const original=limpiarNombreLibreColaborador(texto),valor=normalizar(original);
+      if(!valor) return null;
+      const exacto=buscarItemCatalogoColaborador(original); if(exacto) return exacto.nombre;
+      for(const [producto,aliases] of Object.entries(window.DCHELIS_DIGITACION_ALIASES||{})){
+        if((aliases||[]).some((alias)=>normalizar(alias)===valor)){
+          const item=buscarItemCatalogoColaborador(producto); if(item) return item.nombre;
+        }
+      }
+      return original;
+    }
+    function resolverProductoColaboradorPorCantidad(texto,cantidad){
+      const base=resolverProductoColaborador(texto); if(!base) return null;
+      const ajustado=resolverPyePorCantidad(base,cantidad,normalizar);
+      return buscarItemCatalogoColaborador(ajustado)?.nombre||ajustado;
+    }
+    function subtotalProducto(item,cantidad){
+      if(!item||!(Number(cantidad)>0)) return 0;
+      const cant=Number(cantidad),x100=Number(item.precio_x100??item.precio??0),x50=Number(item.precio_x50??0),x25=Number(item.precio_x25??0);
+      const unit=Number(item.precio_unidad??(x100>0?x100/100:item.precio||0));
+      if(x25||x50||x100){const precio=cant>=75?x100:cant>=50?x50:x25,tamano=cant>=75?100:cant>=50?50:25;if(precio>0)return Number((cant*(precio/tamano)).toFixed(2));}
+      return Number((cant*unit).toFixed(2));
+    }
+    function sugerirCategoriaColaborador(producto,cantidad){
+      const tipo=tipoItemCocina(producto||'',cantidad,normalizar);
+      if(tipo.esKeke)return 'Kekes'; if(tipo.esTorta)return 'Tortas';
+      return normalizarCategoriaOperativa(tipo.grupo)||'Bocaditos';
+    }
+    function categoriaColaborador(producto,cantidad){
+      const item=buscarItemCatalogoColaborador(producto);
+      const guardada=normalizarCategoriaOperativa(item?.categoria_operativa||''); if(guardada)return guardada;
+      if(item&&!item.personalizado)return sugerirCategoriaColaborador(producto,cantidad);
+      return categoriasPersonalizadasColaborador.get(normalizar(producto))||'';
+    }
+    async function cargarCatalogoColaborador(){
+      const r=await fetch(api('/api/productos'),{credentials:'include'}),data=await r.json();
+      if(!r.ok)throw new Error(data.error||'No se pudo cargar el catálogo.');
+      catalogoColaborador=(Array.isArray(data)?data:[]).filter((item)=>item.categoria!=='Extras para tortas'&&item.categoria!=='Pruebas'&&item.categoria!=='Producto de prueba');
+    }
+    function obtenerLineasColaborador(){return String(document.getElementById('colDetalle').value||'').split(/\n|,/).map((l)=>l.trim()).filter(Boolean);}
+    function prepararDetallesColaborador(){
+      return obtenerLineasColaborador().map((linea,indice)=>{
+        const match=linea.match(/^\s*(\d+(?:[.,]\d+)?)\s*(?:x|X)?\s*(.+?)\s*$/i),cantidad=match?Number(match[1].replace(',','.')):0;
+        const producto=resolverProductoColaboradorPorCantidad(match?match[2]:linea,cantidad),item=buscarItemCatalogoColaborador(producto);
+        return {linea,indice,cantidad,producto,item,subtotal:subtotalProducto(item,cantidad),categoria_operativa:categoriaColaborador(producto,cantidad)};
       });
     }
-    function claveFotoColaborador(detalle) {
-      return `linea-${detalle.indice}-${normalizar(detalle.item?.nombre || 'torta')}`;
+    function actualizarClasificacionesColaborador(detalles=prepararDetallesColaborador()){
+      const panel=document.getElementById('colCustomProducts'),desconocidos=[],vistos=new Set();
+      for(const d of detalles){if(!d.producto||d.item)continue;const clave=normalizar(d.producto);if(!clave||vistos.has(clave))continue;vistos.add(clave);desconocidos.push(d);}
+      if(!desconocidos.length){panel.classList.add('hidden');panel.innerHTML='';return;}
+      panel.classList.remove('hidden');
+      panel.innerHTML=`<div class="custom-product-learning-title"><strong>Productos nuevos</strong><span>Confirma una vez y se recordarán.</span></div>${desconocidos.map((d)=>{const clave=normalizar(d.producto),actual=categoriasPersonalizadasColaborador.get(clave)||'',sugerida=sugerirCategoriaColaborador(d.producto,d.cantidad);return `<div class="custom-product-card"><div class="custom-product-name"><strong>${d.producto}</strong><small>Sugerencia: ${sugerida}</small></div><select data-col-custom="${clave}" required><option value="" ${actual?'':'selected'} disabled>Selecciona tipo</option>${CATEGORIAS_OPERATIVAS_COLABORADOR.map((cat)=>`<option value="${cat}" ${cat===actual?'selected':''}>${cat}</option>`).join('')}</select></div>`;}).join('')}`;
+      panel.querySelectorAll('[data-col-custom]').forEach((select)=>select.addEventListener('change',()=>{categoriasPersonalizadasColaborador.set(select.dataset.colCustom,select.value);renderPreviewColaborador();}));
     }
-    function cargarFotoColaborador(event) {
-      const input = event.currentTarget;
-      const key = input.dataset.fotoKey;
-      const archivo = input.files?.[0];
-      if (!key || !archivo) return;
-      const lector = new FileReader();
-      lector.onload = () => {
-        const data = String(lector.result || '');
-        fotosTortaColaborador.set(key, data);
-        const preview = document.querySelector(`[data-col-foto-preview="${key}"]`);
-        if (preview) { preview.src = data; preview.classList.remove('hidden'); }
-      };
-      lector.readAsDataURL(archivo);
-    }
-    function actualizarOpcionesTortaColaborador(detalles = prepararDetallesColaborador()) {
-      const tortas = detalles.filter((detalle) => detalle.item?.categoria === 'Torta Chantilly');
-      const visible = tortas.length > 0;
-      document.getElementById('colTortaOptions').classList.toggle('hidden', !visible);
-      const contenedor = document.getElementById('colFotosTorta');
-      const claves = new Set(tortas.map(claveFotoColaborador));
-      for (const key of [...fotosTortaColaborador.keys()]) if (!claves.has(key)) fotosTortaColaborador.delete(key);
-      if (!visible) {
-        document.getElementById('colExtraChocolate').checked = false;
-        document.getElementById('colExtraSelva').checked = false;
-        if (contenedor) contenedor.innerHTML = '';
-        return;
-      }
-      if (contenedor) {
-        contenedor.innerHTML = tortas.map((detalle) => {
-          const key = claveFotoColaborador(detalle);
-          const data = fotosTortaColaborador.get(key) || '';
-          return `<div class="cake-photo-control"><div><strong>${detalle.item.nombre}</strong><input type="file" accept="image/*" data-foto-key="${key}"></div><img class="cake-photo-preview${data ? '' : ' hidden'}" data-col-foto-preview="${key}" src="${data}" alt="Vista previa"></div>`;
-        }).join('');
-        contenedor.querySelectorAll('input[data-foto-key]').forEach((input) => input.addEventListener('change', cargarFotoColaborador));
+    async function aprenderPersonalizadosColaborador(detalles){
+      const vistos=new Set();
+      for(const d of detalles){
+        const item=buscarItemCatalogoColaborador(d.producto_nombre);if(item&&!item.personalizado)continue;
+        const clave=normalizar(d.producto_nombre);if(!clave||vistos.has(clave))continue;vistos.add(clave);
+        const categoria=normalizarCategoriaOperativa(d.categoria_operativa);if(!categoria)throw new Error(`Selecciona el tipo de "${d.producto_nombre}".`);
+        if(item?.personalizado&&normalizarCategoriaOperativa(item.categoria_operativa)===categoria)continue;
+        const r=await fetch(api('/api/admin/productos-personalizados'),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:d.producto_nombre,categoria_operativa:categoria})});
+        const data=await r.json().catch(()=>({}));if(!r.ok&&r.status!==409)throw new Error(data.error||`No se pudo guardar "${d.producto_nombre}".`);
+        if(data.producto){const i=catalogoColaborador.findIndex((x)=>normalizar(x.nombre)===normalizar(data.producto.nombre));if(i>=0)catalogoColaborador[i]=data.producto;else catalogoColaborador.push(data.producto);}
       }
     }
-    function renderPreviewColaborador() {
-      const detalles = prepararDetallesColaborador();
-      actualizarOpcionesTortaColaborador(detalles);
-      const extras = (document.getElementById('colExtraChocolate').checked ? 10 : 0) + (document.getElementById('colExtraSelva').checked ? 10 : 0);
-      const total = detalles.reduce((s,d)=>s+d.subtotal,0)+extras;
-      document.getElementById('colPreview').innerHTML = detalles.map((d)=>`<li><span>${d.cantidad||'?'} • ${d.item?.nombre || d.linea}</span><strong>S/. ${d.subtotal.toFixed(2)}</strong></li>`).join('')+`<li><span>Total</span><strong>S/. ${total.toFixed(2)}</strong></li>`;
+    function claveFotoColaborador(d){return `linea-${d.indice}-${normalizar(d.producto||'torta')}`;}
+    function cargarFotoColaborador(event){const input=event.currentTarget,key=input.dataset.fotoKey,archivo=input.files?.[0];if(!key||!archivo)return;const lector=new FileReader();lector.onload=()=>{fotosTortaColaborador.set(key,String(lector.result||''));renderPreviewColaborador();};lector.readAsDataURL(archivo);}
+    function actualizarOpcionesTortaColaborador(detalles=prepararDetallesColaborador()){
+      const tortas=detalles.filter((d)=>{const categoria=categoriaColaborador(d.producto,d.cantidad),tipo=tipoItemCocina(d.producto||'',d.cantidad,normalizar);return categoria==='Tortas'||tipo.esTorta;});
+      const panel=document.getElementById('colTortaOptions'),contenedor=document.getElementById('colFotosTorta');panel.classList.toggle('hidden',!tortas.length);
+      const claves=new Set(tortas.map(claveFotoColaborador));for(const key of [...fotosTortaColaborador.keys()])if(!claves.has(key))fotosTortaColaborador.delete(key);
+      if(!tortas.length){document.getElementById('colExtraChocolate').checked=false;document.getElementById('colExtraSelva').checked=false;document.getElementById('colIndicacionesTorta').value='';contenedor.innerHTML='';return;}
+      contenedor.innerHTML=tortas.map((d)=>{const key=claveFotoColaborador(d),data=fotosTortaColaborador.get(key)||'';return `<div class="cake-photo-control"><div><strong>${d.producto}</strong><input type="file" accept="image/*" data-foto-key="${key}"></div><img class="cake-photo-preview${data?'':' hidden'}" src="${data}" alt="Vista previa"></div>`;}).join('');
+      contenedor.querySelectorAll('[data-foto-key]').forEach((input)=>input.addEventListener('change',cargarFotoColaborador));
     }
-    async function registrarPedidoColaborador() {
-      const nombre=document.getElementById('colNombre').value.trim(), apellido=document.getElementById('colApellido').value.trim(), celular=document.getElementById('colCelular').value.trim(), tipoComprobante=document.getElementById('colTipoComprobante').value, numeroDocumento=document.getElementById('colNumeroDocumento').value.trim();
-      const detallesBase=prepararDetallesColaborador();
-      if(!nombre||!apellido||!celular||!detallesBase.length||detallesBase.some((d)=>!d.item||d.cantidad<=0)) return alert('Completa los datos y usa productos válidos.');
-      if(tipoComprobante && !numeroDocumento) return alert(`Ingresa el ${tipoComprobante==='factura'?'RUC':'DNI'} para emitir el comprobante.`);
-      const detalles=detallesBase.map((d)=>({producto_nombre:d.item.nombre,cantidad:d.cantidad,subtotal:d.subtotal,paquetes:{},foto_torta:d.item.categoria==='Torta Chantilly'?(fotosTortaColaborador.get(claveFotoColaborador(d))||''):''}));
-      if(document.getElementById('colExtraChocolate').checked) detalles.push({producto_nombre:'Extra de Chocolate',cantidad:1,subtotal:10,paquetes:{}});
-      if(document.getElementById('colExtraSelva').checked) detalles.push({producto_nombre:'Extra de Selva Negra',cantidad:1,subtotal:10,paquetes:{}});
-      const total=detalles.reduce((s,d)=>s+d.subtotal,0), adelanto=Number(document.getElementById('colAdelanto').value||0);
-      if(adelanto>total) return alert('El adelanto no puede superar el total.');
-      const foto=detalles.find((detalle)=>detalle.foto_torta)?.foto_torta||'';
-      const payload={tipo_cliente:'Cliente',cliente_nombre:`${nombre} ${apellido}`,celular,monto_total:Number(total.toFixed(2)),adelanto:Number(adelanto.toFixed(2)),metodo_pago:'Efectivo',fecha_recoge:document.getElementById('colFecha').value||new Date().toISOString().slice(0,10),hora_recoge:document.getElementById('colHora').value||'18:00',tipo_comprobante:tipoComprobante,numero_documento:numeroDocumento,dedicatoria:'',foto_torta:foto,origen:'digitacion',detalles};
-      let respuesta=await fetch(api('/api/pedidos'),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      let resultado=await respuesta.json().catch(()=>({}));
-      if(respuesta.status===409&&resultado.duplicado){
-        const ref=resultado.coincidencia?.codigo?` (${resultado.coincidencia.codigo})`:'';
-        if(!confirm(`Posible pedido duplicado${ref}. ¿Registrar de todas formas?`)) return;
-        payload.confirmar_duplicado=true;
-        respuesta=await fetch(api('/api/pedidos'),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-        resultado=await respuesta.json().catch(()=>({}));
-      }
-      if(!respuesta.ok) return alert(resultado.error||'No se pudo registrar el pedido.');
-      alert(`Pedido ${resultado.codigo||''} registrado.`);
-      document.getElementById('colDetalle').value='';
-      fotosTortaColaborador.clear();
-      renderPreviewColaborador();
-      cargar();
+    function renderPreviewColaborador(){
+      const detalles=prepararDetallesColaborador();actualizarClasificacionesColaborador(detalles);actualizarOpcionesTortaColaborador(detalles);
+      const extras=(document.getElementById('colExtraChocolate').checked?10:0)+(document.getElementById('colExtraSelva').checked?10:0),total=Number((detalles.reduce((s,d)=>s+Number(d.subtotal||0),0)+extras).toFixed(2)),adelanto=Number(document.getElementById('colAdelanto').value||0),restante=Math.max(0,total-adelanto);
+      document.getElementById('colRestante').value=`S/. ${restante.toFixed(2)}`;
+      document.getElementById('colPreview').innerHTML=detalles.map((d)=>`<li><span>${d.cantidad||'?'} • ${d.item?.nombre||d.producto||d.linea}</span><strong>${d.item&&!d.item.personalizado?`S/. ${d.subtotal.toFixed(2)}`:(d.categoria_operativa||'Selecciona tipo')}</strong></li>`).join('')+`<li><span>Total estimado</span><strong>S/. ${total.toFixed(2)}</strong></li><li><span>Restante</span><strong>S/. ${restante.toFixed(2)}</strong></li>`;
     }
-    document.getElementById('colTipoComprobante').addEventListener('change', (event) => { const tipo=event.target.value, visible=tipo==='boleta'||tipo==='factura', label=document.getElementById('colNumeroDocumentoLabel'), input=document.getElementById('colNumeroDocumento'); label.style.display=visible?'block':'none'; input.style.display=visible?'block':'none'; label.textContent=tipo==='factura'?'RUC':'DNI'; input.maxLength=tipo==='factura'?11:8; input.placeholder=tipo==='factura'?'20123456789':'12345678'; if(!visible) input.value=''; });
+    function limpiarPedidoColaborador(texto){
+      const lineas=String(texto||'').replace(/\r/g,'').replace(/[;]+/g,'\n').split(/\n/).map((l)=>l.replace(/^\s*[•●▪◦►▶*-]+\s*/,'').trim()).filter(Boolean),limpias=[];
+      for(const linea of lineas){let m=linea.match(/^\s*(\d+(?:[.,]\d+)?)\s*(?:x\s*)?(?:und(?:idades?)?|uds?|u)?\s+(.+?)\s*$/i);if(m){limpias.push(`${m[1]} ${m[2].replace(/\s+(?:und(?:idades?)?|uds?|u)\.?$/i,'').trim()}`);continue;}m=linea.match(/^\s*(.+?)\s+(?:x\s*)?(\d+(?:[.,]\d+)?)\s*(?:und(?:idades?)?|uds?|u)?\s*$/i);if(m&&!/^pedido\b/i.test(linea))limpias.push(`${m[2]} ${m[1].trim()}`);}
+      if(limpias.length)document.getElementById('colDetalle').value=limpias.join('\n');document.getElementById('colExternalStatus').textContent=limpias.length?`${limpias.length} producto(s) limpiado(s).`:'No encontré líneas con cantidad + producto.';renderPreviewColaborador();
+    }
+    async function registrarPedidoColaborador(){
+      const nombre=document.getElementById('colNombre').value.trim(),apellido=document.getElementById('colApellido').value.trim(),celular=document.getElementById('colCelular').value.trim(),tipoComprobante=document.getElementById('colTipoComprobante').value,numeroDocumento=document.getElementById('colNumeroDocumento').value.trim(),baseDetalles=prepararDetallesColaborador();
+      if(!nombre||!apellido||!celular||!baseDetalles.length||baseDetalles.some((d)=>!d.producto||d.cantidad<=0))return alert('Completa nombre, apellido, celular y productos válidos.');
+      if(tipoComprobante&&!numeroDocumento)return alert(`Ingresa el ${tipoComprobante==='factura'?'RUC':'DNI'}.`);
+      for(const d of baseDetalles)if(!d.item&&!categoriaColaborador(d.producto,d.cantidad)){actualizarClasificacionesColaborador(baseDetalles);return alert(`Selecciona qué tipo de producto es "${d.producto}".`);}
+      const detalles=baseDetalles.map((d)=>{const categoria=categoriaColaborador(d.producto,d.cantidad),tipo=tipoItemCocina(d.producto||'',d.cantidad,normalizar);return {producto_nombre:d.producto,categoria_operativa:categoria,cantidad:d.cantidad,subtotal:Number(d.subtotal.toFixed(2)),paquetes:{},foto_torta:(categoria==='Tortas'||tipo.esTorta)?(fotosTortaColaborador.get(claveFotoColaborador(d))||''):''};});
+      if(document.getElementById('colExtraChocolate').checked)detalles.push({producto_nombre:'Extra de Chocolate',cantidad:1,subtotal:10,paquetes:{}});if(document.getElementById('colExtraSelva').checked)detalles.push({producto_nombre:'Extra de Selva Negra',cantidad:1,subtotal:10,paquetes:{}});
+      const total=Number(detalles.reduce((s,d)=>s+Number(d.subtotal||0),0).toFixed(2)),adelanto=Number(document.getElementById('colAdelanto').value||0);if(adelanto>total)return alert('El adelanto no puede superar el total.');
+      try{
+        await aprenderPersonalizadosColaborador(detalles);
+        const foto=detalles.find((d)=>d.foto_torta)?.foto_torta||'',payload={tipo_cliente:'Cliente',cliente_nombre:`${nombre} ${apellido}`,celular,monto_total:total,adelanto:Number(adelanto.toFixed(2)),metodo_pago:'Efectivo',fecha_recoge:document.getElementById('colFecha').value||new Date().toISOString().slice(0,10),hora_recoge:document.getElementById('colHora').value||'18:00',tipo_comprobante:tipoComprobante,numero_documento:numeroDocumento,dedicatoria:document.getElementById('colIndicacionesTorta').value.trim(),foto_torta:foto,origen:'digitacion',detalles};
+        let respuesta=await fetch(api('/api/pedidos'),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),resultado=await respuesta.json().catch(()=>({}));
+        if(respuesta.status===409&&resultado.duplicado){const ref=resultado.coincidencia?.codigo?` (${resultado.coincidencia.codigo})`:'';if(!confirm(`Posible pedido duplicado${ref}. ¿Registrar de todas formas?`))return;payload.confirmar_duplicado=true;respuesta=await fetch(api('/api/pedidos'),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});resultado=await respuesta.json().catch(()=>({}));}
+        if(!respuesta.ok)throw new Error(resultado.error||'No se pudo registrar el pedido.');
+        alert(`Pedido ${resultado.codigo||''} registrado.`);document.getElementById('colDetalle').value='';document.getElementById('colIndicacionesTorta').value='';document.getElementById('colAdelanto').value='0';categoriasPersonalizadasColaborador.clear();fotosTortaColaborador.clear();await cargarCatalogoColaborador();renderPreviewColaborador();cargar();
+      }catch(error){alert(error.message||'No se pudo registrar el pedido.');}
+    }
+    function poblarHorasColaborador(){const selector=document.getElementById('colHora'),horas=[];for(let h=8;h<=20;h+=1)for(let m=0;m<60;m+=30)horas.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);selector.innerHTML=horas.map((h)=>`<option value="${h}">${h}</option>`).join('');selector.value='18:00';}
+    document.getElementById('colTipoComprobante').addEventListener('change',(event)=>{const tipo=event.target.value,grupo=document.getElementById('colDocumentoGroup'),label=document.getElementById('colNumeroDocumentoLabel'),input=document.getElementById('colNumeroDocumento'),visible=tipo==='boleta'||tipo==='factura';grupo.classList.toggle('hidden',!visible);label.textContent=tipo==='factura'?'RUC':'DNI';input.maxLength=tipo==='factura'?11:8;input.placeholder=tipo==='factura'?'20123456789':'12345678';if(!visible)input.value='';});
     document.getElementById('tabGeneral').addEventListener('click',()=>{document.getElementById('tabGeneral').classList.add('active');document.getElementById('tabDigitacion').classList.remove('active');document.getElementById('panelGeneral').classList.add('active');document.getElementById('panelDigitacion').classList.remove('active');});
-    document.getElementById('tabDigitacion').addEventListener('click',async()=>{document.getElementById('tabDigitacion').classList.add('active');document.getElementById('tabGeneral').classList.remove('active');document.getElementById('panelDigitacion').classList.add('active');document.getElementById('panelGeneral').classList.remove('active'); if(!catalogoColaborador.length) await cargarCatalogoColaborador(); renderPreviewColaborador();});
-    ['colDetalle','colAdelanto','colExtraChocolate','colExtraSelva'].forEach((id)=>document.getElementById(id).addEventListener('input',renderPreviewColaborador));
+    document.getElementById('tabDigitacion').addEventListener('click',async()=>{document.getElementById('tabDigitacion').classList.add('active');document.getElementById('tabGeneral').classList.remove('active');document.getElementById('panelDigitacion').classList.add('active');document.getElementById('panelGeneral').classList.remove('active');if(!catalogoColaborador.length)await cargarCatalogoColaborador();renderPreviewColaborador();});
+    ['colDetalle','colAdelanto','colExtraChocolate','colExtraSelva','colIndicacionesTorta'].forEach((id)=>document.getElementById(id).addEventListener('input',renderPreviewColaborador));
+    document.getElementById('colPegarPedido').addEventListener('click',async()=>{try{const texto=await navigator.clipboard.readText();limpiarPedidoColaborador(texto);}catch{document.getElementById('colDetalle').focus();}});
+    document.getElementById('colLimpiarPedido').addEventListener('click',()=>limpiarPedidoColaborador(document.getElementById('colDetalle').value));
     document.getElementById('registrarColaborador').addEventListener('click',registrarPedidoColaborador);
+    poblarHorasColaborador();
+    document.getElementById('colFecha').value=new Date().toISOString().slice(0,10);
     const fecha = document.getElementById('fecha'); fecha.value = new Date().toISOString().slice(0,10);
     const safe = (text) => String(text || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     async function actualizarEstadoPedidoColaborador(id, estado) {
