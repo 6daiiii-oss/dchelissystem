@@ -180,7 +180,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
       const pedidoId = idsPorUid.get(registro.casinoUid);
       if (!pedidoId) continue;
       for (const item of registro.items) {
-        valoresDetalles.push("(?, ?, ?, 0, '{}', '')");
+        valoresDetalles.push("(?, ?, '', ?, 0, '{}', '')");
         parametrosDetalles.push(pedidoId, item.producto_nombre, item.cantidad);
       }
     }
@@ -239,7 +239,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
         const valores = [];
         const parametros = [];
         for (const item of items) {
-          valores.push("(?, ?, ?, 0, '{}', '')");
+          valores.push("(?, ?, '', ?, 0, '{}', '')");
           parametros.push(pedidoId, item.producto_nombre, item.cantidad);
         }
         await dbRunAsync(
@@ -2281,11 +2281,8 @@ app.post('/api/admin/productos-personalizados', requireAdminAuth, async (req, re
     if (!categoriaOperativa) return res.status(400).json({ error: 'Selecciona qué tipo de producto es.' });
 
     const nombreNormalizado = normalizarProducto(nombre);
-    const existenteBase = await dbGetAsync(
-      `SELECT id, nombre FROM productos WHERE UPPER(REGEXP_REPLACE(nombre, '[^A-Z0-9]+', ' ', 'g')) = ? LIMIT 1`,
-      [nombreNormalizado]
-    ).catch(() => null);
-
+    const productosBase = await dbAllAsync(`SELECT id, nombre FROM productos`);
+    const existenteBase = productosBase.find((item) => normalizarProducto(item.nombre) === nombreNormalizado);
     if (existenteBase) {
       return res.status(409).json({ error: 'Ese producto ya existe en el catálogo principal.' });
     }
@@ -2752,6 +2749,7 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
       if (!pedido) continue;
       pedido.detalles.push({
         producto_nombre: detalle.producto_nombre,
+        categoria_operativa: detalle.categoria_operativa || '',
         cantidad: detalle.cantidad,
         subtotal: detalle.subtotal,
         paquetes: detalle.paquetes ? JSON.parse(detalle.paquetes) : {},
