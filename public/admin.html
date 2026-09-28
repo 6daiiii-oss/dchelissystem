@@ -6187,7 +6187,7 @@
             <div><span class="label">Fecha de emisión</span><div class="value"><input type="datetime-local" name="fecha_emision" value="${fechaEmisionParaInput(pedido.fecha_emision || pedido.fecha_registro)}" class="form-control" /></div></div>
             <div><span class="label">Método de pago</span><div class="value"><input type="text" name="metodo_pago" value="${(pedido.metodo_pago || 'Efectivo').replace(/"/g, '&quot;')}" class="form-control" /></div></div>
             <div><span class="label">Comprobante</span><div class="value"><select name="tipo_comprobante" class="form-control"><option value="" ${!pedido.tipo_comprobante ? 'selected' : ''}>Sin comprobante</option><option value="boleta" ${pedido.tipo_comprobante === 'boleta' ? 'selected' : ''}>Boleta electrónica (DNI)</option><option value="factura" ${pedido.tipo_comprobante === 'factura' ? 'selected' : ''}>Factura electrónica (RUC)</option></select><input type="text" name="numero_documento" value="${(pedido.numero_documento || '').replace(/"/g, '&quot;')}" placeholder="DNI o RUC" class="form-control" style="margin-top:6px;" /></div></div>
-            <div><span class="label">Monto total</span><div class="value"><input type="number" min="0" step="0.01" name="monto_total" value="${total.toFixed(2)}" class="form-control" onfocus="this.select()" data-editor-recalculate /></div></div>
+            <div><span class="label">Monto total</span><div class="value"><input type="number" min="0" step="0.01" name="monto_total" value="${total.toFixed(2)}" class="form-control" readonly data-editor-recalculate /></div></div>
             <div><span class="label">Monto pagado</span><div class="value"><input type="number" min="0" step="0.01" name="adelanto" value="${adelanto.toFixed(2)}" class="form-control" onfocus="this.select()" data-editor-recalculate /></div></div>
             <div><span class="label">Saldo restante</span><div class="value"><input type="number" step="0.01" name="restante" value="${restante.toFixed(2)}" class="form-control" readonly /></div></div>
           </div>
@@ -6209,14 +6209,21 @@
       document.querySelectorAll('[data-remove-item]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const fila = btn.closest('.pedido-item-editor');
-          if (fila) fila.remove();
+          if (fila) {
+            const formulario = fila.closest('form');
+            fila.remove();
+            actualizarRestanteEditor(formulario);
+          }
         });
       });
       const formulario = document.getElementById('pedidoEdicionForm');
       if (formulario) {
         formulario.querySelectorAll('[data-editor-recalculate]').forEach((campo) => {
           campo.addEventListener('input', () => actualizarRestanteEditor(formulario));
-          campo.addEventListener('focus', () => campo.select());
+          if (!campo.readOnly) campo.addEventListener('focus', () => campo.select());
+        });
+        formulario.addEventListener('input', (event) => {
+          if (event.target?.matches('input[name^="item_subtotal_"]')) actualizarRestanteEditor(formulario);
         });
         actualizarRestanteEditor(formulario);
       }
@@ -6233,15 +6240,25 @@
       contenedor.querySelectorAll('[data-remove-item]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const filaItem = btn.closest('.pedido-item-editor');
-          if (filaItem) filaItem.remove();
+          if (filaItem) {
+            const formulario = filaItem.closest('form');
+            filaItem.remove();
+            actualizarRestanteEditor(formulario);
+          }
         });
       });
+      actualizarRestanteEditor(document.getElementById('pedidoEdicionForm'));
     }
 
     function actualizarRestanteEditor(form) {
       if (!form) return;
-      const total = Math.max(0, Number(form.elements.monto_total?.value || 0));
+      const total = Number(
+        Array.from(form.querySelectorAll('.pedido-item-editor input[name^="item_subtotal_"]'))
+          .reduce((suma, campo) => suma + Math.max(0, Number(campo.value || 0)), 0)
+          .toFixed(2)
+      );
       const adelanto = Math.max(0, Number(form.elements.adelanto?.value || 0));
+      if (form.elements.monto_total) form.elements.monto_total.value = total.toFixed(2);
       if (form.elements.restante) form.elements.restante.value = Math.max(0, total - adelanto).toFixed(2);
     }
     async function guardarPedidoEditado(event) {
