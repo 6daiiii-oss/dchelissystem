@@ -6099,9 +6099,9 @@
           <div><span class="label">Fecha</span><div class="value">${formatearFecha(pedido.fecha_recoge)}</div></div>
           <div><span class="label">Fecha de emisión</span><div class="value">${formatearFechaHoraEmision(pedido.fecha_emision || pedido.fecha_registro)}</div></div>
           ${pedido.origen === 'casino' ? '<div><span class="label">Origen</span><div class="value"><span class="badge casino-badge">CASINO · CRONOGRAMA</span></div></div>' : ''}
-          <div><span class="label">Total</span><div class="value">S/. ${Number(pedido.monto_total || 0).toFixed(2)}</div></div>
+          <div><span class="label">Total</span><div class="value">S/. ${calcularTotalOrdenPedido(pedido).toFixed(2)}</div></div>
           <div><span class="label">Monto pagado</span><div class="value">S/. ${Number(pedido.adelanto || 0).toFixed(2)}</div></div>
-          <div><span class="label">Saldo restante</span><div class="value">S/. ${(Number(pedido.monto_total || 0) - Number(pedido.adelanto || 0)).toFixed(2)}</div></div>
+          <div><span class="label">Saldo restante</span><div class="value">S/. ${Math.max(0, calcularTotalOrdenPedido(pedido) - Number(pedido.adelanto || 0)).toFixed(2)}</div></div>
           <div><span class="label">Comprobante</span><div class="value">${pedido.tipo_comprobante ? `${pedido.tipo_comprobante === 'factura' ? 'Factura - RUC' : 'Boleta - DNI'} ${pedido.numero_documento || ''}` : 'Sin comprobante'}</div></div>
           ${pedido.despachado_por ? `<div><span class="label">Despachado por</span><div class="value">${pedido.despachado_por}</div></div>` : ''}
         </div>
@@ -6174,7 +6174,7 @@
       if (!pedido) return;
       const contenido = document.getElementById('detallePedidoContenido');
       if (!contenido) return;
-      const total = Number(pedido.monto_total || 0);
+      const total = calcularTotalOrdenPedido(pedido);
       const adelanto = Number(pedido.adelanto || 0);
       const restante = Math.max(0, total - adelanto);
       contenido.innerHTML = `
@@ -7481,7 +7481,7 @@
     const ordenReferencia = [...resolverProductoNombres(), ...obtenerProductosExtraParaProduccion()];
 
     // Producción anticipada: bocaditos, tortas, kekes y por ahora panes.
-    // Mantiene la ventana 15:00 del día elegido → 15:00 del día siguiente.
+    // El backend ya entrega solo los productos anticipados asignados a esta fecha de producción.
     const detallesAnticipados = Array.isArray(data?.detalles) ? data.detalles : [];
     const clasificacionAnticipada = clasificarHojaProduccion(
       detallesAnticipados,
@@ -7596,7 +7596,7 @@
       if (firmaProduccion === nuevaFirmaProduccion) return;
 
       const etiqueta = document.getElementById('kitchenWindowLabel');
-      if (etiqueta) etiqueta.textContent = `Producción: ${data.ventana?.desde || ''} → ${data.ventana?.hasta || ''} · Rojo: emitido entre 08:00 del día anterior y 08:00 del día de la hoja, con recojo ese mismo día · Embalaje: recojos del ${data.embalaje?.fecha || fecha}`;
+      if (etiqueta) etiqueta.textContent = `Producción ${fecha}: anticipados del día siguiente solo si el pedido existía con 2 días de anticipación; pedidos tardíos pasan al día del recojo y salen urgentes. Embalaje: recojos del ${data.embalaje?.fecha || fecha}.`;
 
       renderizarHojaProduccionCocina(data);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
