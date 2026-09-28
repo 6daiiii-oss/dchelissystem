@@ -3206,6 +3206,21 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
     }
   }
 
+  const categoriasPersonalizadas = new Map();
+  try {
+    const aprendidos = await dbAllAsync(`
+      SELECT nombre_normalizado, categoria_operativa
+      FROM productos_personalizados
+    `);
+    for (const item of aprendidos || []) {
+      const clave = normalizarProducto(item?.nombre_normalizado || '');
+      const categoria = normalizarCategoriaOperativa(item?.categoria_operativa);
+      if (clave && categoria) categoriasPersonalizadas.set(clave, categoria);
+    }
+  } catch (error) {
+    console.warn('No se pudieron precargar categorías personalizadas al editar:', error.message);
+  }
+
   db.run('BEGIN TRANSACTION');
 
   db.run(`UPDATE pedidos SET
@@ -3246,8 +3261,10 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
         if (!nombre || cantidad <= 0) return;
         const nombreProducto = resolverPyePorCantidad(nombre, cantidad, normalizarProducto);
         const paquetes = item.paquetes && typeof item.paquetes === 'object' ? JSON.stringify(item.paquetes) : '{}';
-        const categoriaOperativa = normalizarCategoriaOperativa(item.categoria_operativa);
-        stmt.run(id, nombreProducto, categoriaOperativa || '', cantidad, subtotal, paquetes, String(item.foto_torta || ''));
+        const categoriaOperativa = normalizarCategoriaOperativa(item.categoria_operativa)
+          || categoriasPersonalizadas.get(normalizarProducto(nombreProducto))
+          || '';
+        stmt.run(id, nombreProducto, categoriaOperativa, cantidad, subtotal, paquetes, String(item.foto_torta || ''));
       });
 
       stmt.finalize((finalizeErr) => {
