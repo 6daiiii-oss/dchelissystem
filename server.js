@@ -2469,6 +2469,15 @@ app.post('/api/pedidos', protectDigitacionOrigin, async (req, res) => {
     await dbRunAsync('BEGIN TRANSACTION');
     transaccion = true;
 
+    const productosBaseNormalizados = new Set();
+    if (origenPedido === 'digitacion') {
+      const productosBase = await dbAllAsync(`SELECT nombre FROM productos`);
+      for (const producto of productosBase || []) {
+        const clave = normalizarProducto(producto?.nombre || '');
+        if (clave) productosBaseNormalizados.add(clave);
+      }
+    }
+
     const pedidoInsertado = await dbRunAsync(queryPedido, [
       codigoPedido,
       tipo_cliente,
@@ -2531,12 +2540,28 @@ app.post('/api/pedidos', protectDigitacionOrigin, async (req, res) => {
         det.foto_torta
       ]);
       if (det.categoria_operativa) {
-        await dbRunAsync(
-          `UPDATE productos_personalizados
-           SET usos = usos + 1, actualizado_en = CURRENT_TIMESTAMP
-           WHERE nombre_normalizado = ?`,
-          [normalizarProducto(det.producto_nombre)]
-        );
+        const nombreNormalizado = normalizarProducto(det.producto_nombre);
+        if (origenPedido === 'digitacion' && !productosBaseNormalizados.has(nombreNormalizado)) {
+          await dbRunAsync(
+            `INSERT INTO productos_personalizados
+              (nombre, nombre_normalizado, categoria_operativa, usos, actualizado_en)
+             VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+             ON CONFLICT (nombre_normalizado)
+             DO UPDATE SET
+               nombre = EXCLUDED.nombre,
+               categoria_operativa = EXCLUDED.categoria_operativa,
+               usos = productos_personalizados.usos + 1,
+               actualizado_en = CURRENT_TIMESTAMP`,
+            [det.producto_nombre, nombreNormalizado, det.categoria_operativa]
+          );
+        } else {
+          await dbRunAsync(
+            `UPDATE productos_personalizados
+             SET usos = usos + 1, actualizado_en = CURRENT_TIMESTAMP
+             WHERE nombre_normalizado = ?`,
+            [nombreNormalizado]
+          );
+        }
       }
     }
 
