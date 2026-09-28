@@ -3223,10 +3223,10 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
     return res.status(400).json({ error: 'El pedido debe tener al menos un item.' });
   }
 
+  // El total del pedido editado siempre se deriva de sus productos.
+  // Evita que monto_total quede desfasado después de modificar cantidades o subtotales.
   const montoTotal = Number(
-    pedido.monto_total !== undefined && pedido.monto_total !== null
-      ? pedido.monto_total
-      : detalles.reduce((suma, item) => suma + Number(item.subtotal || 0), 0)
+    detalles.reduce((suma, item) => suma + Number(item.subtotal || 0), 0).toFixed(2)
   );
   const adelanto = Number(pedido.adelanto || 0);
 
