@@ -4546,6 +4546,7 @@
       panel.querySelectorAll('[data-custom-category]').forEach((select) => {
         select.addEventListener('change', () => {
           window.__quickCustomCategorySelections.set(select.dataset.customCategory, select.value);
+          renderQuickEntryPreview();
         });
       });
     }
@@ -4683,7 +4684,8 @@
           : resolverProductoDigitado(linea);
         const item = (window.__quickCatalog || []).find((entry) => normalizarNombreProducto(entry.nombre) === normalizarNombreProducto(producto || ''));
         const tipo = tipoItemCocina(producto || '', cantidad, normalizarNombreProducto);
-        return tipo.esTorta
+        const categoriaOperativa = categoriaOperativaDigitacion(producto || '', cantidad);
+        return (categoriaOperativa === 'Tortas' || tipo.esTorta)
           ? { indice, producto: item?.nombre || producto, key: obtenerClaveFotoTorta(indice, item?.nombre || producto) }
           : null;
       }).filter(Boolean);
