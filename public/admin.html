@@ -6870,14 +6870,20 @@
         const original = detalle.producto_nombre;
         if (!resueltos.has(original)) resueltos.set(original, obtenerProductoResolucion(original) || original);
         const nombre = resueltos.get(original);
-        const clave = normalizarNombreProducto(nombre);
-        if (clave && !activos.has(clave)) activos.set(clave, { nombre, grupo: grupoProductoProduccion(nombre, normalizarNombreProducto) });
+        const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa || '');
+        const grupo = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes'].includes(categoriaManual)
+          ? categoriaManual
+          : grupoProductoProduccion(nombre, normalizarNombreProducto);
+        const clave = `${normalizarNombreProducto(nombre)}|${grupo}`;
+        if (clave && !activos.has(clave)) activos.set(clave, { nombre, grupo });
       }
       const listas = { bocaditos:[], sandwiches:[], triples:[], piqueos:[], panes:[] };
-      const agregar = (clave) => {
-        const item = activos.get(clave);
+      const agregar = (claveNombre) => {
+        const coincidencia = [...activos.keys()].find((clave) => clave.startsWith(`${claveNombre}|`));
+        if (!coincidencia) return;
+        const item = activos.get(coincidencia);
         if (!item) return;
-        activos.delete(clave);
+        activos.delete(coincidencia);
         const destino = item.grupo === 'Panes' ? listas.panes
           : item.grupo === 'Triples' ? listas.triples
           : item.grupo === 'Piqueos' ? listas.piqueos
@@ -7160,7 +7166,10 @@
       const cantidad = Number(detalle.cantidad || 0);
       if (!pedidoId || !(cantidad > 0)) continue;
       const nombre = obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre || 'Producto';
-      const grupo = grupoProductoProduccion(nombre, normalizarNombreProducto);
+      const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa || '');
+      const grupo = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes'].includes(categoriaManual)
+        ? categoriaManual
+        : grupoProductoProduccion(nombre, normalizarNombreProducto);
       if (!porPedido.has(pedidoId)) porPedido.set(pedidoId, []);
       porPedido.get(pedidoId).push({ nombre, grupo, cantidad });
     }
