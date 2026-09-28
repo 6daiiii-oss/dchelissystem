@@ -680,6 +680,34 @@ function esUrgentePorEmision(fechaHoja, pedido = {}) {
   return emision.getTime() >= desde.getTime() && emision.getTime() <= hasta.getTime();
 }
 
+function fechaIsoLimaDesdeValor(valor) {
+  if (!valor) return '';
+  const fecha = valor instanceof Date ? valor : new Date(valor);
+  if (!Number.isNaN(fecha.getTime())) {
+    const partes = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(fecha);
+    const mapa = Object.fromEntries(partes.map((parte) => [parte.type, parte.value]));
+    if (mapa.year && mapa.month && mapa.day) return `${mapa.year}-${mapa.month}-${mapa.day}`;
+  }
+  const match = String(valor).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
+}
+
+function fechaProduccionAnticipada(pedido = {}) {
+  const fechaRecoge = String(pedido.fecha_recoge || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaRecoge)) return '';
+  const fechaLimiteAnticipada = sumarDiasIso(fechaRecoge, -2);
+  const fechaEmision = fechaIsoLimaDesdeValor(pedido.fecha_emision || pedido.fecha_registro);
+  if (fechaEmision && fechaLimiteAnticipada && fechaEmision <= fechaLimiteAnticipada) {
+    return sumarDiasIso(fechaRecoge, -1);
+  }
+  return fechaRecoge;
+}
+
 function firmaDetallesPedido(detalles = []) {
   const acumulado = new Map();
   (Array.isArray(detalles) ? detalles : []).forEach((item) => {
@@ -2273,7 +2301,7 @@ app.get('/api/productos', async (req, res) => {
   }
 });
 
-app.post('/api/admin/productos-personalizados', requireAdminAuth, async (req, res) => {
+app.post('/api/admin/productos-personalizados', requireStaffAuth, async (req, res) => {
   try {
     const nombre = limpiarNombreProductoEntrada(req.body?.nombre);
     const categoriaOperativa = normalizarCategoriaOperativa(req.body?.categoria_operativa);
@@ -3342,7 +3370,9 @@ app.delete('/api/admin/pedidos/:id', requireAdminAuth, (req, res) => {
   });
 });
 
-// Endpoint: ventana diaria de producción/embalaje (15:00 del día elegido a 15:00 del siguiente)
+// Endpoint: producción diaria. La producción anticipada se asigna por fecha de emisión,
+// no por la hora de recojo: si el pedido existía con 2 días de anticipación, se produce
+// el día anterior; si llegó después, se produce el mismo día del recojo como urgente.
 app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
   try {
     const fecha = String(req.query.fecha || '').trim();
@@ -3350,33 +3380,21 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
     const fechaSiguiente = sumarDiasIso(fecha, 1);
     if (!fechaSiguiente) return res.status(400).json({ error: 'Fecha inválida' });
 
-    const clientesBase = await dbAllAsync(`
+    const candidatosBase = await dbAllAsync(`
       SELECT id, codigo, cliente_nombre, tipo_cliente, origen, fecha_recoge, hora_recoge,
              fecha_emision, fecha_registro, cronograma_casino_id
       FROM pedidos
-      WHERE (
-        (fecha_recoge = ? AND hora_recoge >= '15:00')
-        OR
-        (fecha_recoge = ? AND hora_recoge < '15:00')
-      )
+      WHERE fecha_recoge IN (?, ?)
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Pendiente de pago', 'Despachado (D''chelis)', 'Cancelado')
         ${FILTRO_NEWPORT_HOJAS_SQL}
       ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
     `, [fecha, fechaSiguiente]);
 
-    const clientes = clientesBase
-      .map((pedido) => ({ ...pedido, es_urgente: esUrgentePorEmision(fecha, pedido) }))
-      .sort((a, b) =>
-        Number(Boolean(b.es_urgente)) - Number(Boolean(a.es_urgente))
-        || String(a.fecha_recoge || '').localeCompare(String(b.fecha_recoge || ''))
-        || String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
-        || Number(a.id) - Number(b.id)
-      );
+    const idsCandidatos = candidatosBase.map((item) => Number(item.id)).filter(Boolean);
+    let detallesProduccion = [];
 
-    const ids = clientes.map((item) => Number(item.id)).filter(Boolean);
-    let detalles = [];
-    if (ids.length) {
-      const placeholders = ids.map(() => '?').join(',');
+    if (idsCandidatos.length) {
+      const placeholders = idsCandidatos.map(() => '?').join(',');
       const rows = await dbAllAsync(
         `SELECT p.id AS pedido_id, p.origen, p.tipo_cliente, p.fecha_recoge, p.hora_recoge,
                 p.fecha_emision, p.fecha_registro,
@@ -3385,27 +3403,51 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
          JOIN pedidos p ON dp.pedido_id = p.id
          WHERE p.id IN (${placeholders})
          ORDER BY p.id ASC, dp.id ASC`,
-        ids
+        idsCandidatos
       );
 
-      detalles = (rows || []).map((det) => {
+      detallesProduccion = (rows || []).map((det) => {
         const resuelto = resolverProductoProduccion(det.producto_nombre);
+        const categoriaManual = normalizarCategoriaOperativa(det.categoria_operativa || '');
+        const grupo = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes', 'Tortas', 'Kekes'].includes(categoriaManual)
+          ? categoriaManual
+          : grupoProductoProduccion(resuelto, normalizarProducto);
+        const fechaProduccion = fechaProduccionAnticipada(det);
         return {
           pedido_id: det.pedido_id,
           origen: det.origen || 'pg',
           tipo_cliente: det.tipo_cliente || 'Cliente',
           fecha_recoge: det.fecha_recoge,
           hora_recoge: det.hora_recoge,
-          es_urgente: esUrgentePorEmision(fecha, det),
+          es_urgente: fechaProduccion === det.fecha_recoge || esUrgentePorEmision(det.fecha_recoge, det),
           producto_nombre: resuelto,
           producto_nombre_original: det.producto_nombre,
           categoria_operativa: det.categoria_operativa || '',
+          grupo_operativo: grupo,
+          fecha_produccion: fechaProduccion,
           cantidad: Number(det.cantidad || 0),
           paquetes: det.paquetes ? JSON.parse(det.paquetes) : {},
           foto_torta: det.foto_torta || ''
         };
-      });
+      }).filter((det) =>
+        !['Sándwiches', 'Piqueos', 'Triples'].includes(det.grupo_operativo)
+        && det.fecha_produccion === fecha
+      );
     }
+
+    const idsProduccion = new Set(detallesProduccion.map((item) => Number(item.pedido_id)));
+    const urgentesProduccion = new Set(
+      detallesProduccion.filter((item) => item.es_urgente).map((item) => Number(item.pedido_id))
+    );
+    const clientes = candidatosBase
+      .filter((pedido) => idsProduccion.has(Number(pedido.id)))
+      .map((pedido) => ({ ...pedido, es_urgente: urgentesProduccion.has(Number(pedido.id)) }))
+      .sort((a, b) =>
+        Number(Boolean(b.es_urgente)) - Number(Boolean(a.es_urgente))
+        || String(a.fecha_recoge || '').localeCompare(String(b.fecha_recoge || ''))
+        || String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
+        || Number(a.id) - Number(b.id)
+      );
 
     const clientesEmbalajeBase = await dbAllAsync(`
       SELECT id, codigo, cliente_nombre, tipo_cliente, origen, fecha_recoge, hora_recoge,
@@ -3459,10 +3501,14 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
     return res.json({
       fecha,
       fecha_siguiente: fechaSiguiente,
-      ventana: { desde: `${fecha} 15:00`, hasta: `${fechaSiguiente} 15:00` },
+      ventana: {
+        produccion: fecha,
+        siguiente_recojo: fechaSiguiente,
+        regla: 'anticipada_por_fecha_emision'
+      },
       productos: PRODUCTOS_COCINA,
       clientes,
-      detalles,
+      detalles: detallesProduccion,
       embalaje: {
         fecha,
         clientes: clientesEmbalaje,
@@ -3471,124 +3517,8 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error cargando producción:', error);
-    return res.status(500).json({ error: 'No se pudo cargar la ventana de producción.' });
+    return res.status(500).json({ error: 'No se pudo cargar la producción del día.' });
   }
-});
-
-// Endpoint para recibir la notificación desde MacroDroid / Yape
-app.post('/api/yape-webhook', (req, res) => {
-  const payload = req.body || {};
-  const texto = String(payload.texto_notificacion || payload.notificacion || payload.text || '').trim();
-  const codigo = String(payload.codigo || payload.codigoPedido || payload.codigo_pedido || payload.pedido || payload.pedido_codigo || '').trim();
-  const nroOperacion = String(payload.nro_operacion || payload.numero_operacion || payload.op || payload.operacion || payload.nroOperacion || '').trim();
-  const monto = Number(payload.monto || payload.monto_total || payload.total || 0);
-  const tipo = String(payload.tipo || payload.event || payload.signal || '').trim();
-  const origen = String(payload.origen || payload.source || '').trim();
-
-  console.log('🔔 WEBHOOK RECIBIDO:', {
-    codigo,
-    nroOperacion,
-    monto,
-    tipo,
-    origen,
-    payload_completo: payload,
-    tiene_texto: !!texto,
-    tiene_codigo: !!codigo,
-    tiene_nroOperacion: !!nroOperacion
-  });
-
-  if (!texto && !codigo && !nroOperacion) {
-    console.log('❌ RECHAZO: No se recibió texto, codigo ni nro_operacion');
-    return res.status(400).json({ error: 'No se recibió texto de notificación ni codigo de pedido ni nro_operacion.' });
-  }
-
-  const responder = (pedido, message) => {
-    if (!pedido) {
-      return res.status(404).json({ ok: false, status: 'not_found', message: message || 'No se encontró pedido coincidente' });
-    }
-
-    return res.json({ ok: true, codigo: pedido.codigo || codigo, estado: 'Registrado', nro_operacion: pedido.nro_operacion || nroOperacion || '', monto, tipo, origen, mode: 'yape-webhook' });
-  };
-
-  // ESTRATEGIA: Si viene nro_operacion (de MacroDroid), usar eso primero
-  // porque es más simple que pasar el código dinámicamente por variables
-  if (nroOperacion && !codigo) {
-    console.log('🔍 Buscando pedido por NRO_OPERACION (estrategia MacroDroid):', nroOperacion);
-    return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE estado IN ('Pendiente de verificación de pago', 'Registrado') ORDER BY id DESC LIMIT 1`, [], (err, pedido) => {
-      if (err) {
-        console.log('❌ Error en SELECT:', err.message);
-        return res.status(500).json({ error: err.message });
-      }
-      if (!pedido) {
-        console.log('❌ No hay pedidos pendientes en la base de datos');
-        return res.status(404).json({ ok: false, error: 'No hay pedidos pendientes.' });
-      }
-      console.log('✅ Pedido pendiente encontrado:', pedido.codigo, '- Actualizando con nro_operacion:', nroOperacion);
-      return db.run(`UPDATE pedidos SET estado = 'Registrado', registrado_en = CURRENT_TIMESTAMP, nro_operacion = ? WHERE id = ?`, [nroOperacion, pedido.id], function (updateErr) {
-        if (updateErr) {
-          console.log('❌ Error en UPDATE:', updateErr.message);
-          return res.status(500).json({ ok: false, error: updateErr.message });
-        }
-        console.log('✅ Pedido actualizado exitosamente');
-        return responder(pedido);
-      });
-    });
-  }
-
-  // Si viene código (formato antiguo o manual), usar eso
-  if (codigo) {
-    console.log('🔍 Buscando pedido por CODIGO:', codigo);
-    return db.run(`UPDATE pedidos SET estado = 'Registrado', registrado_en = CURRENT_TIMESTAMP, nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE codigo = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado')`, [nroOperacion || '', codigo], function (err) {
-      if (err) {
-        console.log('❌ Error en UPDATE:', err.message);
-        return res.status(500).json({ error: err.message });
-      }
-      console.log('✅ UPDATE ejecutado, filas afectadas:', this.changes);
-      if (this.changes === 0) {
-        console.log('⚠️ 0 filas afectadas, verificando si el pedido existe...');
-        return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE codigo = ? LIMIT 1`, [codigo], (lookupErr, pedido) => {
-          if (lookupErr) {
-            console.log('❌ Error en SELECT:', lookupErr.message);
-            return res.status(500).json({ error: lookupErr.message });
-          }
-          if (!pedido) {
-            console.log('❌ PEDIDO NO ENCONTRADO con codigo:', codigo);
-            return res.status(404).json({ ok: false, error: 'Pedido no encontrado o ya no está pendiente.', codigo, nro_operacion: nroOperacion, tipo, origen });
-          }
-          console.log('⚠️ Pedido existe pero estado no es editable:', pedido.estado);
-          return responder(pedido, 'Pedido coincidente encontrado, pero el estado no permite pagarlo desde webhook.');
-        });
-      }
-      console.log('✅ Pedido actualizado exitosamente, obteniendo detalles...');
-      return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE codigo = ? LIMIT 1`, [codigo], (lookupErr, pedido) => {
-        if (lookupErr) {
-          console.log('❌ Error en SELECT final:', lookupErr.message);
-          return res.status(500).json({ error: lookupErr.message });
-        }
-        return responder(pedido, 'Pedido no encontrado en la confirmación del webhook.');
-      });
-    });
-  }
-  if (texto) {
-    const textoBusqueda = texto || '';
-    const opMatch = textoBusqueda.match(/(?:operaci[oó]n|op\.?)\s*:?\s*(\d+)/i) || textoBusqueda.match(/\b\d{6,10}\b/);
-    const nroFromText = opMatch ? (opMatch[1] || opMatch[0]) : '';
-    const montoMatch = textoBusqueda.match(/S\/\s*([\d\.]+)/i);
-    const montoFromText = montoMatch ? parseFloat(montoMatch[1]) : null;
-
-    if (nroFromText) {
-      return db.get(`SELECT id, codigo, estado, monto_total, adelanto FROM pedidos WHERE nro_operacion = ? AND estado IN ('Pendiente de verificación de pago', 'Registrado') LIMIT 1`, [nroFromText], (err, pedido) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!pedido) return res.status(404).json({ ok: false, status: 'not_found', message: 'No se encontró pedido coincidente con la operación extraída del texto.' });
-        return db.run(`UPDATE pedidos SET estado = 'Registrado', registrado_en = CURRENT_TIMESTAMP, nro_operacion = COALESCE(NULLIF(?, ''), nro_operacion) WHERE id = ?`, [nroFromText, pedido.id], function (updateErr) {
-          if (updateErr) return res.status(500).json({ ok: false, error: updateErr.message });
-          return responder(pedido, 'Pedido confirmado por texto de operación.');
-        });
-      });
-    }
-  }
-
-  return res.status(404).json({ ok: false, status: 'not_found', message: 'No se encontró pedido coincidente' });
 });
 
 // Hoja de embalaje en Excel: urgentes a la izquierda, normales a la derecha y casinos al extremo derecho.
