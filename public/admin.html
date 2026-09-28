@@ -6341,10 +6341,7 @@
 
     function obtenerNumeroOrdenPedido(pedido) {
       const codigo = String(pedido?.codigo || '').trim();
-      if (codigo) {
-        const partes = codigo.split('-').filter(Boolean);
-        return partes[partes.length - 1] || codigo;
-      }
+      if (codigo) return codigo;
       return String(pedido?.id || '').padStart(6, '0');
     }
 
@@ -6368,6 +6365,14 @@
       });
       while (filas.length < minimo) filas.push(['', '', '', '']);
       return filas;
+    }
+
+    function dibujarMarcaAguaOrden(pdf, centroX, centroY, anchoReferencia, escala = 1) {
+      const tamano = Math.max(18, Math.min(54, anchoReferencia * 0.28)) * escala;
+      pdf.setTextColor(232, 239, 232);
+      pdf.setFont('helvetica', 'bolditalic');
+      pdf.setFontSize(tamano);
+      pdf.text("D'chelis", centroX, centroY, { align:'center', angle:-18 });
     }
 
     function dibujarCabeceraOrdenA4(pdf, pedido) {
@@ -6399,8 +6404,9 @@
       pdf.text('ORDEN DE PEDIDO', cajaX + 31, y + 6, { align:'center' });
       pdf.line(cajaX, y + 9, cajaX + 62, y + 9);
       pdf.setTextColor(...rojo);
-      pdf.setFontSize(11.5);
-      pdf.text(`N° ${obtenerNumeroOrdenPedido(pedido)}`, cajaX + 31, y + 18, { align:'center' });
+      const numeroOrden = obtenerNumeroOrdenPedido(pedido);
+      pdf.setFontSize(numeroOrden.length > 22 ? 7.2 : numeroOrden.length > 16 ? 8.7 : 11.5);
+      pdf.text(`N° ${numeroOrden}`, cajaX + 31, y + 18, { align:'center' });
 
       const fecha = dividirFechaOrden(pedido?.fecha_recoge);
       pdf.setFillColor(...verde);
@@ -6451,6 +6457,7 @@
       const verde = [77,132,73];
       const startY = dibujarCabeceraOrdenA4(pdf, pedido);
       const filas = filasOrdenPedido(pedido, 20);
+      dibujarMarcaAguaOrden(pdf, 105, startY + 78, 180, 1);
       pdf.autoTable({
         startY,
         margin:{ left:15, right:15 },
@@ -6668,8 +6675,9 @@
         pdf.text('ORDEN DE PEDIDO', cajaX + cajaW/2, 10, { align:'center' });
         pdf.line(cajaX, 12.5, cajaX + cajaW, 12.5);
         pdf.setTextColor(...rojo);
-        pdf.setFontSize(8.6);
-        pdf.text(`N° ${obtenerNumeroOrdenPedido(pedido)}`, cajaX + cajaW/2, 19, { align:'center' });
+        const numeroOrden = obtenerNumeroOrdenPedido(pedido);
+        pdf.setFontSize(numeroOrden.length > 22 ? 4.5 : numeroOrden.length > 16 ? 5.8 : 8.6);
+        pdf.text(`N° ${numeroOrden}`, cajaX + cajaW/2, 19, { align:'center' });
 
         const fecha = dividirFechaOrden(pedido.fecha_recoge);
         pdf.setFillColor(...verde);
@@ -6706,6 +6714,7 @@
         pdf.text('REMITIMOS A UD. EN BUENAS CONDICIONES LO SIGUIENTE', izquierda + 2, 54);
 
         const filas = filasOrdenPedido(pedido, 20);
+        dibujarMarcaAguaOrden(pdf, izquierda + (anchoUtil / 2), 113, anchoUtil, 0.9);
         const altoFila = Math.max(3.6, Math.min(5.45, 112 / Math.max(20, filas.length)));
         pdf.autoTable({
           startY:57,
