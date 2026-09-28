@@ -127,11 +127,28 @@ function tipoItemCocina(nombre, cantidad, normalizar) {
   return { esKeke, esTorta, esPastel, grupo: grupoProductoProduccion(nombreAjustado, normalizar), nombreAjustado };
 }
 
+function normalizarCategoriaOperativa(valor) {
+  const clave = normalizarBaseProduccion(valor);
+  const mapa = {
+    BOCADITO: 'Bocaditos', BOCADITOS: 'Bocaditos',
+    SANDWICH: 'Sándwiches', SANDWICHES: 'Sándwiches', SANGUCHE: 'Sándwiches', SANGUCHES: 'Sándwiches',
+    TRIPLE: 'Triples', TRIPLES: 'Triples',
+    PIQUEO: 'Piqueos', PIQUEOS: 'Piqueos',
+    PAN: 'Panes', PANES: 'Panes',
+    TORTA: 'Tortas', TORTAS: 'Tortas',
+    KEKE: 'Kekes', KEKES: 'Kekes', QUEQUE: 'Kekes', QUEQUES: 'Kekes'
+  };
+  return mapa[clave] || '';
+}
+
 function filtrarItemsEmbalaje(detalles, resolver, normalizar) {
   const nombres = new Map();
   return (detalles || []).filter((detalle) => {
     const cantidad = Number(detalle.cantidad || 0);
     if (!(cantidad > 0)) return false;
+    const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa);
+    if (categoriaManual === 'Tortas' || categoriaManual === 'Kekes') return false;
+    if (categoriaManual) return true;
     const original = detalle.producto_nombre;
     if (!nombres.has(original)) nombres.set(original, resolver(original) || original);
     const tipo = tipoItemCocina(nombres.get(original), cantidad, normalizar);
@@ -165,12 +182,15 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
 
     const fuenteTipo = detalle.producto_nombre_original || detalle.producto_nombre || nombreBase;
     const tipo = tipoItemCocina(fuenteTipo, cantidad, normalizar);
+    const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa);
     const nombre = resolverPyePorCantidad(nombreBase, cantidad, normalizar);
     const clave = normalizar(nombre);
-    const esKeke = tipo.esKeke;
-    const esPastel = tipo.esPastel;
-    const esTorta = tipo.esTorta;
-    const grupo = grupoProductoProduccion(nombre, normalizar);
+    const esKeke = categoriaManual === 'Kekes' || (!categoriaManual && tipo.esKeke);
+    const esTorta = categoriaManual === 'Tortas' || (!categoriaManual && tipo.esTorta);
+    const esPastel = esTorta || (!categoriaManual && tipo.esPastel);
+    const grupo = ['Bocaditos', 'Sándwiches', 'Piqueos', 'Triples', 'Panes'].includes(categoriaManual)
+      ? categoriaManual
+      : grupoProductoProduccion(nombre, normalizar);
 
     if (esKeke || esTorta) {
       const cliente = nombres.get(Number(detalle.pedido_id)) || 'Cliente';
@@ -224,5 +244,5 @@ function resolverNombreEspecialProduccion(nombre) {
 if (typeof module !== 'undefined') module.exports = {
   clasificarHojaProduccion, resolverPetipanNombre, resolverCiabattaNombre,
   grupoProductoProduccion, tipoItemCocina, filtrarItemsEmbalaje, resolverPyePorCantidad,
-  resolverNombreEspecialProduccion
+  resolverNombreEspecialProduccion, normalizarCategoriaOperativa
 };
