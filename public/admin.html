@@ -4488,10 +4488,13 @@
     }
 
     function categoriaOperativaDigitacion(producto, cantidad) {
-      const guardada = categoriaOperativaCatalogo(producto);
+      const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
+      const item = buscarItemCatalogoDigitacion(catalogo, producto);
+      const guardada = normalizarCategoriaOperativa(item?.categoria_operativa || '');
       if (guardada) return guardada;
+      if (item && !item.personalizado) return sugerirCategoriaOperativa(producto, cantidad);
       const clave = normalizarNombreProducto(producto || '');
-      return window.__quickCustomCategorySelections.get(clave) || sugerirCategoriaOperativa(producto, cantidad);
+      return window.__quickCustomCategorySelections.get(clave) || '';
     }
 
     function actualizarClasificacionesPersonalizadas(lineas = getQuickEntryLines()) {
@@ -4509,9 +4512,6 @@
         const clave = normalizarNombreProducto(producto);
         if (!clave || vistos.has(clave)) continue;
         vistos.add(clave);
-        if (!window.__quickCustomCategorySelections.has(clave)) {
-          window.__quickCustomCategorySelections.set(clave, sugerirCategoriaOperativa(producto, cantidad));
-        }
         desconocidos.push({ producto, cantidad, clave });
       }
 
@@ -4527,15 +4527,17 @@
           <strong>Productos nuevos</strong>
           <span>Confirma una vez y el sistema lo recordará.</span>
         </div>
-        ${desconocidos.map(({ producto, clave }) => {
+        ${desconocidos.map(({ producto, cantidad, clave }) => {
           const actual = window.__quickCustomCategorySelections.get(clave) || '';
+          const sugerida = sugerirCategoriaOperativa(producto, cantidad);
           return `
             <div class="custom-product-card">
               <div class="custom-product-name">
                 <strong>${escapeHtmlAdmin(producto)}</strong>
-                <small>Se guardará en el catálogo al registrar el pedido.</small>
+                <small>Selecciona el tipo una sola vez. Sugerencia: ${escapeHtmlAdmin(sugerida)}.</small>
               </div>
-              <select data-custom-category="${escapeHtmlAdmin(clave)}" aria-label="Tipo de ${escapeHtmlAdmin(producto)}">
+              <select data-custom-category="${escapeHtmlAdmin(clave)}" aria-label="Tipo de ${escapeHtmlAdmin(producto)}" required>
+                <option value="" ${actual ? '' : 'selected'} disabled>Selecciona tipo</option>
                 ${CATEGORIAS_OPERATIVAS_DIGITACION.map((cat) => `<option value="${cat}" ${cat === actual ? 'selected' : ''}>${cat}</option>`).join('')}
               </select>
             </div>
@@ -4570,9 +4572,12 @@
         const clave = normalizarNombreProducto(detalle.producto_nombre);
         if (!clave || vistos.has(clave)) continue;
         vistos.add(clave);
+        if (!categoriaNueva) {
+          throw new Error(`Selecciona el tipo de "${detalle.producto_nombre}" antes de registrar.`);
+        }
         nuevos.push({
           nombre: detalle.producto_nombre,
-          categoria_operativa: categoriaNueva || sugerirCategoriaOperativa(detalle.producto_nombre, detalle.cantidad)
+          categoria_operativa: categoriaNueva
         });
       }
 
@@ -4828,6 +4833,14 @@
         const fotoKey = obtenerClaveFotoTorta(indice, producto);
         const tipoProducto = tipoItemCocina(producto, cantidad, normalizarNombreProducto);
         const categoriaOperativa = categoriaOperativaDigitacion(producto, cantidad);
+        if (!precioItem && !categoriaOperativa) {
+          actualizarClasificacionesPersonalizadas(lineas);
+          const claveNueva = normalizarNombreProducto(producto);
+          const selector = document.querySelector(`[data-custom-category="${CSS.escape(claveNueva)}"]`);
+          selector?.focus();
+          mostrarErrorAdmin(`Selecciona qué tipo de producto es "${producto}" antes de registrar.`, 'quickEntryInput');
+          return;
+        }
         detalles.push({
           producto_nombre: producto,
           categoria_operativa: categoriaOperativa,
