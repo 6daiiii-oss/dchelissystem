@@ -6614,73 +6614,117 @@
       }
 
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+      const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'landscape' });
       const ancho = 297;
       const alto = 210;
       const anchoCasilla = ancho / 3;
+      const verde = [77,132,73];
+      const verdeClaro = [244,248,244];
+      const rojo = [179,72,66];
 
       const dibujarBoleta = (pedido, indiceCasilla) => {
-        const montoTotal = Number(pedido.monto_total || 0);
-        const montoPagado = Number(pedido.adelanto || 0);
-        const saldoRestante = Math.max(0, montoTotal - montoPagado);
-        const cancelado = String(pedido.estado || '').trim().toLowerCase() === 'cancelado';
-        const izquierda = indiceCasilla * anchoCasilla + 3;
-        const derecha = (indiceCasilla + 1) * anchoCasilla - 3;
-        const centro = (izquierda + derecha) / 2;
+        const baseX = indiceCasilla * anchoCasilla;
+        const izquierda = baseX + 3;
+        const derecha = baseX + anchoCasilla - 3;
+        const anchoUtil = derecha - izquierda;
 
-        pdf.setDrawColor(148, 163, 184);
-        if (indiceCasilla < 2) pdf.line((indiceCasilla + 1) * anchoCasilla, 0, (indiceCasilla + 1) * anchoCasilla, alto);
-        pdf.setDrawColor(0, 92, 39);
-        pdf.setTextColor(0, 92, 39);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(11);
-        pdf.text("PASTELERIA D'CHELIS", centro, 9, { align: 'center' });
-        pdf.setDrawColor(0, 92, 39);
-        pdf.line(izquierda, 12, derecha, 12);
-
-        pdf.setTextColor(15, 23, 42);
-        pdf.setFontSize(8.2);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text(`Código: ${pedido.codigo || `PED-${pedido.id}`}`, izquierda, 19);
-        pdf.text(`Cliente: ${pedido.cliente_nombre || '-'}`, izquierda, 24);
-        pdf.text(`Teléfono: ${pedido.celular || '-'}`, izquierda, 29);
-        pdf.text(`Recojo: ${pedido.fecha_recoge || '-'} ${pedido.hora_recoge || ''}`, izquierda, 34);
-        if (pedido.tipo_comprobante) pdf.text(`${pedido.tipo_comprobante === 'factura' ? 'Factura - RUC' : 'Boleta - DNI'}: ${pedido.numero_documento || '-'}`, izquierda, 39);
-        if (pedido.dedicatoria) {
-          const dedicatoria = pdf.splitTextToSize(`Dedicatoria: ${pedido.dedicatoria}`, derecha - izquierda);
-          pdf.text(dedicatoria, izquierda, pedido.tipo_comprobante ? 44 : 39);
+        if (indiceCasilla < 2) {
+          pdf.setDrawColor(185,195,188);
+          pdf.setLineWidth(.2);
+          pdf.line(baseX + anchoCasilla, 0, baseX + anchoCasilla, alto);
         }
 
-        const filas = (pedido.detalles || []).map((item) => [
-          String(item.cantidad || 0),
-          String(item.producto_nombre || '-'),
-          `S/. ${Number(item.subtotal || 0).toFixed(2)}`
-        ]);
+        pdf.setTextColor(...verde);
+        pdf.setFont('helvetica','bold');
+        pdf.setFontSize(6.6);
+        pdf.text('PANADERÍA - BAGUETERÍA - PASTELERÍA', izquierda + 1, 7);
+        pdf.setFontSize(15);
+        pdf.text("D'chelis", izquierda + 10, 18);
+        pdf.setFontSize(5.2);
+        pdf.setTextColor(98,111,103);
+        pdf.text('Jr. Prolongación Ayacucho N° 964 · San Miguel', izquierda + 1, 23);
+        pdf.text('946 227 035', izquierda + 18, 26.5);
+
+        const cajaW = 35;
+        const cajaX = derecha - cajaW;
+        pdf.setDrawColor(...verde);
+        pdf.setLineWidth(.3);
+        pdf.roundedRect(cajaX, 4.5, cajaW, 18.5, 1.5, 1.5);
+        pdf.setTextColor(...verde);
+        pdf.setFontSize(7.8);
+        pdf.text('ORDEN DE PEDIDO', cajaX + cajaW/2, 10, { align:'center' });
+        pdf.line(cajaX, 12.5, cajaX + cajaW, 12.5);
+        pdf.setTextColor(...rojo);
+        pdf.setFontSize(8.6);
+        pdf.text(`N° ${obtenerNumeroOrdenPedido(pedido)}`, cajaX + cajaW/2, 19, { align:'center' });
+
+        const fecha = dividirFechaOrden(pedido.fecha_recoge);
+        pdf.setFillColor(...verde);
+        pdf.rect(cajaX, 25.5, 12, 6.5, 'F');
+        pdf.setTextColor(255,255,255);
+        pdf.setFontSize(5.8);
+        pdf.text('FECHA', cajaX + 6, 29.8, { align:'center' });
+        pdf.setDrawColor(...verde);
+        pdf.rect(cajaX + 12, 25.5, cajaW - 12, 6.5);
+        pdf.setTextColor(50,58,53);
+        pdf.setFontSize(5.8);
+        pdf.text(`${fecha.dia || '--'}/${fecha.mes || '--'}/${fecha.anio || '----'}`, cajaX + 12 + (cajaW-12)/2, 29.8, { align:'center' });
+
+        pdf.setDrawColor(...verde);
+        pdf.roundedRect(izquierda, 35, anchoUtil, 14, 1, 1);
+        pdf.setTextColor(...verde);
+        pdf.setFont('helvetica','bold');
+        pdf.setFontSize(6.1);
+        pdf.text('SEÑOR:', izquierda + 2.5, 40);
+        pdf.text('TELF.:', izquierda + 58, 40);
+        pdf.setTextColor(45,52,47);
+        pdf.setFont('helvetica','normal');
+        pdf.setFontSize(6.1);
+        const cliente = pdf.splitTextToSize(String(pedido.cliente_nombre || '-'), 43);
+        pdf.text(cliente.slice(0,1), izquierda + 13, 40);
+        pdf.text(String(pedido.celular || '-'), izquierda + 68, 40);
+        pdf.setTextColor(96,108,100);
+        pdf.setFontSize(5.2);
+        pdf.text(`Recojo: ${pedido.fecha_recoge || '-'} ${pedido.hora_recoge || ''}`, izquierda + 2.5, 46);
+
+        pdf.setTextColor(...verde);
+        pdf.setFont('helvetica','bolditalic');
+        pdf.setFontSize(6.2);
+        pdf.text('REMITIMOS A UD. EN BUENAS CONDICIONES LO SIGUIENTE', izquierda + 2, 54);
+
+        const filas = filasOrdenPedido(pedido, 20);
+        const altoFila = Math.max(3.6, Math.min(5.45, 112 / Math.max(20, filas.length)));
         pdf.autoTable({
-          startY: pedido.dedicatoria ? (pedido.tipo_comprobante ? 52 : 47) : (pedido.tipo_comprobante ? 47 : 40),
-          margin: { left: izquierda, right: ancho - derecha },
-          tableWidth: derecha - izquierda,
-          head: [['Cant.', 'Descripción', 'Subtotal']],
-          body: filas.length ? filas : [['-', 'Sin productos', '-']],
-          theme: 'grid',
-          styles: { font: 'helvetica', fontSize: 7.6, cellPadding: 1.6, overflow: 'linebreak', minCellHeight: 6 },
-          headStyles: { fillColor: [238, 247, 238], textColor: [0, 92, 39], fontStyle: 'bold' },
-          columnStyles: { 0: { cellWidth: 14, halign: 'center' }, 2: { cellWidth: 24, halign: 'right' } }
+          startY:57,
+          margin:{ left:izquierda, right:ancho-derecha },
+          tableWidth:anchoUtil,
+          head:[['CANT.', 'ARTÍCULO', 'UNIT.', 'TOTAL']],
+          body:filas,
+          theme:'grid',
+          styles:{ font:'helvetica', fontSize:5.6, minCellHeight:altoFila, cellPadding:{ top:.55, right:.5, bottom:.55, left:.5 }, lineColor:verde, lineWidth:.12, textColor:[35,43,38], valign:'middle' },
+          headStyles:{ fillColor:verdeClaro, textColor:verde, fontStyle:'bold', halign:'center', minCellHeight:5.5, lineColor:verde, lineWidth:.18 },
+          columnStyles:{ 0:{ cellWidth:10, halign:'center' }, 1:{ cellWidth:50 }, 2:{ cellWidth:15, halign:'right' }, 3:{ cellWidth:anchoUtil - 75, halign:'right' } }
         });
 
-        const pagoY = 196;
-        pdf.setDrawColor(203, 213, 225);
-        pdf.line(izquierda, pagoY - 6, derecha, pagoY - 6);
-        pdf.setTextColor(0, 92, 39);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(8.2);
-        pdf.text(`Total: S/. ${montoTotal.toFixed(2)}`, derecha, pagoY, { align: 'right' });
-        pdf.text(`Pagado: S/. ${montoPagado.toFixed(2)}`, derecha, pagoY + 4.5, { align: 'right' });
-        pdf.text(`Restante: S/. ${saldoRestante.toFixed(2)}`, derecha, pagoY + 9, { align: 'right' });
-        if (cancelado) {
-          pdf.setTextColor(180, 35, 24);
-          pdf.setFontSize(9.5);
-          pdf.text('CANCELADO', derecha, pagoY + 15, { align: 'right' });
+        const montoTotal = Number(pedido.monto_total || 0);
+        const pagado = Math.min(montoTotal, Math.max(0, Number(pedido.adelanto || 0)));
+        const saldo = Math.max(0, montoTotal - pagado);
+        const yResumen = Math.min(193, pdf.lastAutoTable.finalY + 3.5);
+        pdf.setDrawColor(...verde);
+        pdf.setLineWidth(.18);
+        pdf.roundedRect(derecha - 33, yResumen, 33, 13.5, .8, .8);
+        pdf.setFont('helvetica','bold');
+        pdf.setTextColor(...verde);
+        pdf.setFontSize(5.7);
+        pdf.text(`TOTAL  S/. ${montoTotal.toFixed(2)}`, derecha - 2, yResumen + 4, { align:'right' });
+        pdf.text(`PAGADO S/. ${pagado.toFixed(2)}`, derecha - 2, yResumen + 8, { align:'right' });
+        pdf.text(`SALDO   S/. ${saldo.toFixed(2)}`, derecha - 2, yResumen + 12, { align:'right' });
+        if (pedido.dedicatoria) {
+          pdf.setTextColor(87,99,91);
+          pdf.setFont('helvetica','normal');
+          pdf.setFontSize(5);
+          const notas = pdf.splitTextToSize(`Indicaciones: ${pedido.dedicatoria}`, anchoUtil - 36);
+          pdf.text(notas.slice(0,2), izquierda, yResumen + 4);
         }
       };
 
