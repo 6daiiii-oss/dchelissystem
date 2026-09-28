@@ -7,7 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="digitacion-config.js"></script>
-<script src="production-classification.js?v=7"></script>
+<script src="production-classification.js?v=8"></script>
 <script>
   (() => {
     const oscuro = Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -473,14 +473,14 @@
     .pedido-editor-form textarea { resize: vertical; min-height: 90px; }
     .pedido-editor-form input:focus, .pedido-editor-form select:focus, .pedido-editor-form textarea:focus { border-color: #b75e36; box-shadow: 0 0 0 3px rgba(183,94,54,.12); }
     .pedido-editor-items { display: grid; gap: 10px; }
-    .pedido-item-editor { display: grid !important; grid-template-columns: minmax(0, 1fr) 110px 140px auto !important; gap: 8px !important; align-items: end !important; padding: 10px; border: 1px solid #eadfd6; border-radius: 11px; background: #fffaf5; margin-bottom: 0 !important; }
+    .pedido-item-editor { display: grid !important; grid-template-columns: minmax(0, 1fr) 100px 120px 150px auto !important; gap: 8px !important; align-items: end !important; padding: 10px; border: 1px solid #eadfd6; border-radius: 11px; background: #fffaf5; margin-bottom: 0 !important; }
     .pedido-item-editor .editor-item-field { display: flex; flex-direction: column; gap: 5px; }
     .pedido-item-editor .editor-item-field span { color: var(--muted); font-size: .68rem; font-weight: 800; text-transform: uppercase; }
     .pedido-editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 1050px) {
       #pedidosGeneral .date-group .cards-grid,
       #pedidosHistorial .date-group .cards-grid { grid-template-columns: repeat(2, minmax(280px, 1fr)); }
-      .pedido-item-editor { grid-template-columns: minmax(0, 1fr) 100px 120px auto !important; }
+      .pedido-item-editor { grid-template-columns: minmax(0, 1fr) 90px 105px 130px auto !important; }
     }
     @media (max-width: 640px) {
       #pedidosGeneral .date-group .cards-grid,
@@ -3010,6 +3010,51 @@
       }
     }
 
+
+    @media screen {
+      .custom-product-learning {
+        margin-top:10px;
+        padding:11px;
+        display:grid;
+        gap:8px;
+        border:1px solid #d9e5dc;
+        border-radius:12px;
+        background:#f7faf8;
+      }
+      .custom-product-learning.hidden { display:none !important; }
+      .custom-product-learning-title {
+        display:flex;
+        justify-content:space-between;
+        gap:8px;
+        align-items:baseline;
+        color:#4f6056;
+        font-size:.72rem;
+        font-weight:800;
+      }
+      .custom-product-learning-title strong { color:var(--brand); font-size:.8rem; }
+      .custom-product-card {
+        display:grid;
+        grid-template-columns:minmax(0,1fr) 170px;
+        gap:8px;
+        align-items:center;
+        padding:9px;
+        border:1px solid #e2e9e4;
+        border-radius:10px;
+        background:#fff;
+      }
+      .custom-product-name { min-width:0; }
+      .custom-product-name strong { display:block; font-size:.78rem; overflow-wrap:anywhere; }
+      .custom-product-name small { display:block; margin-top:2px; color:var(--muted); font-size:.64rem; }
+      .custom-product-card select { width:100%; min-height:38px; }
+      html[data-theme="dark"] .custom-product-learning { background:#152019; border-color:#33463a; }
+      html[data-theme="dark"] .custom-product-card { background:#101813; border-color:#304137; }
+      html[data-theme="dark"] .custom-product-learning-title { color:#9faea5; }
+
+      @media (max-width:640px) {
+        .custom-product-card { grid-template-columns:1fr; }
+      }
+    }
+
 </style>
 </head>
 <body>
@@ -3167,6 +3212,7 @@
                   <button class="btn btn-ghost" type="button" onclick="limpiarPedidoExternoActual()">Limpiar y corregir</button>
                   <span id="quickExternalStatus" class="external-order-status">Al pegar un mensaje externo se quitarán fechas, saludos y texto adicional.</span>
                 </div>
+                <div id="quickCustomProducts" class="custom-product-learning hidden"></div>
               </div>
               <div class="controls">
                 <button class="btn btn-success" type="submit">Registrar pedido</button>
@@ -4424,6 +4470,124 @@
         .slice(0, 160);
     }
 
+    window.__quickCustomCategorySelections = window.__quickCustomCategorySelections || new Map();
+    const CATEGORIAS_OPERATIVAS_DIGITACION = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes', 'Tortas', 'Kekes'];
+
+    function categoriaOperativaCatalogo(producto) {
+      const item = buscarItemCatalogoDigitacion(window.__quickCatalog || [], producto);
+      return normalizarCategoriaOperativa(item?.categoria_operativa || '');
+    }
+
+    function sugerirCategoriaOperativa(producto, cantidad) {
+      const guardada = categoriaOperativaCatalogo(producto);
+      if (guardada) return guardada;
+      const tipo = tipoItemCocina(producto || '', cantidad, normalizarNombreProducto);
+      if (tipo.esKeke) return 'Kekes';
+      if (tipo.esTorta) return 'Tortas';
+      return normalizarCategoriaOperativa(tipo.grupo) || 'Bocaditos';
+    }
+
+    function categoriaOperativaDigitacion(producto, cantidad) {
+      const guardada = categoriaOperativaCatalogo(producto);
+      if (guardada) return guardada;
+      const clave = normalizarNombreProducto(producto || '');
+      return window.__quickCustomCategorySelections.get(clave) || sugerirCategoriaOperativa(producto, cantidad);
+    }
+
+    function actualizarClasificacionesPersonalizadas(lineas = getQuickEntryLines()) {
+      const panel = document.getElementById('quickCustomProducts');
+      if (!panel) return;
+
+      const desconocidos = [];
+      const vistos = new Set();
+      for (const linea of lineas) {
+        const match = linea.match(/^\s*(\d+)\s*(?:x|X)?\s*(.+?)\s*$/i);
+        if (!match) continue;
+        const cantidad = Number(match[1]) || 0;
+        const producto = resolverProductoDigitadoPorCantidad(match[2], cantidad);
+        if (!producto || buscarItemCatalogoDigitacion(window.__quickCatalog || [], producto)) continue;
+        const clave = normalizarNombreProducto(producto);
+        if (!clave || vistos.has(clave)) continue;
+        vistos.add(clave);
+        if (!window.__quickCustomCategorySelections.has(clave)) {
+          window.__quickCustomCategorySelections.set(clave, sugerirCategoriaOperativa(producto, cantidad));
+        }
+        desconocidos.push({ producto, cantidad, clave });
+      }
+
+      if (!desconocidos.length) {
+        panel.classList.add('hidden');
+        panel.innerHTML = '';
+        return;
+      }
+
+      panel.classList.remove('hidden');
+      panel.innerHTML = `
+        <div class="custom-product-learning-title">
+          <strong>Productos nuevos</strong>
+          <span>Confirma una vez y el sistema lo recordará.</span>
+        </div>
+        ${desconocidos.map(({ producto, clave }) => {
+          const actual = window.__quickCustomCategorySelections.get(clave) || '';
+          return `
+            <div class="custom-product-card">
+              <div class="custom-product-name">
+                <strong>${escapeHtmlAdmin(producto)}</strong>
+                <small>Se guardará en el catálogo al registrar el pedido.</small>
+              </div>
+              <select data-custom-category="${escapeHtmlAdmin(clave)}" aria-label="Tipo de ${escapeHtmlAdmin(producto)}">
+                ${CATEGORIAS_OPERATIVAS_DIGITACION.map((cat) => `<option value="${cat}" ${cat === actual ? 'selected' : ''}>${cat}</option>`).join('')}
+              </select>
+            </div>
+          `;
+        }).join('')}
+      `;
+
+      panel.querySelectorAll('[data-custom-category]').forEach((select) => {
+        select.addEventListener('change', () => {
+          window.__quickCustomCategorySelections.set(select.dataset.customCategory, select.value);
+        });
+      });
+    }
+
+    async function aprenderProductosPersonalizados(detalles) {
+      const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
+      const nuevos = [];
+      const vistos = new Set();
+
+      for (const detalle of detalles) {
+        if (!detalle?.producto_nombre || buscarItemCatalogoDigitacion(catalogo, detalle.producto_nombre)) continue;
+        const clave = normalizarNombreProducto(detalle.producto_nombre);
+        if (!clave || vistos.has(clave)) continue;
+        vistos.add(clave);
+        nuevos.push({
+          nombre: detalle.producto_nombre,
+          categoria_operativa: detalle.categoria_operativa
+        });
+      }
+
+      for (const producto of nuevos) {
+        const response = await fetch('/api/admin/productos-personalizados', {
+          method:'POST',
+          credentials:'same-origin',
+          headers:{ 'Content-Type':'application/json' },
+          body:JSON.stringify(producto)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok && response.status !== 409) {
+          throw new Error(data.error || `No se pudo aprender "${producto.nombre}".`);
+        }
+        if (data.producto) {
+          const indice = catalogo.findIndex((item) =>
+            normalizarNombreProducto(item.nombre || '') === normalizarNombreProducto(data.producto.nombre || '')
+          );
+          if (indice >= 0) catalogo[indice] = data.producto;
+          else catalogo.push(data.producto);
+        }
+      }
+      window.__quickCatalog = catalogo;
+    }
+
     function resolverProductoDigitadoPorCantidad(texto, cantidad) {
       const original = limpiarNombreProductoLibreDigitacion(texto);
       if (!original) return null;
@@ -4447,6 +4611,7 @@
     function renderQuickEntryPreview() {
       const lista = getQuickEntryLines();
       actualizarOpcionesTortaDigitacion(lista);
+      actualizarClasificacionesPersonalizadas(lista);
       const contenedor = document.getElementById('digitacionResumen');
       if (!contenedor) return;
 
@@ -4460,7 +4625,10 @@
         const catalogo = Array.isArray(window.__quickCatalog) ? window.__quickCatalog : [];
         const item = buscarItemCatalogoDigitacion(catalogo, producto);
         const subtotal = calcularSubtotalCatalogo(item, Math.max(1, cantidad || 1));
-        const priceText = item ? ` • S/. ${subtotal.toFixed(2)}` : ' • personalizado';
+        const categoria = categoriaOperativaDigitacion(nombre, Math.max(1, cantidad || 1));
+        const priceText = item && !item.personalizado
+          ? ` • S/. ${subtotal.toFixed(2)}`
+          : ` • ${categoria || 'personalizado'}`;
         return `<li><span>${cantidad ? `${cantidad} • ${nombre}${priceText}` : linea}</span><strong>${cantidad || 1}</strong></li>`;
       });
 
@@ -4648,12 +4816,14 @@
         const subtotal = calcularSubtotalCatalogo(precioItem, cantidad);
         const fotoKey = obtenerClaveFotoTorta(indice, producto);
         const tipoProducto = tipoItemCocina(producto, cantidad, normalizarNombreProducto);
+        const categoriaOperativa = categoriaOperativaDigitacion(producto, cantidad);
         detalles.push({
           producto_nombre: producto,
+          categoria_operativa: categoriaOperativa,
           cantidad,
           subtotal: Number(subtotal.toFixed(2)),
           paquetes: {},
-          foto_torta: tipoProducto.esTorta ? (window.__quickCakePhotos.get(fotoKey) || '') : ''
+          foto_torta: (categoriaOperativa === 'Tortas' || tipoProducto.esTorta) ? (window.__quickCakePhotos.get(fotoKey) || '') : ''
         });
       }
 
@@ -4672,6 +4842,8 @@
       if (submitButton) submitButton.disabled = true;
 
       try {
+        await aprenderProductosPersonalizados(detalles);
+
         const payloadPedido = {
           tipo_cliente: 'Cliente',
           cliente_nombre: `${nombreCliente} ${apellidoCliente}`.trim(),
@@ -4727,6 +4899,9 @@
         document.getElementById('quickExtraChocolate').checked = false;
         document.getElementById('quickExtraSelva').checked = false;
         window.__quickCakePhotos.clear();
+        window.__quickCustomCategorySelections.clear();
+        const customPanel = document.getElementById('quickCustomProducts');
+        if (customPanel) { customPanel.innerHTML = ''; customPanel.classList.add('hidden'); }
         const fotosTorta = document.getElementById('quickFotosTorta');
         if (fotosTorta) fotosTorta.innerHTML = '';
         document.getElementById('quickRestante').value = 'S/. 0.00';
@@ -5936,6 +6111,7 @@
       const cantidad = Number(item.cantidad || 1);
       const subtotal = Number(item.subtotal || 0);
       const fotoTorta = String(item.foto_torta || '');
+      const categoriaOperativa = normalizarCategoriaOperativa(item.categoria_operativa || '') || sugerirCategoriaOperativa(nombre, cantidad);
       return `
         <div class="pedido-item-editor" data-item-index="${index}">
           <input type="hidden" name="item_foto_${index}" value="${fotoTorta.replace(/"/g, '&quot;')}" />
@@ -5950,6 +6126,12 @@
           <div class="editor-item-field">
             <span>Subtotal</span>
             <input type="number" min="0" step="0.01" name="item_subtotal_${index}" value="${subtotal.toFixed(2)}" class="form-control" aria-label="Subtotal ${index + 1}" onfocus="this.select()" />
+          </div>
+          <div class="editor-item-field">
+            <span>Tipo</span>
+            <select name="item_categoria_${index}" class="form-control" aria-label="Tipo de producto ${index + 1}">
+              ${CATEGORIAS_OPERATIVAS_DIGITACION.map((cat) => `<option value="${cat}" ${cat === categoriaOperativa ? 'selected' : ''}>${cat}</option>`).join('')}
+            </select>
           </div>
           <button type="button" class="delete-order-btn" data-remove-item="${index}">Quitar</button>
         </div>
@@ -6038,8 +6220,9 @@
         const nombre = fila.querySelector('input[name^="item_nombre_"]')?.value.trim() || '';
         const cantidad = Number(fila.querySelector('input[name^="item_cantidad_"]')?.value || 0);
         const subtotal = Number(fila.querySelector('input[name^="item_subtotal_"]')?.value || 0);
+        const categoria_operativa = fila.querySelector('select[name^="item_categoria_"]')?.value || '';
         const foto_torta = fila.querySelector('input[name^="item_foto_"]')?.value || '';
-        return { producto_nombre: nombre, cantidad, subtotal, paquetes: {}, foto_torta };
+        return { producto_nombre: nombre, categoria_operativa, cantidad, subtotal, paquetes: {}, foto_torta };
       }).filter((item) => item.producto_nombre && item.cantidad > 0);
 
       if (!detalles.length) {
