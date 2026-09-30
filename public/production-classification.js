@@ -66,7 +66,7 @@ function grupoProductoProduccion(nombre, normalizar) {
   // sánguche. Una fila "Francesito con asado" no puede fusionarse con
   // "Ciabattita con asado". Cualquier base de pan con relleno se trata como
   // Sándwich; la pieza de pan sola continúa en Panes.
-  const baseRellena = clave.match(/^(FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CAMOTE|MAIZ|ARABE|BAGUETINO)\b/);
+  const baseRellena = clave.match(/^(FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO)\b/);
   if (baseRellena) {
     const resto = clave.slice(baseRellena[0].length).trim();
     if (resto) return 'Sándwiches';
@@ -78,7 +78,7 @@ function grupoProductoProduccion(nombre, normalizar) {
   }
 
   if (/\bCIABAT[A-Z]*\b/.test(clave) && !/^(?:SANDWICH|SANGUCHE|TRIPLE)\b/.test(clave)) return 'Panes';
-  if (/^(PAN|MINI|MINNI|BAGUETINA|BAGUETTE|BAGUETINO|CIABAT[A-Z]*|CROISSANT|FRANCES|ARABE|PULLMAN|PULMAN|ROSETA)\b/.test(clave)) return 'Panes';
+  if (/^(PAN|MINI|MINNI|BAGUETINA|BAGUETTE|BAGUETINO|CIABAT[A-Z]*|CROISSANT|CROSSAINT|FRANCES|ARABE|ARABITO|PULLMAN|PULMAN|ROSETA)\b/.test(clave)) return 'Panes';
 
   return 'Bocaditos';
 }
