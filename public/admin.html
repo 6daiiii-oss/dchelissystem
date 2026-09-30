@@ -5146,14 +5146,14 @@
       const clave = normalizarNombreProducto(nombre || '');
       const fuente = normalizarNombreProducto(categoriaFuente || '');
 
-      if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(fuente)
-          || /\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
-
-      if (/\bTORTAS?\b/.test(fuente)
-          || (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave))) return 'tortas';
-
+      // La sección explícita del Excel manda sobre el nombre del producto.
+      if (/\bTORTAS?\b/.test(fuente)) return 'tortas';
+      if (/\b(KEKE|KEKES|QUEQUE|QUEQUES)\b/.test(fuente)) return 'kekes';
       if (/\bDULCES?\b/.test(fuente) || /\bBOCADITOS?\s+DULCES?\b/.test(fuente)) return 'dulces';
       if (/\bSALADOS?\b/.test(fuente) || /\bBOCADITOS?\s+SALADOS?\b/.test(fuente)) return 'salados';
+
+      if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
+      if (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave)) return 'tortas';
 
       const grupo = grupoProductoProduccion(nombre || '', normalizarNombreProducto);
       if (grupo === 'Sándwiches') return 'sanguches';
