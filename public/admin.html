@@ -5136,9 +5136,6 @@
       const clave = normalizarNombreProducto(nombre || '');
       if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
       if (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave)) return 'tortas';
-      if (/\bCIABATTIT[A-Z]*\b.*\bHOT DOG\b/.test(clave)) return 'panes';
-      if (/\b(CIABATTIT[A-Z]*|FRANCESIT[A-Z]*|MAIZ)\b.*\b(POLLO|ASADO|MECHADA|LOMITO|HAMBURGUESA|TORREJA|PECANAS|PINA|DURAZNO)\b/.test(clave)) return 'sanguches';
-
       const grupo = grupoProductoProduccion(nombre || '', normalizarNombreProducto);
       if (grupo === 'Panes') return 'panes';
       if (grupo === 'Sándwiches') return 'sanguches';
