@@ -5089,25 +5089,29 @@
 
       const grupos = [];
       lista.forEach((dia) => {
-        const lunes = lunesDeFechaCasino(dia.fecha);
+        const semanaForzada = String(dia.semana_forzada || '').trim();
+        const lunes = semanaForzada ? '' : lunesDeFechaCasino(dia.fecha);
+        const clave = semanaForzada ? `forzada:${semanaForzada}` : `calendario:${lunes}`;
         let grupo = grupos[grupos.length - 1];
-        if (!grupo || grupo.lunes !== lunes) {
-          grupo = { lunes, dias: [] };
+        if (!grupo || grupo.clave !== clave) {
+          grupo = { clave, lunes, semanaForzada, dias: [] };
           grupos.push(grupo);
         }
         grupo.dias.push(dia);
       });
 
       return grupos.map((grupo, indice) => {
-        const inicio = grupo.dias[0]?.fecha || grupo.lunes;
-        const fin = grupo.dias[grupo.dias.length - 1]?.fecha || inicio;
+        const limitesForzados = grupo.semanaForzada ? grupo.semanaForzada.split('|') : [];
+        const inicio = limitesForzados[0] || grupo.dias[0]?.fecha || grupo.lunes;
+        const fin = limitesForzados[1] || grupo.dias[grupo.dias.length - 1]?.fecha || inicio;
         return {
           indice,
           numero: indice + 1,
           dias: grupo.dias,
           inicio,
           fin,
-          finSemana: (() => {
+          esForzada: Boolean(grupo.semanaForzada),
+          finSemana: grupo.semanaForzada ? fin : (() => {
             const domingo = fechaCasinoADate(grupo.lunes);
             domingo.setDate(domingo.getDate() + 6);
             return isoDateCasino(domingo);
@@ -5179,8 +5183,8 @@
     }
 
     function renderizarTablaCasino(casino, productos, dias) {
-      if (!dias.length || !productos.length) {
-        return '<div class="casino-empty-day">Sin pedidos en esta hoja.</div>';
+      if (!dias.length) {
+        return '<div class="casino-empty-day">Sin días disponibles en esta hoja.</div>';
       }
 
       const anchoMinimo = Math.max(620, 250 + (dias.length * 86));
@@ -5278,14 +5282,23 @@
 
       let primero = -1;
       let ultimo = -1;
+      let primeraExtension = -1;
+      let ultimaExtension = -1;
       lista.forEach((dia, indice) => {
         const tienePedidos = (Array.isArray(dia.productos) ? dia.productos : [])
           .some((producto) => Number(producto?.total || 0) > 0);
         if (tienePedidos && primero < 0) primero = indice;
         if (tienePedidos) ultimo = indice;
+        if (dia?.extension_manual) {
+          if (primeraExtension < 0) primeraExtension = indice;
+          ultimaExtension = indice;
+        }
       });
 
-      // El cronograma se muestra completo desde su primer día con pedidos hasta el último.
+      if (primero < 0 && primeraExtension >= 0) primero = primeraExtension;
+      if (ultimaExtension > ultimo) ultimo = ultimaExtension;
+
+      // Las extensiones manuales forman parte real del cronograma aunque todavía estén vacías.
       return primero >= 0 && ultimo >= primero ? lista.slice(primero, ultimo + 1) : [];
     }
 
@@ -5336,7 +5349,10 @@
       if (!data || !semana) return;
 
       const dataSemana = { ...data, dias: semana.dias };
-      const cronogramas = construirCronogramaPorCasino(dataSemana).filter((cronograma) => cronograma.productos.length > 0);
+      const cronogramasBase = construirCronogramaPorCasino(dataSemana);
+      const cronogramas = semana.esForzada
+        ? cronogramasBase
+        : cronogramasBase.filter((cronograma) => cronograma.productos.length > 0);
       const casino = cronogramas[Number(indiceCasino)]?.casino;
       if (!casino) return;
 
@@ -5413,8 +5429,10 @@
       renderizarSelectorSemanasCasino(semanas);
 
       const dataSemana = { ...data, dias: semana.dias };
-      const cronogramas = construirCronogramaPorCasino(dataSemana)
-        .filter((cronograma) => cronograma.productos.length > 0);
+      const cronogramasBase = construirCronogramaPorCasino(dataSemana);
+      const cronogramas = semana.esForzada
+        ? cronogramasBase
+        : cronogramasBase.filter((cronograma) => cronograma.productos.length > 0);
 
       contenedor.innerHTML = cronogramas.map((cronograma, indice) => {
         const hojas = dividirHojasSalidaCasino(cronograma.productos, semana.dias)
