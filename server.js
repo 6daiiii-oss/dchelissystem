@@ -1623,14 +1623,15 @@ function categoriaPlantillaCasino(nombre, categoriaFuente = '') {
   const clave = normalizarProducto(nombre || '');
   const fuente = normalizarProducto(categoriaFuente || '');
 
-  if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(fuente)
-      || /\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
-
-  if (/\bTORTAS?\b/.test(fuente)
-      || (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave))) return 'tortas';
-
+  // La sección explícita del Excel manda sobre el nombre. Así, por ejemplo,
+  // "Kekito de zanahoria" dentro de Bocaditos dulces sigue siendo bocadito dulce.
+  if (/\bTORTAS?\b/.test(fuente)) return 'tortas';
+  if (/\b(KEKE|KEKES|QUEQUE|QUEQUES)\b/.test(fuente)) return 'kekes';
   if (/\bDULCES?\b/.test(fuente) || /\bBOCADITOS?\s+DULCES?\b/.test(fuente)) return 'dulces';
   if (/\bSALADOS?\b/.test(fuente) || /\bBOCADITOS?\s+SALADOS?\b/.test(fuente)) return 'salados';
+
+  if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
+  if (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave)) return 'tortas';
 
   const grupo = grupoProductoProduccion(nombre || '', normalizarProducto);
   if (grupo === 'Sándwiches') return 'sanguches';
