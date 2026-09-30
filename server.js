@@ -1561,7 +1561,7 @@ function diaFechaCasino(fecha) {
 
 function esProductoCasinoIdentidadEstricta(nombre) {
   const clave = normalizarProducto(nombre);
-  return /^(?:TRIPLES?|SANDWICH|SANGUCHE|FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CAMOTE|MAIZ|ARABE|BAGUETINO|BAGUETINA)\b/.test(clave);
+  return /^(?:TRIPLES?|SANDWICH|SANGUCHE|FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO|BAGUETINA)\b/.test(clave);
 }
 
 function resolverNombreCasino(nombre, pan = '', tipo = '') {
@@ -2303,14 +2303,17 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
     const ordenar = (productos, orden, preservarOrdenFuente = false) => {
       const rango = new Map(orden.map((categoria, indice) => [categoria, indice]));
       return productos.slice().filter((p) => rango.has(p.categoria)).sort((a, b) => {
+        const categoriaA = rango.get(a.categoria) ?? 99;
+        const categoriaB = rango.get(b.categoria) ?? 99;
+        if (categoriaA !== categoriaB) return categoriaA - categoriaB;
+
         const ordenA = Number(a.orden_fuente);
         const ordenB = Number(b.orden_fuente);
         const tieneA = Number.isFinite(ordenA);
         const tieneB = Number.isFinite(ordenB);
         if (preservarOrdenFuente && tieneA && tieneB && ordenA !== ordenB) return ordenA - ordenB;
         if (preservarOrdenFuente && tieneA !== tieneB) return tieneA ? -1 : 1;
-        return (rango.get(a.categoria) ?? 99) - (rango.get(b.categoria) ?? 99)
-          || (tieneA && tieneB ? ordenA - ordenB : a.indice - b.indice);
+        return (tieneA && tieneB ? ordenA - ordenB : a.indice - b.indice);
       });
     };
 
