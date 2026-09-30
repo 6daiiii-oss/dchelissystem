@@ -267,6 +267,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
             producto_nombre_fuente: nombreFuente || nombreOperacion,
             casino_clave_fuente: String(producto?.clave_fuente || `${normalizarProducto(casino)}::${dia.fecha}::${indiceProducto}::${normalizarProducto(nombreFuente || nombreOperacion)}`),
             casino_orden_fuente: Number.isFinite(Number(producto?.orden_fuente)) ? Number(producto.orden_fuente) : indiceProducto,
+            casino_categoria_fuente: String(producto?.categoria_fuente || '').trim(),
             cantidad
           };
         }).filter((item) => item.producto_nombre && Number.isFinite(item.cantidad) && item.cantidad > 0);
@@ -323,14 +324,15 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
       const pedidoId = idsPorUid.get(registro.casinoUid);
       if (!pedidoId) continue;
       for (const item of registro.items) {
-        valoresDetalles.push("(?, ?, '', ?, 0, '{}', '', ?, ?, ?)");
+        valoresDetalles.push("(?, ?, '', ?, 0, '{}', '', ?, ?, ?, ?)");
         parametrosDetalles.push(
           pedidoId,
           item.producto_nombre,
           item.cantidad,
           item.producto_nombre_fuente,
           item.casino_clave_fuente,
-          item.casino_orden_fuente
+          item.casino_orden_fuente,
+          item.casino_categoria_fuente
         );
       }
     }
@@ -339,7 +341,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
       await dbRunAsync(`
         INSERT INTO detalles_pedido (
           pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta,
-          producto_nombre_fuente, casino_clave_fuente, casino_orden_fuente
+          producto_nombre_fuente, casino_clave_fuente, casino_orden_fuente, casino_categoria_fuente
         )
         VALUES ${valoresDetalles.join(', ')}
       `, parametrosDetalles);
@@ -366,6 +368,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
           producto_nombre_fuente: nombreFuente || nombreOperacion,
           casino_clave_fuente: String(producto?.clave_fuente || `${normalizarProducto(casino)}::${dia.fecha}::${indiceProducto}::${normalizarProducto(nombreFuente || nombreOperacion)}`),
           casino_orden_fuente: Number.isFinite(Number(producto?.orden_fuente)) ? Number(producto.orden_fuente) : indiceProducto,
+          casino_categoria_fuente: String(producto?.categoria_fuente || '').trim(),
           cantidad
         };
       }).filter((item) => item.producto_nombre && Number.isFinite(item.cantidad) && item.cantidad > 0);
@@ -407,7 +410,8 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
             item.cantidad,
             item.producto_nombre_fuente,
             item.casino_clave_fuente,
-            item.casino_orden_fuente
+            item.casino_orden_fuente,
+            item.casino_categoria_fuente
           );
         }
         await dbRunAsync(
@@ -444,7 +448,7 @@ async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '', c
   const rows = await dbAllAsync(`
     SELECT p.id, p.cliente_nombre, p.casino_nombre, p.fecha_recoge, p.cronograma_casino_id,
            dp.producto_nombre, dp.producto_nombre_fuente, dp.casino_clave_fuente,
-           dp.casino_orden_fuente, dp.cantidad
+           dp.casino_orden_fuente, dp.casino_categoria_fuente, dp.cantidad
     FROM pedidos p
     JOIN detalles_pedido dp ON dp.pedido_id = p.id
     WHERE ${condiciones.join(' AND ')}
@@ -487,6 +491,7 @@ async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '', c
         nombre_operacion: nombreOperacion,
         clave_fuente: claveFuente,
         orden_fuente: Number.isFinite(Number(row.casino_orden_fuente)) ? Number(row.casino_orden_fuente) : null,
+        categoria_fuente: String(row.casino_categoria_fuente || '').trim(),
         grupo: grupoProductoCasino(nombreFuente || nombreOperacion) === 'extra' ? 'extra' : 'principal',
         por_casino: {},
         total: 0
@@ -584,6 +589,7 @@ function combinarCronogramaCasinoConPedidos(baseOriginal, editado) {
           nombre_operacion: productoEditado?.nombre_operacion || resolverProductoCasinoOperacion(nombre),
           clave_fuente: claveFuente,
           orden_fuente: Number.isFinite(Number(productoEditado?.orden_fuente)) ? Number(productoEditado.orden_fuente) : null,
+          categoria_fuente: String(productoEditado?.categoria_fuente || '').trim(),
           grupo: productoEditado.grupo || (grupoProductoCasino(nombre) === 'extra' ? 'extra' : 'principal'),
           por_casino: {},
           total: 0
@@ -592,6 +598,9 @@ function combinarCronogramaCasinoConPedidos(baseOriginal, editado) {
       }
       if (Number.isFinite(Number(productoEditado?.orden_fuente))) {
         producto.orden_fuente = Number(productoEditado.orden_fuente);
+      }
+      if (String(productoEditado?.categoria_fuente || '').trim()) {
+        producto.categoria_fuente = String(productoEditado.categoria_fuente).trim();
       }
       if (!producto.por_casino) producto.por_casino = {};
 
@@ -1610,6 +1619,34 @@ function grupoProductoCasino(nombre, categoria = '', esFormatoPanTipo = false) {
   return 'principal';
 }
 
+function categoriaPlantillaCasino(nombre, categoriaFuente = '') {
+  const clave = normalizarProducto(nombre || '');
+  const fuente = normalizarProducto(categoriaFuente || '');
+
+  if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(fuente)
+      || /\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
+
+  if (/\bTORTAS?\b/.test(fuente)
+      || (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave))) return 'tortas';
+
+  if (/\bDULCES?\b/.test(fuente) || /\bBOCADITOS?\s+DULCES?\b/.test(fuente)) return 'dulces';
+  if (/\bSALADOS?\b/.test(fuente) || /\bBOCADITOS?\s+SALADOS?\b/.test(fuente)) return 'salados';
+
+  const grupo = grupoProductoProduccion(nombre || '', normalizarProducto);
+  if (grupo === 'Sándwiches') return 'sanguches';
+  if (grupo === 'Triples') return 'triples';
+  if (grupo === 'Piqueos') return 'piqueos';
+  if (grupo === 'Panes') return 'panes';
+
+  if (/\b(PULLMAN|PULMAN|PAN(?:ES)?|SIN RELLENO|TAMANO REGULAR)\b/.test(fuente)) return 'panes';
+
+  if (/\b(ALFAJOR(?:CITO)?S?|OREJITAS?|PANUELITOS?|PIONONITOS?|PIONONO|PYE|PIE|RELAMPAGOS?|TARTALETAS?|BISCOTELAS?|BROWNIES?|CISNES?|COCADAS?|CONITOS?|DONAS?|KEKITOS?|MERENGUITOS?|MILHOJAS?|MOUSSE|NIDITOS?|PROFITEROL(?:ES)?|ROSQUITAS?|TORTITAS?|TRES LECHES|TRUFAS?)\b/.test(clave)) {
+    return 'dulces';
+  }
+
+  return 'salados';
+}
+
 function huellaCronogramaCasino(datos) {
   const dias = (Array.isArray(datos?.dias) ? datos.dias : [])
     .map((dia) => ({
@@ -1840,6 +1877,7 @@ async function procesarCronogramaCasinos(buffer) {
           String(fila)
         ].join('::');
         const ordenFuente = ordenFuenteGlobal++;
+        const categoriaFuente = String(esFormatoPanTipo ? pan : categoriaActual || '').replace(/\s+/g, ' ').trim();
         const nombreProductoBase = resolverNombreCasino(nombreOriginal, pan, tipo);
         const reconocido = resolverVariantePetipanCasino([pan, tipo].filter(Boolean).join(' '))
           || resolverVariantePetipanCasino(nombreOriginal)
@@ -1864,6 +1902,7 @@ async function procesarCronogramaCasinos(buffer) {
               nombre_operacion: nombreProducto,
               clave_fuente: claveFuente,
               orden_fuente: ordenFuente,
+              categoria_fuente: categoriaFuente,
               grupo,
               por_casino: {},
               total: 0,
@@ -2223,21 +2262,8 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
       .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
     if (!dias.length) return res.status(404).send('No hay días del cronograma en esa semana.');
 
-    const normalizarCategoria = (nombre) => {
-      const clave = normalizarProducto(nombre || '');
-      if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
-      if (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave)) return 'tortas';
-      const grupo = grupoProductoProduccion(nombre || '', normalizarProducto);
-      if (grupo === 'Panes') return 'panes';
-      if (grupo === 'Sándwiches') return 'sanguches';
-      if (grupo === 'Triples') return 'triples';
-      if (/\b(ALFAJOR(?:CITO)?S?|OREJITAS?|PANUELITOS?|PIONONITOS?|PIONONO|PYE|PIE|RELAMPAGOS?|TARTALETAS?|BISCOTELAS?|BROWNIES?|CISNES?|COCADAS?|CONITOS?|DONAS?|KEKITOS?|MERENGUITOS?|MILHOJAS?|MOUSSE|NIDITOS?|PROFITEROL(?:ES)?|ROSQUITAS?|TORTITAS?|TRES LECHES|TRUFAS?)\b/.test(clave)) return 'dulces';
-      return 'salados';
-    };
-    const ordenUna = ['dulces', 'salados', 'panes', 'sanguches', 'triples', 'tortas', 'kekes'];
-    const ordenHoja1 = ['dulces', 'salados', 'panes', 'tortas', 'kekes'];
-    const ordenHoja2 = ['sanguches', 'triples'];
-    const maxFilasUnaHoja = 38;
+    const ordenHoja1 = ['dulces', 'salados', 'tortas', 'kekes'];
+    const ordenHoja2 = ['sanguches', 'triples', 'piqueos', 'panes'];
 
     const casinos = new Set(Array.isArray(cronograma?.casinos) ? cronograma.casinos : []);
     dias.forEach((dia) => (dia.casinos || []).forEach((casino) => casino && casinos.add(casino)));
@@ -2249,14 +2275,14 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
         (dia.productos || []).forEach((producto) => {
           const cantidad = Number(producto?.por_casino?.[casino] || 0);
           if (!(cantidad > 0)) return;
-          const nombre = String(producto?.nombre_fuente || producto?.nombre || 'Producto').trim();
+          const nombre = String(producto?.nombre_operacion || producto?.nombre || producto?.nombre_fuente || 'Producto').trim();
           const claveFuente = String(producto?.clave_fuente || '').trim();
           const clave = claveFuente || normalizarProducto(nombre) || nombre;
           if (!mapa.has(clave)) {
             mapa.set(clave, {
               nombre,
               por_fecha: {},
-              categoria: normalizarCategoria(nombre),
+              categoria: categoriaPlantillaCasino(nombre, producto?.categoria_fuente || ''),
               indice: indice++,
               orden_fuente: Number.isFinite(Number(producto?.orden_fuente)) ? Number(producto.orden_fuente) : null
             });
@@ -2366,14 +2392,10 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
     for (const casino of casinos) {
       const productos = construirProductosCasino(casino);
       if (!productos.length) continue;
-      if (productos.length <= maxFilasUnaHoja) {
-        agregarHoja(casino, ordenar(productos, ordenUna), 1, 1);
-      } else {
-        const hoja1 = ordenar(productos.filter((p) => ordenHoja1.includes(p.categoria)), ordenHoja1);
-        const hoja2 = ordenar(productos.filter((p) => ordenHoja2.includes(p.categoria)), ordenHoja2, true);
-        const hojas = [hoja1, hoja2].filter((hoja) => hoja.length);
-        hojas.forEach((hoja, indice) => agregarHoja(casino, hoja, indice + 1, hojas.length));
-      }
+      const hoja1 = ordenar(productos.filter((p) => ordenHoja1.includes(p.categoria)), ordenHoja1);
+      const hoja2 = ordenar(productos.filter((p) => ordenHoja2.includes(p.categoria)), ordenHoja2, true);
+      const hojas = [hoja1, hoja2].filter((hoja) => hoja.length);
+      hojas.forEach((hoja, indice) => agregarHoja(casino, hoja, indice + 1, hojas.length));
     }
 
     if (!workbook.worksheets.length) return res.status(404).send('No hay pedidos Casino para exportar en esa semana.');
@@ -3037,7 +3059,7 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
     const placeholders = ids.map(() => '?').join(',');
     const detalles = await dbAllAsync(`
       SELECT pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta,
-             producto_nombre_fuente, casino_clave_fuente, casino_orden_fuente
+             producto_nombre_fuente, casino_clave_fuente, casino_orden_fuente, casino_categoria_fuente
       FROM detalles_pedido
       WHERE pedido_id IN (${placeholders})
       ORDER BY pedido_id ASC, id ASC
@@ -3060,7 +3082,8 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
         paquetes: detalle.paquetes ? JSON.parse(detalle.paquetes) : {},
         foto_torta: detalle.foto_torta || '',
         casino_clave_fuente: detalle.casino_clave_fuente || '',
-        casino_orden_fuente: Number.isFinite(Number(detalle.casino_orden_fuente)) ? Number(detalle.casino_orden_fuente) : null
+        casino_orden_fuente: Number.isFinite(Number(detalle.casino_orden_fuente)) ? Number(detalle.casino_orden_fuente) : null,
+        casino_categoria_fuente: detalle.casino_categoria_fuente || ''
       });
     }
 
@@ -3562,8 +3585,8 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
 
       const stmt = db.prepare(`INSERT INTO detalles_pedido (
         pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta,
-        producto_nombre_fuente, casino_clave_fuente, casino_orden_fuente
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        producto_nombre_fuente, casino_clave_fuente, casino_orden_fuente, casino_categoria_fuente
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
       detalles.forEach((item) => {
         const nombre = limpiarNombreProductoEntrada(item.producto_nombre);
         const cantidad = Number(item.cantidad || 0);
@@ -3586,7 +3609,8 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
           String(item.foto_torta || ''),
           claveFuenteCasino ? nombre : '',
           claveFuenteCasino,
-          ordenFuenteCasino
+          ordenFuenteCasino,
+          String(item.casino_categoria_fuente || '').trim()
         );
       });
 
