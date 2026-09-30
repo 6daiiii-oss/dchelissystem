@@ -1619,6 +1619,35 @@ function grupoProductoCasino(nombre, categoria = '', esFormatoPanTipo = false) {
   return 'principal';
 }
 
+const CASINO_PLANTILLA_HOJA_1 = Object.freeze(['dulces', 'salados', 'tortas', 'kekes']);
+const CASINO_PLANTILLA_HOJA_2 = Object.freeze(['sanguches', 'triples', 'piqueos', 'panes']);
+
+function compactarNombreCasinoVista(nombre) {
+  const original = String(nombre || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!original) return 'PRODUCTO';
+
+  let texto = original.toUpperCase();
+  if (texto.length <= 40) return texto;
+
+  const reemplazos = [
+    [/\bQUESO CREMA\b/g, 'Q. CREMA'],
+    [/\bHAMBURGUESA\b/g, 'HAMB.'],
+    [/\bMAYONESA\b/g, 'MAYO.'],
+    [/\bESPARRAGOS?\b/g, 'ESPARR.'],
+    [/\bVERDURAS\b/g, 'VERD.'],
+    [/\bPECANAS\b/g, 'PEC.'],
+    [/\bDURAZNO\b/g, 'DUR.'],
+    [/\bTOMATE\b/g, 'TOM.']
+  ];
+  for (const [patron, reemplazo] of reemplazos) {
+    texto = texto.replace(patron, reemplazo).replace(/\s+/g, ' ').trim();
+    if (texto.length <= 40) return texto;
+  }
+
+  texto = texto.replace(/\s+CON\s+/g, ' C/ ').replace(/\s+DE\s+/g, ' ').replace(/\s+/g, ' ').trim();
+  return texto;
+}
+
 function categoriaPlantillaCasino(nombre, categoriaFuente = '') {
   const clave = normalizarProducto(nombre || '');
   const fuente = normalizarProducto(categoriaFuente || '');
@@ -2263,8 +2292,8 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
       .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
     if (!dias.length) return res.status(404).send('No hay días del cronograma en esa semana.');
 
-    const ordenHoja1 = ['dulces', 'salados', 'tortas', 'kekes'];
-    const ordenHoja2 = ['sanguches', 'triples', 'piqueos', 'panes'];
+    const ordenHoja1 = CASINO_PLANTILLA_HOJA_1;
+    const ordenHoja2 = CASINO_PLANTILLA_HOJA_2;
 
     const casinos = new Set(Array.isArray(cronograma?.casinos) ? cronograma.casinos : []);
     dias.forEach((dia) => (dia.casinos || []).forEach((casino) => casino && casinos.add(casino)));
@@ -2347,7 +2376,7 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
         pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1, margins: { left:0.2, right:0.2, top:0.2, bottom:0.2, header:0, footer:0 } }
       });
       ws.views = [{ showGridLines: false }];
-      ws.getColumn(1).width = 34;
+      ws.getColumn(1).width = 38;
       for (let col = 2; col <= dias.length + 1; col += 1) ws.getColumn(col).width = 11;
 
       const cabecera = [String(casino || 'Casino').toUpperCase(), ...dias.map((dia) => {
@@ -2358,7 +2387,7 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
       const rowCabecera = ws.addRow(cabecera);
       rowCabecera.height = 30;
       rowCabecera.eachCell((cell, col) => {
-        cell.font = { bold:true, size: col === 1 ? 12 : 9 };
+        cell.font = { name: col === 1 ? 'Arial Narrow' : 'Arial', bold:true, size: col === 1 ? 11 : 9 };
         cell.alignment = { horizontal: col === 1 ? 'left' : 'center', vertical:'middle', wrapText:true };
         cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb: col === 1 ? 'FFF2F2F2' : 'FFE7EFE8' } };
         cell.border = borde;
@@ -2366,7 +2395,7 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
 
       const totales = new Map(dias.map((dia) => [dia.fecha, 0]));
       productos.forEach((producto) => {
-        const valores = [producto.nombre.toUpperCase()];
+        const valores = [compactarNombreCasinoVista(producto.nombre)];
         dias.forEach((dia) => {
           const cantidad = Number(producto.por_fecha?.[dia.fecha] || 0);
           valores.push(cantidad > 0 ? cantidad : '');
@@ -2375,8 +2404,8 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
         const row = ws.addRow(valores);
         row.height = 17;
         row.eachCell({ includeEmpty:true }, (cell, col) => {
-          cell.font = { bold: col === 1, size: 9 };
-          cell.alignment = { horizontal: col === 1 ? 'left' : 'center', vertical:'middle', wrapText: col === 1 };
+          cell.font = { name: col === 1 ? 'Arial Narrow' : 'Arial', bold: col === 1, size: col === 1 ? 8.5 : 9 };
+          cell.alignment = { horizontal: col === 1 ? 'left' : 'center', vertical:'middle', wrapText:false, shrinkToFit:false };
           cell.border = borde;
           if (col > 1 && cell.value !== '') cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFDDECDD' } };
         });
