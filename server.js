@@ -2175,7 +2175,7 @@ app.get('/api/admin/casinos/cronograma/:id', requireAdminAuth, async (req, res) 
     // Solo se consultan las ediciones de ESTA importación. La base JSON conserva
     // semanas aún no migradas; los pedidos internos sustituyen las fechas editadas.
     const cronogramaEditado = await construirCronogramaCasinoDesdePedidos({ cronogramaId: id });
-    const cronograma = combinarCronogramaCasinoConPedidos(cronogramaBase, cronogramaEditado);
+    let cronograma = combinarCronogramaCasinoConPedidos(cronogramaBase, cronogramaEditado);
 
     cronograma = {
       ...cronograma,
