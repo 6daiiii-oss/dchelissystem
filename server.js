@@ -1808,6 +1808,8 @@ async function procesarCronogramaCasinos(buffer) {
           !claveOriginal
           || claveOriginal === 'ITEM'
           || claveOriginal.includes('TOTAL CANTIDAD')
+          || claveOriginal.includes('CANTIDADES TOTALES')
+          || claveOriginal === 'TOTAL'
           || claveOriginal.includes('TOTAL SEMANAL')
           || claveOriginal.includes('TOTAL GASTO')
           || claveOriginal.includes('#REF')
