@@ -1728,7 +1728,7 @@
       }
       body.printing-casinos .casino-print-sheet-head h5 {
         margin:0 !important;
-        font-family:Arial, Helvetica, sans-serif !important;
+        font-family:"Arial Narrow", Arial, Helvetica, sans-serif !important;
         font-size:16pt !important;
         line-height:1.08 !important;
         font-weight:900 !important;
@@ -1780,7 +1780,7 @@
       }
       body.printing-casinos .casino-day-table th,
       body.printing-casinos .casino-day-table td {
-        border:1.25px solid #111 !important;
+        border:1px solid #111 !important;
         box-sizing:border-box !important;
         overflow:hidden !important;
         text-overflow:clip !important;
@@ -1819,16 +1819,16 @@
       }
 
       body.printing-casinos .casino-day-table .casino-product-col {
-        width:48mm !important;
-        min-width:48mm !important;
-        max-width:48mm !important;
-        padding-left:1.4mm !important;
+        width:90mm !important;
+        min-width:90mm !important;
+        max-width:90mm !important;
+        padding-left:1mm !important;
         background:#f9fafb !important;
         text-align:left !important;
         vertical-align:middle !important;
         font-size:var(--casino-product-font-px) !important;
         line-height:1 !important;
-        font-weight:900 !important;
+        font-weight:800 !important;
         -webkit-print-color-adjust:exact;
         print-color-adjust:exact;
       }
@@ -5008,11 +5008,8 @@
     }
 
     function renderizarNombreCasino(nombre) {
-      const texto = String(nombre || '');
-      const longitud = texto.length;
-      const factor = longitud <= 20 ? 1 : Math.max(0.34, Math.min(1, 20 / longitud));
-      const estilo = factor < 1 ? ` style="font-size:${factor.toFixed(3)}em"` : '';
-      return `<span class="casino-product-value"${estilo}>${escapeHtmlAdmin(texto)}</span>`;
+      const texto = String(nombre || '').replace(/\s+/g, ' ').trim();
+      return `<span class="casino-product-value">${escapeHtmlAdmin(texto)}</span>`;
     }
 
     function construirCronogramaPorCasino(data) {
@@ -5030,12 +5027,14 @@
 
             const multiplicador = Number(producto?.multiplicador_unidades || 1);
             const cantidad = multiplicador > 1 ? cantidadOperativa / multiplicador : cantidadOperativa;
-            const nombreBase = producto.nombre || 'Producto';
+            const nombreBase = producto.nombre_fuente || producto.nombre || 'Producto';
             const nombreVisible = multiplicador > 1 ? `${nombreBase} X${multiplicador}` : nombreBase;
-            const clave = normalizarNombreProducto(nombreVisible) || String(nombreVisible || '');
+            const claveFuente = String(producto?.clave_fuente || '').trim();
+            const clave = claveFuente || normalizarNombreProducto(nombreVisible) || String(nombreVisible || '');
             if (!productosMap.has(clave)) {
               productosMap.set(clave, {
                 nombre: nombreVisible,
+                clave_fuente: claveFuente,
                 grupo: producto.grupo === 'extra' ? 'extra' : 'principal',
                 por_fecha: {},
                 total: 0,
@@ -5136,7 +5135,7 @@
 
     const MAX_FILAS_CASINO_UNA_HOJA = 38;
     const ORDEN_CASINO_UNA_HOJA = ['dulces', 'salados', 'panes', 'sanguches', 'triples', 'tortas', 'kekes'];
-    const ORDEN_CASINO_HOJA_1 = ['dulces', 'salados', 'panes', 'kekes', 'tortas'];
+    const ORDEN_CASINO_HOJA_1 = ['dulces', 'salados', 'panes', 'tortas', 'kekes'];
     const ORDEN_CASINO_HOJA_2 = ['sanguches', 'triples'];
 
     function categoriaSalidaCasino(nombre) {
@@ -5154,7 +5153,7 @@
       return 'salados';
     }
 
-    function ordenarProductosSalidaCasino(productos, ordenCategorias) {
+    function ordenarProductosSalidaCasino(productos, ordenCategorias, preservarOrdenFuente = false) {
       const rango = new Map(ordenCategorias.map((categoria, indice) => [categoria, indice]));
       return (Array.isArray(productos) ? productos : [])
         .map((producto, indice) => ({
@@ -5168,10 +5167,10 @@
           const ordenB = Number(b.orden_fuente);
           const tieneOrdenA = Number.isFinite(ordenA);
           const tieneOrdenB = Number.isFinite(ordenB);
-          if (tieneOrdenA && tieneOrdenB) return ordenA - ordenB;
-          if (tieneOrdenA !== tieneOrdenB) return tieneOrdenA ? -1 : 1;
+          if (preservarOrdenFuente && tieneOrdenA && tieneOrdenB && ordenA !== ordenB) return ordenA - ordenB;
+          if (preservarOrdenFuente && tieneOrdenA !== tieneOrdenB) return tieneOrdenA ? -1 : 1;
           return (rango.get(a.__categoriaCasino) ?? 99) - (rango.get(b.__categoriaCasino) ?? 99)
-            || a.__indiceCasino - b.__indiceCasino;
+            || (tieneOrdenA && tieneOrdenB ? ordenA - ordenB : a.__indiceCasino - b.__indiceCasino);
         });
     }
 
@@ -5187,7 +5186,8 @@
       );
       const hoja2 = ordenarProductosSalidaCasino(
         visibles.filter((producto) => ORDEN_CASINO_HOJA_2.includes(categoriaSalidaCasino(producto.nombre))),
-        ORDEN_CASINO_HOJA_2
+        ORDEN_CASINO_HOJA_2,
+        true
       );
       return [hoja1, hoja2].filter((hoja) => hoja.length);
     }
@@ -5254,12 +5254,12 @@
       const filas = Math.max(1, productos.length + 1);
       const altoDisponibleMm = 270;
       const altoFilaMm = Math.min(7.2, altoDisponibleMm / (filas + 2));
-      const fuenteBasePx = Math.max(5.6, Math.min(11.5, altoFilaMm * 1.65));
-      const fuenteProductoPx = Math.max(5.4, Math.min(11.5, fuenteBasePx));
-      const fuenteNumeroPx = Math.max(6.2, Math.min(13, altoFilaMm * 1.9));
-      const paddingMm = Math.max(0.2, Math.min(1.1, altoFilaMm * 0.11));
-      const fuenteDiaPx = Math.max(7.5, Math.min(10.5, diasSemana.length > 7 ? 8 : 9.5));
-      const fuenteFechaPx = Math.max(6.8, Math.min(9.5, diasSemana.length > 7 ? 7.3 : 8.5));
+      const fuenteBasePx = 10;
+      const fuenteProductoPx = 10;
+      const fuenteNumeroPx = 10;
+      const paddingMm = Math.max(0.15, Math.min(0.65, altoFilaMm * 0.08));
+      const fuenteDiaPx = 9;
+      const fuenteFechaPx = 8;
 
       const estiloAjuste = [
         `--casino-row-mm:${altoFilaMm.toFixed(3)}mm`,
