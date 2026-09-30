@@ -237,6 +237,7 @@ async function initializeDatabase() {
   await pool.query(`ALTER TABLE detalles_pedido ADD COLUMN IF NOT EXISTS producto_nombre_fuente TEXT DEFAULT ''`);
   await pool.query(`ALTER TABLE detalles_pedido ADD COLUMN IF NOT EXISTS casino_clave_fuente TEXT DEFAULT ''`);
   await pool.query(`ALTER TABLE detalles_pedido ADD COLUMN IF NOT EXISTS casino_orden_fuente INTEGER`);
+  await pool.query(`ALTER TABLE detalles_pedido ADD COLUMN IF NOT EXISTS casino_categoria_fuente TEXT DEFAULT ''`);
   await pool.query(`ALTER TABLE detalles_pedido ALTER COLUMN cantidad TYPE DOUBLE PRECISION USING cantidad::double precision`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS pedidos_casino_uid_uidx ON pedidos (casino_uid) WHERE casino_uid IS NOT NULL`);
   await pool.query(`CREATE INDEX IF NOT EXISTS detalles_pedido_pedido_idx ON detalles_pedido (pedido_id, id)`);
