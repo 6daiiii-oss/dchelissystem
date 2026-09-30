@@ -1602,11 +1602,16 @@
       vertical-align:middle;
       font-weight:inherit;
     }
+    .casino-product-col .casino-product-value {
+      font-family:"Arial Narrow", "Roboto Condensed", Arial, Helvetica, sans-serif;
+      text-transform:uppercase;
+      letter-spacing:-0.08px;
+    }
     .casino-product-value {
       display:inline-block;
       max-width:100%;
       white-space:nowrap;
-      overflow:visible;
+      overflow:hidden;
       text-overflow:clip;
       line-height:1;
       vertical-align:middle;
@@ -1819,16 +1824,18 @@
       }
 
       body.printing-casinos .casino-day-table .casino-product-col {
-        width:90mm !important;
-        min-width:90mm !important;
-        max-width:90mm !important;
+        width:94mm !important;
+        min-width:94mm !important;
+        max-width:94mm !important;
         padding-left:1mm !important;
         background:#f9fafb !important;
         text-align:left !important;
         vertical-align:middle !important;
+        font-family:"Arial Narrow", "Roboto Condensed", Arial, Helvetica, sans-serif !important;
         font-size:var(--casino-product-font-px) !important;
         line-height:1 !important;
         font-weight:800 !important;
+        letter-spacing:-0.08px !important;
         -webkit-print-color-adjust:exact;
         print-color-adjust:exact;
       }
@@ -1836,7 +1843,7 @@
         display:inline-block !important;
         max-width:100% !important;
         white-space:nowrap !important;
-        overflow:visible !important;
+        overflow:hidden !important;
         text-overflow:clip !important;
         line-height:1 !important;
       }
@@ -5007,9 +5014,35 @@
       return `<span class="casino-number-value"${estilo}>${escapeHtmlAdmin(texto)}</span>`;
     }
 
+    function compactarNombreCasinoVista(nombre) {
+      const original = String(nombre || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!original) return 'PRODUCTO';
+
+      let texto = original.toUpperCase();
+      if (texto.length <= 40) return texto;
+
+      const reemplazos = [
+        [/\bQUESO CREMA\b/g, 'Q. CREMA'],
+        [/\bHAMBURGUESA\b/g, 'HAMB.'],
+        [/\bMAYONESA\b/g, 'MAYO.'],
+        [/\bESPARRAGOS?\b/g, 'ESPARR.'],
+        [/\bVERDURAS\b/g, 'VERD.'],
+        [/\bPECANAS\b/g, 'PEC.'],
+        [/\bDURAZNO\b/g, 'DUR.'],
+        [/\bTOMATE\b/g, 'TOM.']
+      ];
+      for (const [patron, reemplazo] of reemplazos) {
+        texto = texto.replace(patron, reemplazo).replace(/\s+/g, ' ').trim();
+        if (texto.length <= 40) return texto;
+      }
+
+      return texto.replace(/\s+CON\s+/g, ' C/ ').replace(/\s+DE\s+/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
     function renderizarNombreCasino(nombre) {
-      const texto = String(nombre || '').replace(/\s+/g, ' ').trim();
-      return `<span class="casino-product-value">${escapeHtmlAdmin(texto)}</span>`;
+      const original = String(nombre || '').replace(/\s+/g, ' ').trim();
+      const visible = compactarNombreCasinoVista(original);
+      return `<span class="casino-product-value" title="${escapeHtmlAdmin(original)}">${escapeHtmlAdmin(visible)}</span>`;
     }
 
     function construirCronogramaPorCasino(data) {
@@ -5269,12 +5302,12 @@
       const filas = Math.max(1, productos.length + 1);
       const altoDisponibleMm = 270;
       const altoFilaMm = Math.min(7.2, altoDisponibleMm / (filas + 2));
-      const fuenteBasePx = 10;
-      const fuenteProductoPx = 10;
-      const fuenteNumeroPx = 10;
-      const paddingMm = Math.max(0.15, Math.min(0.65, altoFilaMm * 0.08));
-      const fuenteDiaPx = 9;
-      const fuenteFechaPx = 8;
+      const fuenteBasePx = 11;
+      const fuenteProductoPx = 11.3;
+      const fuenteNumeroPx = 10.5;
+      const paddingMm = Math.max(0.12, Math.min(0.55, altoFilaMm * 0.07));
+      const fuenteDiaPx = 9.5;
+      const fuenteFechaPx = 8.5;
 
       const estiloAjuste = [
         `--casino-row-mm:${altoFilaMm.toFixed(3)}mm`,
