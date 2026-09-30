@@ -3036,7 +3036,8 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
     const ids = pedidos.map((pedido) => Number(pedido.id));
     const placeholders = ids.map(() => '?').join(',');
     const detalles = await dbAllAsync(`
-      SELECT pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta
+      SELECT pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta,
+             producto_nombre_fuente, casino_clave_fuente, casino_orden_fuente
       FROM detalles_pedido
       WHERE pedido_id IN (${placeholders})
       ORDER BY pedido_id ASC, id ASC
@@ -3052,12 +3053,14 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
       const pedido = porId.get(Number(detalle.pedido_id));
       if (!pedido) continue;
       pedido.detalles.push({
-        producto_nombre: detalle.producto_nombre,
+        producto_nombre: detalle.producto_nombre_fuente || detalle.producto_nombre,
         categoria_operativa: detalle.categoria_operativa || '',
         cantidad: detalle.cantidad,
         subtotal: detalle.subtotal,
         paquetes: detalle.paquetes ? JSON.parse(detalle.paquetes) : {},
-        foto_torta: detalle.foto_torta || ''
+        foto_torta: detalle.foto_torta || '',
+        casino_clave_fuente: detalle.casino_clave_fuente || '',
+        casino_orden_fuente: Number.isFinite(Number(detalle.casino_orden_fuente)) ? Number(detalle.casino_orden_fuente) : null
       });
     }
 
@@ -3557,7 +3560,10 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
         return res.status(500).json({ error: errDelete.message });
       }
 
-      const stmt = db.prepare(`INSERT INTO detalles_pedido (pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+      const stmt = db.prepare(`INSERT INTO detalles_pedido (
+        pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta,
+        producto_nombre_fuente, casino_clave_fuente, casino_orden_fuente
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
       detalles.forEach((item) => {
         const nombre = limpiarNombreProductoEntrada(item.producto_nombre);
         const cantidad = Number(item.cantidad || 0);
@@ -3568,7 +3574,20 @@ app.put('/api/admin/pedidos/:id', requireAdminAuth, async (req, res) => {
         const categoriaOperativa = normalizarCategoriaOperativa(item.categoria_operativa)
           || categoriasPersonalizadas.get(normalizarProducto(nombreProducto))
           || '';
-        stmt.run(id, nombreProducto, categoriaOperativa, cantidad, subtotal, paquetes, String(item.foto_torta || ''));
+        const claveFuenteCasino = String(item.casino_clave_fuente || '').trim();
+        const ordenFuenteCasino = Number.isFinite(Number(item.casino_orden_fuente)) ? Number(item.casino_orden_fuente) : null;
+        stmt.run(
+          id,
+          nombreProducto,
+          categoriaOperativa,
+          cantidad,
+          subtotal,
+          paquetes,
+          String(item.foto_torta || ''),
+          claveFuenteCasino ? nombre : '',
+          claveFuenteCasino,
+          ordenFuenteCasino
+        );
       });
 
       stmt.finalize((finalizeErr) => {
