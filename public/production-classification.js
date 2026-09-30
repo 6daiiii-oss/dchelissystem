@@ -58,11 +58,18 @@ function grupoProductoProduccion(nombre, normalizar) {
     return /^(?:PETIPAN|PETIT PAN|PETITPAN|PETI PAN)(?:\s+MINI)?$/.test(clave) ? 'Panes' : 'Sándwiches';
   }
 
-  if (/\b(SANDWICH|SANGUCHE|BUTIFARRA|CAPRESE|CAPRECCE)\b/.test(clave)
-      || /\bCROISSANT\b.*\b(POLLO|MIXTO|JAMON|QUESO)\b/.test(clave)
-      || /\b(?:FRANCES|ARABE)\b.*\b(POLLO|ASADO|LOMITO|HAMBURGUESA)\b/.test(clave)
-      || /\bCIABAT[A-Z]*\b.*\b(POLLO|ASADO|LOMITO|HAMBURGUESA|HOT\s*DOG|CHORIZO)\b/.test(clave)) {
+  if (/\b(SANDWICH|SANGUCHE|BUTIFARRA|CAPRESE|CAPRECCE)\b/.test(clave)) {
     return 'Sándwiches';
+  }
+
+  // En cronogramas de Casinos, el tipo de pan forma parte de la identidad del
+  // sánguche. Una fila "Francesito con asado" no puede fusionarse con
+  // "Ciabattita con asado". Cualquier base de pan con relleno se trata como
+  // Sándwich; la pieza de pan sola continúa en Panes.
+  const baseRellena = clave.match(/^(FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CAMOTE|MAIZ|ARABE|BAGUETINO)\b/);
+  if (baseRellena) {
+    const resto = clave.slice(baseRellena[0].length).trim();
+    if (resto) return 'Sándwiches';
   }
 
   if (/^PIQUEOS?\b/.test(clave)
