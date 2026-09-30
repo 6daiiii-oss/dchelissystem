@@ -107,6 +107,137 @@ function inicioSemanaCasino(fechaIso) {
   return fecha.toISOString().slice(0, 10);
 }
 
+
+const SEMANA_CASINO_OCTUBRE_2026 = {
+  inicio: '2026-10-01',
+  fin: '2026-10-07',
+  clave: '2026-10-01|2026-10-07'
+};
+
+function fechasRangoIsoCasino(desde, hasta) {
+  const fechas = [];
+  const actual = new Date(`${desde}T12:00:00Z`);
+  const limite = new Date(`${hasta}T12:00:00Z`);
+  if (Number.isNaN(actual.getTime()) || Number.isNaN(limite.getTime())) return fechas;
+  while (actual.getTime() <= limite.getTime()) {
+    fechas.push(actual.toISOString().slice(0, 10));
+    actual.setUTCDate(actual.getUTCDate() + 1);
+  }
+  return fechas;
+}
+
+async function asegurarSemanaCasinoOctubre2026() {
+  const { inicio, fin, clave } = SEMANA_CASINO_OCTUBRE_2026;
+  let meta = await dbGetAsync(`
+    SELECT id, nombre_archivo, fecha_inicio, fecha_fin, datos_json
+    FROM casino_cronogramas
+    WHERE fecha_inicio <= '2026-09-30'
+      AND fecha_fin >= '2026-09-24'
+      AND UPPER(COALESCE(nombre_archivo, '')) NOT LIKE '%NEWPORT%'
+    ORDER BY creado_en DESC, id DESC
+    LIMIT 1
+  `);
+
+  if (!meta) {
+    meta = await dbGetAsync(`
+      SELECT id, nombre_archivo, fecha_inicio, fecha_fin, datos_json
+      FROM casino_cronogramas
+      WHERE fecha_inicio <= '2026-09-30'
+        AND fecha_fin >= '2026-09-24'
+      ORDER BY creado_en DESC, id DESC
+      LIMIT 1
+    `);
+  }
+  if (!meta) return false;
+
+  let datos;
+  try { datos = JSON.parse(meta.datos_json); }
+  catch { return false; }
+
+  if (!Array.isArray(datos.dias)) datos.dias = [];
+  if (!Array.isArray(datos.casinos)) datos.casinos = [];
+
+  const casinos = new Set((datos.casinos || []).map((casino) => String(casino || '').trim()).filter(Boolean));
+  for (const dia of datos.dias) {
+    for (const casino of Array.isArray(dia?.casinos) ? dia.casinos : []) {
+      const nombre = String(casino || '').trim();
+      if (nombre) casinos.add(nombre);
+    }
+  }
+  datos.casinos = [...casinos];
+
+  const diasPorFecha = new Map(
+    datos.dias
+      .filter((dia) => dia?.fecha)
+      .map((dia) => [String(dia.fecha), dia])
+  );
+
+  for (const fecha of fechasRangoIsoCasino(inicio, fin)) {
+    const fechaObj = new Date(`${fecha}T12:00:00Z`);
+    let dia = diasPorFecha.get(fecha);
+    if (!dia) {
+      dia = {
+        fecha,
+        dia: Number.isNaN(fechaObj.getTime()) ? '' : diaFechaCasino(fechaObj),
+        casinos: [...casinos],
+        productos: []
+      };
+      datos.dias.push(dia);
+      diasPorFecha.set(fecha, dia);
+    }
+    dia.semana_forzada = clave;
+    dia.extension_manual = true;
+    if (!Array.isArray(dia.casinos)) dia.casinos = [...casinos];
+    if (!Array.isArray(dia.productos)) dia.productos = [];
+  }
+
+  datos.dias.sort((a, b) => String(a?.fecha || '').localeCompare(String(b?.fecha || '')));
+  datos.fecha_inicio = datos.dias[0]?.fecha || meta.fecha_inicio || inicio;
+  datos.fecha_fin = datos.dias.at(-1)?.fecha || fin;
+  if (datos.fecha_fin < fin) datos.fecha_fin = fin;
+
+  await dbRunAsync(`
+    UPDATE casino_cronogramas
+    SET datos_json = ?, fecha_fin = ?
+    WHERE id = ?
+  `, [JSON.stringify(datos), datos.fecha_fin, Number(meta.id)]);
+
+  const valores = [];
+  const parametros = [];
+  for (const fecha of fechasRangoIsoCasino(inicio, fin)) {
+    for (const casino of casinos) {
+      const casinoUid = `cronograma:${Number(meta.id)}:${fecha}:${normalizarProducto(casino)}`;
+      const hash = crypto.createHash('sha1').update(casinoUid).digest('hex').slice(0, 8).toUpperCase();
+      valores.push(`(?, 'Casino', ?, 'CASINO', 0, 0, 'Cuenta Casino', ?, '12:00', '', '', '', '', '',
+        'Registrado', CURRENT_TIMESTAMP, 'casino', ?, ?, ?, ?)`);
+      parametros.push(
+        `CAS-${fecha.replace(/-/g, '')}-${hash}`,
+        casino,
+        fecha,
+        Number(meta.id),
+        casino,
+        inicio,
+        casinoUid
+      );
+    }
+  }
+
+  if (valores.length) {
+    await dbRunAsync(`
+      INSERT INTO pedidos (
+        codigo, tipo_cliente, cliente_nombre, celular, monto_total, adelanto, metodo_pago,
+        fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento,
+        nro_operacion, estado, fecha_emision, origen, cronograma_casino_id,
+        casino_nombre, casino_semana, casino_uid
+      ) VALUES ${valores.join(', ')}
+      ON CONFLICT (casino_uid) WHERE casino_uid IS NOT NULL DO NOTHING
+    `, parametros);
+  }
+
+  console.log(`Casino: semana ${inicio} a ${fin} asegurada en cronograma ${meta.id}.`);
+  return true;
+}
+
 async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones = {}) {
   if (!cronogramaId || !Array.isArray(datos?.dias)) return 0;
   const omitirVerificacionExistencia = Boolean(opciones.omitirVerificacionExistencia);
@@ -3648,4 +3779,16 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Servidor D'chelis ejecutándose en http://localhost:${PORT}`));
+
+async function iniciarServidor() {
+  try {
+    await db.ready;
+    await asegurarSemanaCasinoOctubre2026();
+    app.listen(PORT, '0.0.0.0', () => console.log(`Servidor D'chelis ejecutándose en http://localhost:${PORT}`));
+  } catch (error) {
+    console.error('No se pudo completar la inicialización del servidor:', error);
+    process.exitCode = 1;
+  }
+}
+
+iniciarServidor();
