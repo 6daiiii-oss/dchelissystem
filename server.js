@@ -403,7 +403,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
         const valores = [];
         const parametros = [];
         for (const item of items) {
-          valores.push("(?, ?, '', ?, 0, '{}', '', ?, ?, ?)");
+          valores.push("(?, ?, '', ?, 0, '{}', '', ?, ?, ?, ?)");
           parametros.push(
             pedidoId,
             item.producto_nombre,
@@ -417,7 +417,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
         await dbRunAsync(
           `INSERT INTO detalles_pedido (
              pedido_id, producto_nombre, categoria_operativa, cantidad, subtotal, paquetes, foto_torta,
-             producto_nombre_fuente, casino_clave_fuente, casino_orden_fuente
+             producto_nombre_fuente, casino_clave_fuente, casino_orden_fuente, casino_categoria_fuente
            )
            VALUES ${valores.join(', ')}`,
           parametros
