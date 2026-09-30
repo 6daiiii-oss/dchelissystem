@@ -238,7 +238,7 @@ async function asegurarSemanaCasinoOctubre2026() {
   return true;
 }
 
-const CORRECCION_JOKER_OCTUBRE_2026 = 'joker-sanguches-triples-2026-10-01-v1';
+const CORRECCION_JOKER_OCTUBRE_2026 = 'joker-sanguches-triples-2026-10-01-v2';
 const JOKER_OCTUBRE_2026_SANGUCHES_TRIPLES = [
   ['Francesito jamón queso', ['2026-10-02']],
   ['Francesito con hot dog', ['2026-10-03', '2026-10-05']],
@@ -296,13 +296,81 @@ function esSangucheOTripleCasino(nombre) {
 
 function agendaJokerOctubre2026PorFecha() {
   const agenda = new Map(fechasRangoIsoCasino('2026-10-01', '2026-10-07').map((fecha) => [fecha, []]));
-  for (const [nombre, fechas] of JOKER_OCTUBRE_2026_SANGUCHES_TRIPLES) {
+  JOKER_OCTUBRE_2026_SANGUCHES_TRIPLES.forEach(([nombre, fechas], orden_fuente) => {
     const categoria_operativa = /^TRIPLE\b/.test(normalizarProducto(nombre)) ? 'Triples' : 'Sándwiches';
     for (const fecha of fechas) {
-      if (agenda.has(fecha)) agenda.get(fecha).push({ nombre, cantidad: 20, categoria_operativa });
+      if (agenda.has(fecha)) agenda.get(fecha).push({ nombre, cantidad: 20, categoria_operativa, orden_fuente });
     }
-  }
+  });
   return agenda;
+}
+
+function aplicarJokerOctubre2026EnCronograma(cronogramaOriginal) {
+  let cronograma;
+  try { cronograma = JSON.parse(JSON.stringify(cronogramaOriginal || {})); }
+  catch { cronograma = {}; }
+
+  if (!Array.isArray(cronograma.dias)) return cronograma;
+  const casinos = new Set((Array.isArray(cronograma.casinos) ? cronograma.casinos : []).filter(Boolean));
+  for (const dia of cronograma.dias) {
+    for (const nombre of Array.isArray(dia?.casinos) ? dia.casinos : []) if (nombre) casinos.add(nombre);
+  }
+  const joker = [...casinos].find((nombre) => /\bJOKER\b/.test(normalizarProducto(nombre)));
+  if (!joker) return cronograma;
+
+  const agenda = agendaJokerOctubre2026PorFecha();
+  const diasPorFecha = new Map(cronograma.dias.filter((dia) => dia?.fecha).map((dia) => [String(dia.fecha), dia]));
+
+  for (const [fecha, items] of agenda.entries()) {
+    let dia = diasPorFecha.get(fecha);
+    if (!dia) {
+      const fechaObj = new Date(`${fecha}T12:00:00Z`);
+      dia = { fecha, dia: diaFechaCasino(fechaObj), casinos: [joker], productos: [] };
+      cronograma.dias.push(dia);
+      diasPorFecha.set(fecha, dia);
+    }
+    if (!Array.isArray(dia.casinos)) dia.casinos = [];
+    if (!dia.casinos.some((nombre) => normalizarProducto(nombre) === normalizarProducto(joker))) dia.casinos.push(joker);
+    if (!Array.isArray(dia.productos)) dia.productos = [];
+
+    dia.productos = dia.productos.map((producto) => {
+      const porCasino = { ...(producto?.por_casino || {}) };
+      if (esSangucheOTripleCasino(producto?.nombre || '')) {
+        for (const nombreCasino of Object.keys(porCasino)) {
+          if (normalizarProducto(nombreCasino) === normalizarProducto(joker)) delete porCasino[nombreCasino];
+        }
+      }
+      const total = Object.values(porCasino).reduce((suma, cantidad) => suma + Number(cantidad || 0), 0);
+      return { ...producto, por_casino: porCasino, total };
+    }).filter((producto) => Number(producto.total || 0) > 0);
+
+    for (const item of items) {
+      const clave = normalizarProducto(item.nombre);
+      let producto = dia.productos.find((actual) => normalizarProducto(actual?.nombre || '') === clave);
+      if (!producto) {
+        producto = {
+          nombre: item.nombre,
+          grupo: 'extra',
+          por_casino: {},
+          total: 0,
+          orden_fuente: item.orden_fuente
+        };
+        dia.productos.push(producto);
+      }
+      producto.orden_fuente = item.orden_fuente;
+      producto.grupo = 'extra';
+      producto.por_casino[joker] = item.cantidad;
+      producto.total = Object.values(producto.por_casino || {}).reduce((suma, cantidad) => suma + Number(cantidad || 0), 0);
+    }
+
+    dia.semana_forzada = SEMANA_CASINO_OCTUBRE_2026.clave;
+  }
+
+  cronograma.dias.sort((a, b) => String(a?.fecha || '').localeCompare(String(b?.fecha || '')));
+  cronograma.casinos = [...casinos];
+  cronograma.fecha_inicio = cronograma.dias[0]?.fecha || cronograma.fecha_inicio || '';
+  cronograma.fecha_fin = cronograma.dias.at(-1)?.fecha || cronograma.fecha_fin || '';
+  return cronograma;
 }
 
 async function corregirJokerOctubre2026() {
@@ -372,10 +440,11 @@ async function corregirJokerOctubre2026() {
       const clave = normalizarProducto(item.nombre);
       let producto = dia.productos.find((actual) => normalizarProducto(actual?.nombre || '') === clave);
       if (!producto) {
-        producto = { nombre: item.nombre, grupo: 'extra', por_casino: {}, total: 0 };
+        producto = { nombre: item.nombre, grupo: 'extra', por_casino: {}, total: 0, orden_fuente: item.orden_fuente };
         dia.productos.push(producto);
       }
       if (!producto.por_casino) producto.por_casino = {};
+      producto.orden_fuente = item.orden_fuente;
       producto.por_casino[casino] = item.cantidad;
       producto.total = Object.values(producto.por_casino).reduce((suma, cantidad) => suma + Number(cantidad || 0), 0);
       producto.grupo = 'extra';
@@ -2321,6 +2390,7 @@ app.get('/api/admin/casinos/cronograma/:id', requireAdminAuth, async (req, res) 
     // semanas aún no migradas; los pedidos internos sustituyen las fechas editadas.
     const cronogramaEditado = await construirCronogramaCasinoDesdePedidos({ cronogramaId: id });
     let cronograma = combinarCronogramaCasinoConPedidos(cronogramaBase, cronogramaEditado);
+    cronograma = aplicarJokerOctubre2026EnCronograma(cronograma);
 
     cronograma = {
       ...cronograma,
@@ -2362,7 +2432,9 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
     catch { return res.status(500).send('El cronograma guardado está dañado.'); }
 
     const cronogramaEditado = await construirCronogramaCasinoDesdePedidos({ cronogramaId: id });
-    const cronograma = combinarCronogramaCasinoConPedidos(cronogramaBase, cronogramaEditado);
+    const cronograma = aplicarJokerOctubre2026EnCronograma(
+      combinarCronogramaCasinoConPedidos(cronogramaBase, cronogramaEditado)
+    );
     const dias = (Array.isArray(cronograma?.dias) ? cronograma.dias : [])
       .filter((dia) => dia?.fecha >= desde && dia?.fecha <= hasta)
       .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
@@ -2372,8 +2444,6 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
       const clave = normalizarProducto(nombre || '');
       if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
       if (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave)) return 'tortas';
-      if (/\bCIABATTIT[A-Z]*\b.*\bHOT DOG\b/.test(clave)) return 'panes';
-      if (/\b(CIABATTIT[A-Z]*|FRANCESIT[A-Z]*|MAIZ)\b.*\b(POLLO|ASADO|MECHADA|LOMITO|HAMBURGUESA|TORREJA|PECANAS|PINA|DURAZNO)\b/.test(clave)) return 'sanguches';
       const grupo = grupoProductoProduccion(nombre || '', normalizarProducto);
       if (grupo === 'Panes') return 'panes';
       if (grupo === 'Sándwiches') return 'sanguches';
