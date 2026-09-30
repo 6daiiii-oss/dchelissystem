@@ -5038,11 +5038,18 @@
                 nombre: nombreVisible,
                 grupo: producto.grupo === 'extra' ? 'extra' : 'principal',
                 por_fecha: {},
-                total: 0
+                total: 0,
+                orden_fuente: Number.isFinite(Number(producto?.orden_fuente)) ? Number(producto.orden_fuente) : null
               });
             }
 
             const fila = productosMap.get(clave);
+            if (Number.isFinite(Number(producto?.orden_fuente))) {
+              const orden = Number(producto.orden_fuente);
+              fila.orden_fuente = Number.isFinite(Number(fila.orden_fuente))
+                ? Math.min(Number(fila.orden_fuente), orden)
+                : orden;
+            }
             fila.por_fecha[dia.fecha] = Number(fila.por_fecha[dia.fecha] || 0) + cantidad;
             fila.total += cantidad;
             if (fila.grupo !== 'extra' && producto.grupo === 'extra') fila.grupo = 'extra';
@@ -5156,10 +5163,16 @@
           __indiceCasino: indice
         }))
         .filter((producto) => rango.has(producto.__categoriaCasino))
-        .sort((a, b) =>
-          (rango.get(a.__categoriaCasino) ?? 99) - (rango.get(b.__categoriaCasino) ?? 99)
-          || a.__indiceCasino - b.__indiceCasino
-        );
+        .sort((a, b) => {
+          const ordenA = Number(a.orden_fuente);
+          const ordenB = Number(b.orden_fuente);
+          const tieneOrdenA = Number.isFinite(ordenA);
+          const tieneOrdenB = Number.isFinite(ordenB);
+          if (tieneOrdenA && tieneOrdenB) return ordenA - ordenB;
+          if (tieneOrdenA !== tieneOrdenB) return tieneOrdenA ? -1 : 1;
+          return (rango.get(a.__categoriaCasino) ?? 99) - (rango.get(b.__categoriaCasino) ?? 99)
+            || a.__indiceCasino - b.__indiceCasino;
+        });
     }
 
     function dividirHojasSalidaCasino(productos, dias) {
@@ -5241,9 +5254,9 @@
       const filas = Math.max(1, productos.length + 1);
       const altoDisponibleMm = 270;
       const altoFilaMm = Math.min(7.2, altoDisponibleMm / (filas + 2));
-      const fuenteBasePx = Math.max(6.2, Math.min(11.5, altoFilaMm * 1.65));
-      const fuenteProductoPx = Math.max(6, Math.min(11.5, fuenteBasePx));
-      const fuenteNumeroPx = Math.max(7, Math.min(13, altoFilaMm * 1.9));
+      const fuenteBasePx = Math.max(5.6, Math.min(11.5, altoFilaMm * 1.65));
+      const fuenteProductoPx = Math.max(5.4, Math.min(11.5, fuenteBasePx));
+      const fuenteNumeroPx = Math.max(6.2, Math.min(13, altoFilaMm * 1.9));
       const paddingMm = Math.max(0.2, Math.min(1.1, altoFilaMm * 0.11));
       const fuenteDiaPx = Math.max(7.5, Math.min(10.5, diasSemana.length > 7 ? 8 : 9.5));
       const fuenteFechaPx = Math.max(6.8, Math.min(9.5, diasSemana.length > 7 ? 7.3 : 8.5));
