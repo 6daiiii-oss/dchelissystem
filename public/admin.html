@@ -5179,14 +5179,17 @@
         }))
         .filter((producto) => rango.has(producto.__categoriaCasino))
         .sort((a, b) => {
+          const categoriaA = rango.get(a.__categoriaCasino) ?? 99;
+          const categoriaB = rango.get(b.__categoriaCasino) ?? 99;
+          if (categoriaA !== categoriaB) return categoriaA - categoriaB;
+
           const ordenA = Number(a.orden_fuente);
           const ordenB = Number(b.orden_fuente);
           const tieneOrdenA = Number.isFinite(ordenA);
           const tieneOrdenB = Number.isFinite(ordenB);
           if (preservarOrdenFuente && tieneOrdenA && tieneOrdenB && ordenA !== ordenB) return ordenA - ordenB;
           if (preservarOrdenFuente && tieneOrdenA !== tieneOrdenB) return tieneOrdenA ? -1 : 1;
-          return (rango.get(a.__categoriaCasino) ?? 99) - (rango.get(b.__categoriaCasino) ?? 99)
-            || (tieneOrdenA && tieneOrdenB ? ordenA - ordenB : a.__indiceCasino - b.__indiceCasino);
+          return (tieneOrdenA && tieneOrdenB ? ordenA - ordenB : a.__indiceCasino - b.__indiceCasino);
         });
     }
 
