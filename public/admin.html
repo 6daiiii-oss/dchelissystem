@@ -5027,7 +5027,7 @@
 
             const multiplicador = Number(producto?.multiplicador_unidades || 1);
             const cantidad = multiplicador > 1 ? cantidadOperativa / multiplicador : cantidadOperativa;
-            const nombreBase = producto.nombre_fuente || producto.nombre || 'Producto';
+            const nombreBase = producto.nombre_operacion || producto.nombre || producto.nombre_fuente || 'Producto';
             const nombreVisible = multiplicador > 1 ? `${nombreBase} X${multiplicador}` : nombreBase;
             const claveFuente = String(producto?.clave_fuente || '').trim();
             const clave = claveFuente || normalizarNombreProducto(nombreVisible) || String(nombreVisible || '');
@@ -5035,6 +5035,7 @@
               productosMap.set(clave, {
                 nombre: nombreVisible,
                 clave_fuente: claveFuente,
+                categoria_fuente: String(producto?.categoria_fuente || '').trim(),
                 grupo: producto.grupo === 'extra' ? 'extra' : 'principal',
                 por_fecha: {},
                 total: 0,
@@ -5048,6 +5049,9 @@
               fila.orden_fuente = Number.isFinite(Number(fila.orden_fuente))
                 ? Math.min(Number(fila.orden_fuente), orden)
                 : orden;
+            }
+            if (!fila.categoria_fuente && String(producto?.categoria_fuente || '').trim()) {
+              fila.categoria_fuente = String(producto.categoria_fuente).trim();
             }
             fila.por_fecha[dia.fecha] = Number(fila.por_fecha[dia.fecha] || 0) + cantidad;
             fila.total += cantidad;
@@ -5133,19 +5137,31 @@
       );
     }
 
-    const MAX_FILAS_CASINO_UNA_HOJA = 38;
-    const ORDEN_CASINO_UNA_HOJA = ['dulces', 'salados', 'panes', 'sanguches', 'triples', 'tortas', 'kekes'];
-    const ORDEN_CASINO_HOJA_1 = ['dulces', 'salados', 'panes', 'tortas', 'kekes'];
-    const ORDEN_CASINO_HOJA_2 = ['sanguches', 'triples'];
+    const ORDEN_CASINO_HOJA_1 = ['dulces', 'salados', 'tortas', 'kekes'];
+    const ORDEN_CASINO_HOJA_2 = ['sanguches', 'triples', 'piqueos', 'panes'];
 
-    function categoriaSalidaCasino(nombre) {
+    function categoriaSalidaCasino(producto) {
+      const nombre = typeof producto === 'string' ? producto : (producto?.nombre || '');
+      const categoriaFuente = typeof producto === 'string' ? '' : String(producto?.categoria_fuente || '');
       const clave = normalizarNombreProducto(nombre || '');
-      if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
-      if (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave)) return 'tortas';
+      const fuente = normalizarNombreProducto(categoriaFuente || '');
+
+      if (/\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(fuente)
+          || /\b(KEKE|KEKES|QUEQUE|QUEQUES|CARROT|BUDIN)\b/.test(clave)) return 'kekes';
+
+      if (/\bTORTAS?\b/.test(fuente)
+          || (/^TORTA\b/.test(clave) && !/^TORTITA\b/.test(clave))) return 'tortas';
+
+      if (/\bDULCES?\b/.test(fuente) || /\bBOCADITOS?\s+DULCES?\b/.test(fuente)) return 'dulces';
+      if (/\bSALADOS?\b/.test(fuente) || /\bBOCADITOS?\s+SALADOS?\b/.test(fuente)) return 'salados';
+
       const grupo = grupoProductoProduccion(nombre || '', normalizarNombreProducto);
-      if (grupo === 'Panes') return 'panes';
       if (grupo === 'Sándwiches') return 'sanguches';
       if (grupo === 'Triples') return 'triples';
+      if (grupo === 'Piqueos') return 'piqueos';
+      if (grupo === 'Panes') return 'panes';
+
+      if (/\b(PULLMAN|PULMAN|PAN(?:ES)?|SIN RELLENO|TAMANO REGULAR)\b/.test(fuente)) return 'panes';
 
       if (/\b(ALFAJOR(?:CITO)?S?|OREJITAS?|PANUELITOS?|PIONONITOS?|PIONONO|PYE|PIE|RELAMPAGOS?|TARTALETAS?|BISCOTELAS?|BROWNIES?|CISNES?|COCADAS?|CONITOS?|DONAS?|KEKITOS?|MERENGUITOS?|MILHOJAS?|MOUSSE|NIDITOS?|PROFITEROL(?:ES)?|ROSQUITAS?|TORTITAS?|TRES LECHES|TRUFAS?)\b/.test(clave)) {
         return 'dulces';
@@ -5158,7 +5174,7 @@
       return (Array.isArray(productos) ? productos : [])
         .map((producto, indice) => ({
           ...producto,
-          __categoriaCasino: categoriaSalidaCasino(producto?.nombre || ''),
+          __categoriaCasino: categoriaSalidaCasino(producto),
           __indiceCasino: indice
         }))
         .filter((producto) => rango.has(producto.__categoriaCasino))
@@ -5176,16 +5192,12 @@
 
     function dividirHojasSalidaCasino(productos, dias) {
       const visibles = productosConPedidoEnDias(productos, dias);
-      if (visibles.length <= MAX_FILAS_CASINO_UNA_HOJA) {
-        return [ordenarProductosSalidaCasino(visibles, ORDEN_CASINO_UNA_HOJA)];
-      }
-
       const hoja1 = ordenarProductosSalidaCasino(
-        visibles.filter((producto) => ORDEN_CASINO_HOJA_1.includes(categoriaSalidaCasino(producto.nombre))),
+        visibles.filter((producto) => ORDEN_CASINO_HOJA_1.includes(categoriaSalidaCasino(producto))),
         ORDEN_CASINO_HOJA_1
       );
       const hoja2 = ordenarProductosSalidaCasino(
-        visibles.filter((producto) => ORDEN_CASINO_HOJA_2.includes(categoriaSalidaCasino(producto.nombre))),
+        visibles.filter((producto) => ORDEN_CASINO_HOJA_2.includes(categoriaSalidaCasino(producto))),
         ORDEN_CASINO_HOJA_2,
         true
       );
@@ -6173,12 +6185,14 @@
       const fotoTorta = String(item.foto_torta || '');
       const claveFuenteCasino = String(item.casino_clave_fuente || '');
       const ordenFuenteCasino = Number.isFinite(Number(item.casino_orden_fuente)) ? Number(item.casino_orden_fuente) : '';
+      const categoriaFuenteCasino = String(item.casino_categoria_fuente || '');
       const categoriaOperativa = normalizarCategoriaOperativa(item.categoria_operativa || '') || sugerirCategoriaOperativa(nombre, cantidad);
       return `
         <div class="pedido-item-editor" data-item-index="${index}">
           <input type="hidden" name="item_foto_${index}" value="${fotoTorta.replace(/"/g, '&quot;')}" />
           <input type="hidden" name="item_fuente_clave_${index}" value="${claveFuenteCasino.replace(/"/g, '&quot;')}" />
           <input type="hidden" name="item_fuente_orden_${index}" value="${ordenFuenteCasino}" />
+          <input type="hidden" name="item_fuente_categoria_${index}" value="${categoriaFuenteCasino.replace(/"/g, '&quot;')}" />
           <div class="editor-item-field">
             <span>Producto</span>
             <input type="text" name="item_nombre_${index}" value="${(nombre || '').replace(/"/g, '&quot;')}" class="form-control" aria-label="Producto ${index + 1}" />
@@ -6306,6 +6320,7 @@
         const casino_clave_fuente = fila.querySelector('input[name^="item_fuente_clave_"]')?.value || '';
         const ordenTexto = fila.querySelector('input[name^="item_fuente_orden_"]')?.value || '';
         const casino_orden_fuente = ordenTexto === '' ? null : Number(ordenTexto);
+        const casino_categoria_fuente = fila.querySelector('input[name^="item_fuente_categoria_"]')?.value || '';
         return {
           producto_nombre: nombre,
           categoria_operativa,
@@ -6314,7 +6329,8 @@
           paquetes: {},
           foto_torta,
           casino_clave_fuente,
-          casino_orden_fuente
+          casino_orden_fuente,
+          casino_categoria_fuente
         };
       }).filter((item) => item.producto_nombre && item.cantidad > 0);
 
