@@ -965,7 +965,13 @@ function horaRecogidaOperativa(pedido = {}) {
 function fechaProduccionAnticipada(pedido = {}, grupoProducto = '') {
   const fechaRecoge = String(pedido.fecha_recoge || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaRecoge)) return '';
+  if (['Sándwiches', 'Piqueos', 'Triples'].includes(grupoProducto)) return fechaRecoge;
   const fechaLimiteAnticipada = sumarDiasIso(fechaRecoge, -1);
+  // La fecha del Excel es el compromiso del cronograma. Importarlo de nuevo
+  // no debe mover la producción anticipada según la hora de subida del archivo.
+  if (String(pedido.origen || '').toLowerCase() === 'casino' && Number(pedido.cronograma_casino_id) > 0) {
+    return fechaLimiteAnticipada;
+  }
   const horaRecoge = String(pedido.hora_recoge || '').slice(0, 5);
 
   // La hoja del día previo cubre recojos hasta las 7:30 p. m.
@@ -1407,8 +1413,8 @@ function contextoFechaCasinoHoja(hoja, anterior = {}) {
     for (let columna = 1; columna <= Math.min(8, hoja.columnCount || 0); columna += 1) {
       const valor = valorCeldaCasino(hoja.getCell(fila, columna));
       if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
-        textos.push(String(valor.getFullYear()));
-        const nombreMes = Object.keys(CASINO_MESES).find((mes) => CASINO_MESES[mes] === valor.getMonth());
+        textos.push(String(valor.getUTCFullYear()));
+        const nombreMes = Object.keys(CASINO_MESES).find((mes) => CASINO_MESES[mes] === valor.getUTCMonth());
         if (nombreMes) textos.push(nombreMes);
       } else if (valor !== null && valor !== undefined) {
         const texto = String(valor).trim();
@@ -1580,7 +1586,7 @@ function fechaUtcCasinoValida(anio, mes, dia) {
 
 function fechaExcelCasino(valor, anioReferencia = new Date().getFullYear(), mesReferencia = null) {
   if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
-    return fechaUtcCasinoValida(valor.getFullYear(), valor.getMonth(), valor.getDate());
+    return fechaUtcCasinoValida(valor.getUTCFullYear(), valor.getUTCMonth(), valor.getUTCDate());
   }
 
   if (typeof valor === 'number' && Number.isFinite(valor) && valor > 20000 && valor < 80000) {
@@ -1641,41 +1647,10 @@ function esProductoCasinoIdentidadEstricta(nombre) {
 }
 
 function resolverNombreCasino(nombre, pan = '', tipo = '') {
-  const combinado = [pan, tipo].filter(Boolean).join(' ').trim();
-  const candidatos = [combinado, nombre].filter(Boolean);
-
-  for (const candidato of candidatos) {
-    const clave = normalizarProducto(candidato);
-    if (!clave) continue;
-
-    // PETIPAN necesita identidad por relleno/sabor. Se resuelve antes que los
-    // aliases generales para impedir que "PETIPAN POLLO CRISPY", por ejemplo,
-    // termine agrupado simplemente como "Petipan".
-    const petipan = resolverVariantePetipanCasino(candidato);
-    if (petipan) return petipan;
-
-    // Pye genérico conserva su identidad hasta conocer la cantidad.
-    // La cantidad decide después si es "Torta Pye..." (1-5) o bocadito (10+).
-    if (/\b(PIE|PYE)\b/.test(clave) && !/^TORTA\b/.test(clave)) {
-      if (/\bLIMON\b/.test(clave)) return 'Pye de Limón';
-      if (/\bMANZANA\b/.test(clave)) return 'Pye de Manzana';
-      return String(candidato).replace(/^PIE\b/i, 'Pye').replace(/^PYE\b/i, 'Pye').trim();
-    }
-
-    // En Sánguches y Triples del cronograma, el texto completo define el producto.
-    // No se usa la coincidencia parcial del catálogo porque fusionaba, por ejemplo,
-    // Francesito con asado + Ciabattita con asado en una sola fila.
-    if (esProductoCasinoIdentidadEstricta(candidato)) {
-      return String(candidato).replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
-    }
-
-    if (CASINO_ALIAS_EXACTOS[clave]) return CASINO_ALIAS_EXACTOS[clave];
-    const resuelto = resolverNombreCocina(candidato);
-    if (resuelto) return resuelto;
-  }
-
-  const limpio = String(nombre || combinado || '').replace(/\s+/g, ' ').trim();
-  return limpio || 'Producto sin nombre';
+  // Cada nombre del cronograma es una identidad completa, incluso si no existe
+  // en el catálogo. Las categorías se calculan sin cambiar el artículo.
+  return String(nombre || [pan, tipo].filter(Boolean).join(' ') || 'Producto sin nombre')
+    .replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function grupoProductoCasino(nombre, categoria = '', esFormatoPanTipo = false) {
@@ -1879,6 +1854,10 @@ async function procesarCronogramaCasinos(buffer) {
         if (dia) columnasDia.push({ columna, encabezado: dia });
       }
 
+      // En bloques de bocaditos, TIPO es el artículo y la columna anterior es
+      // la categoría (SALADO/DULCE), no un nombre de pan.
+      if (!columnaArticulo && columnaTipo && !columnaPan) columnaArticulo = columnaTipo;
+
       if (!columnaArticulo && !(columnaPan && columnaTipo) && columnasDia.length) {
         const primeraColumnaDia = Math.min(...columnasDia.map((item) => item.columna));
         if (primeraColumnaDia > 1) columnaArticulo = 1;
@@ -1967,6 +1946,16 @@ async function procesarCronogramaCasinos(buffer) {
           }
         }
         if (!nombreOriginal) {
+          // Totales sin etiqueta (p. ej. Benavides) no son pedidos. Solo omitir
+          // cuando todas las cantidades son SUM de filas anteriores del bloque.
+          const celdasConCantidad = fechasColumnas.map(({ columna }) => hoja.getCell(fila, columna))
+            .filter((celda) => numeroCasino(valorCeldaCasino(celda)) > 0);
+          const esTotalCalculado = celdasConCantidad.length > 0 && celdasConCantidad.every((celda) => {
+            const formula = String(celda.formula || '').replace(/\$/g, '');
+            const rango = formula.match(/^SUM\(([A-Z]+)(\d+):\1(\d+)\)$/i);
+            return rango && Number(rango[2]) > filaFechas && Number(rango[3]) < fila;
+          });
+          if (esTotalCalculado) continue;
           if (fechasColumnas.some(({ columna }) => numeroCasino(valorCeldaCasino(hoja.getCell(fila, columna))) > 0)) {
             throw new Error(`${casino}: la fila ${fila} tiene cantidades, pero no un nombre de producto. Completa el nombre antes de importar.`);
           }
@@ -2021,7 +2010,7 @@ async function procesarCronogramaCasinos(buffer) {
         cantidadesFila.forEach(({ fechaIso, cantidad }) => {
           if (!(cantidad > 0)) return;
 
-          const nombreProducto = resolverPyePorCantidad(nombreProductoBase, cantidad, normalizarProducto);
+          const nombreProducto = nombreProductoBase;
           const grupo = grupoProductoCasino(nombreProducto, categoriaActual, esFormatoPanTipo);
           const dia = diasMap.get(fechaIso);
           dia.casinos.add(casino);
@@ -3812,8 +3801,8 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       const placeholders = idsCandidatos.map(() => '?').join(',');
       const rows = await dbAllAsync(
         `SELECT p.id AS pedido_id, p.origen, p.tipo_cliente, p.fecha_recoge, p.hora_recoge,
-                p.fecha_emision, p.fecha_registro,
-                dp.producto_nombre, dp.producto_nombre_fuente, dp.casino_categoria_fuente,
+                p.fecha_emision, p.fecha_registro, p.cronograma_casino_id,
+                dp.casino_clave_fuente, dp.casino_orden_fuente, dp.producto_nombre, dp.producto_nombre_fuente, dp.casino_categoria_fuente,
                 dp.categoria_operativa, dp.cantidad, dp.paquetes, dp.foto_torta
          FROM detalles_pedido dp
          JOIN pedidos p ON dp.pedido_id = p.id
@@ -3846,6 +3835,8 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
           es_urgente: esUrgentePorEmision(fecha, det, grupo),
           producto_nombre: resuelto,
           producto_nombre_original: nombreOriginal,
+          casino_clave_fuente: det.casino_clave_fuente,
+          casino_orden_fuente: det.casino_orden_fuente,
           categoria_operativa: esCasino ? categoriaCasino : (det.categoria_operativa || ''),
           grupo_operativo: grupo,
           fecha_produccion: fechaProduccion,
@@ -3891,8 +3882,8 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       const placeholders = idsEmbalaje.map(() => '?').join(',');
       const rows = await dbAllAsync(
         `SELECT p.id AS pedido_id, p.origen, p.tipo_cliente, p.fecha_recoge, p.hora_recoge,
-                p.fecha_emision, p.fecha_registro,
-                dp.producto_nombre, dp.producto_nombre_fuente, dp.categoria_operativa,
+                p.fecha_emision, p.fecha_registro, p.cronograma_casino_id,
+                dp.casino_clave_fuente, dp.casino_orden_fuente, dp.producto_nombre, dp.producto_nombre_fuente, dp.categoria_operativa,
                 dp.casino_categoria_fuente, dp.cantidad, dp.paquetes, dp.foto_torta
          FROM detalles_pedido dp
          JOIN pedidos p ON dp.pedido_id = p.id
@@ -3915,6 +3906,8 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
           es_urgente: esUrgentePorEmision(fecha, det),
           producto_nombre: esCasino ? detalleBase.producto_nombre : resolverProductoProduccion(det.producto_nombre),
           producto_nombre_original: esCasino ? detalleBase.producto_nombre_original : det.producto_nombre,
+          casino_clave_fuente: det.casino_clave_fuente,
+          casino_orden_fuente: det.casino_orden_fuente,
           categoria_operativa: esCasino ? detalleBase.categoria_operativa : (det.categoria_operativa || ''),
           cantidad: Number(det.cantidad || 0),
           paquetes: det.paquetes ? JSON.parse(det.paquetes) : {},
@@ -3952,14 +3945,14 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
     const fecha = String(req.query.fecha || '').trim();
     if (!fecha) return res.status(400).send('Fecha requerida');
     const clientesBase = await dbAllAsync(`
-      SELECT id, cliente_nombre, origen, fecha_recoge, hora_recoge, fecha_emision, fecha_registro
+      SELECT id, cliente_nombre, casino_nombre, cronograma_casino_id, origen, fecha_recoge, hora_recoge, fecha_emision, fecha_registro
       FROM pedidos
       WHERE fecha_recoge = ?
         AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Pendiente de pago', 'Despachado (D''chelis)', 'Cancelado')
         ${FILTRO_NEWPORT_HOJAS_SQL}
       ORDER BY hora_recoge, id
     `, [fecha]);
-    const clientes = clientesBase
+    const clientes = filtrarVersionesVigentesCronogramasCasino(clientesBase)
       .map((pedido) => ({ ...pedido, hora_recoge: horaRecogidaOperativa(pedido), es_urgente: esUrgentePorEmision(fecha, pedido) }))
       .sort((a, b) =>
         Number(Boolean(b.es_urgente)) - Number(Boolean(a.es_urgente))
@@ -3973,10 +3966,10 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
       const placeholders = ids.map(() => '?').join(',');
       detalles = await dbAllAsync(
         `SELECT dp.pedido_id, p.origen, dp.producto_nombre, dp.producto_nombre_fuente,
-                dp.categoria_operativa, dp.casino_categoria_fuente, dp.cantidad
+                dp.categoria_operativa, dp.casino_categoria_fuente, dp.casino_clave_fuente, dp.casino_orden_fuente, dp.cantidad
          FROM detalles_pedido dp
          JOIN pedidos p ON p.id = dp.pedido_id
-         WHERE dp.pedido_id IN (${placeholders})`,
+         WHERE dp.pedido_id IN (${placeholders}) ORDER BY dp.pedido_id, dp.id`,
         ids
       );
       detalles = detalles.map((det) => {
@@ -4070,6 +4063,31 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
       worksheet.getRow(2).height = 115;
       worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
     }
+
+    // Una fila por detalle original, incluidas tortas y kekes. Las matrices
+    // anteriores son resúmenes; esta hoja permite comprobar cada pedido.
+    const fuente = workbook.addWorksheet('Detalle de pedidos');
+    fuente.columns = [
+      { header: 'Cliente / Casino', key: 'cliente', width: 24 },
+      { header: 'Producto del pedido', key: 'producto', width: 48 },
+      { header: 'Cantidad', key: 'cantidad', width: 12 },
+      { header: 'Categoría', key: 'categoria', width: 18 },
+      { header: 'Producción', key: 'produccion', width: 16 },
+      { header: 'Embalaje / Recojo', key: 'embalaje', width: 20 },
+      { header: 'Fila de origen', key: 'fuente', width: 45 }
+    ];
+    const clientePorId = new Map(clientes.map((cliente) => [Number(cliente.id), cliente]));
+    for (const detalle of detalles) {
+      const cliente = clientePorId.get(Number(detalle.pedido_id));
+      if (!cliente || !(Number(detalle.cantidad) > 0)) continue;
+      const categoria = grupoDetalle(detalle);
+      fuente.addRow({ cliente: cliente.cliente_nombre, producto: detalle.producto_nombre,
+        cantidad: Number(detalle.cantidad), categoria,
+        produccion: fechaProduccionAnticipada(cliente, categoria),
+        embalaje: cliente.fecha_recoge, fuente: detalle.casino_clave_fuente || '' });
+    }
+    fuente.getRow(1).font = { bold: true };
+    fuente.views = [{ state: 'frozen', ySplit: 1 }];
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="Embalaje_${fecha}.xlsx"`);

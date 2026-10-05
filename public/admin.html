@@ -7,7 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="digitacion-config.js"></script>
-<script src="production-classification.js?v=8"></script>
+<script src="production-classification.js?v=9"></script>
 <script>
   (() => {
     const oscuro = Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -7248,8 +7248,8 @@
       const resueltos = new Map();
       for (const detalle of detalles) {
         if (!(Number(detalle.cantidad || 0) > 0)) continue;
-        const original = detalle.producto_nombre;
-        if (!resueltos.has(original)) resueltos.set(original, obtenerProductoResolucion(original) || original);
+        const original = `${detalle.origen || 'pg'}::${nombreDetalleProduccion(detalle)}`;
+        if (!resueltos.has(original)) resueltos.set(original, nombreDetalleProduccion(detalle, obtenerProductoResolucion));
         const nombre = resueltos.get(original);
         const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa || '');
         const grupo = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes'].includes(categoriaManual)
@@ -7275,7 +7275,7 @@
       for (const nombre of [...resolverProductoNombres(), ...obtenerProductosExtraParaProduccion()]) {
         agregar(normalizarNombreProducto(nombre));
       }
-      for (const clave of [...activos.keys()]) agregar(clave);
+      for (const clave of [...activos.keys()]) agregar(clave.slice(0, clave.lastIndexOf('|')));
       return listas;
     }
 
@@ -7420,9 +7420,9 @@
     detalles.forEach((detalle) => {
       const cantidad = Number(detalle.cantidad || 0);
       if (!(cantidad > 0)) return;
-      const original = detalle.producto_nombre;
+      const original = `${detalle.origen || 'pg'}::${nombreDetalleProduccion(detalle)}`;
       if (!nombresResueltos.has(original)) {
-        nombresResueltos.set(original, obtenerProductoResolucion(original) || original);
+        nombresResueltos.set(original, nombreDetalleProduccion(detalle, obtenerProductoResolucion));
       }
       const clave = normalizarNombreProducto(nombresResueltos.get(original));
       if (!indice.has(clave)) indice.set(clave, { clientes: new Set(), cantidades: new Map(), detalles: [] });
@@ -7546,13 +7546,13 @@
       const pedidoId = Number(detalle.pedido_id);
       const cantidad = Number(detalle.cantidad || 0);
       if (!pedidoId || !(cantidad > 0)) continue;
-      const nombre = obtenerProductoResolucion(detalle.producto_nombre) || detalle.producto_nombre || 'Producto';
+      const nombre = nombreDetalleProduccion(detalle, obtenerProductoResolucion);
       const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa || '');
       const grupo = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes'].includes(categoriaManual)
         ? categoriaManual
         : grupoProductoProduccion(nombre, normalizarNombreProducto);
       if (!porPedido.has(pedidoId)) porPedido.set(pedidoId, []);
-      porPedido.get(pedidoId).push({ nombre, grupo, cantidad });
+      porPedido.get(pedidoId).push({ nombre, grupo, cantidad, claveFuente: detalle.casino_clave_fuente });
     }
 
     const configuraciones = [
@@ -7568,7 +7568,7 @@
         const agregados = new Map();
         for (const item of porPedido.get(Number(cliente.id)) || []) {
           if (!grupos.has(item.grupo)) continue;
-          const clave = normalizarNombreProducto(item.nombre) || item.nombre;
+          const clave = item.claveFuente || normalizarNombreProducto(item.nombre) || item.nombre;
           if (!agregados.has(clave)) agregados.set(clave, { nombre:item.nombre, cantidad:0 });
           agregados.get(clave).cantidad += Number(item.cantidad || 0);
         }

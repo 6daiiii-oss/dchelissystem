@@ -19,12 +19,7 @@ function esIdentidadProductoCasino(nombre) {
 }
 
 function nombreCanonico(producto) {
-  const fuente = nombreFuenteProducto(producto);
-  // Conserva la identidad de cada fila de sánguches/triples. Los archivos ya
-  // importados pueden tener un nombre normalizado distinto al de su fuente.
-  if (fuente && esIdentidadProductoCasino(fuente)) return fuente;
-  const nombre = fuente || String(producto?.nombre || '').trim();
-  return resolverPetipanNombre(nombre) || resolverCiabattaNombre(nombre) || nombre;
+  return nombreFuenteProducto(producto);
 }
 
 function categoriaProducto(producto, nombre) {

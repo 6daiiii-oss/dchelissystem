@@ -28,9 +28,9 @@ test('Cocina recibe los mismos ítems de cada casino sin combinarlos ni perder n
     [-2, 'Casino Sur', 'casino', '09:00']
   ]);
   assert.deepEqual(detalles.map((item) => [item.pedido_id, item.producto_nombre, item.cantidad]), [
-    [-1, 'Empanada pollo', 30],
+    [-1, 'Empanada de pollo', 30],
     [-1, 'Producto sin alias', 1],
-    [-2, 'Empanada pollo', 25],
+    [-2, 'Empanada de pollo', 25],
     [-2, 'Keke vainilla', 2]
   ]);
   assert.ok(detalles.every((item) => item.origen === 'casino' && !item.es_urgente && item.fecha_recoge === '2026-09-24'));
@@ -109,8 +109,8 @@ test('la producción recupera fuente y categoría del detalle guardado antes de 
   ]);
   const normalizar = (nombre) => String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
   const { filas } = clasificarHojaProduccion(detalles, [], resolverNombre, normalizar);
-  assert.ok(filas.some((f) => f.nombre === 'Empanada de pollo' && f.total === 30 && f.grupo === 'Bocaditos'));
-  assert.ok(filas.some((f) => f.nombre === 'Petipan de Pollo' && f.total === 20 && f.grupo === 'Sándwiches'));
+  assert.ok(filas.some((f) => f.nombre === 'EMPANADITAS DE POLLO' && f.total === 30 && f.grupo === 'Bocaditos'));
+  assert.ok(filas.some((f) => f.nombre === 'PETIPAN CON POLLO' && f.total === 20 && f.grupo === 'Sándwiches'));
   assert.equal(filas.filter((f) => f.nombre === 'Mini Francés').length, 0);
 });
 

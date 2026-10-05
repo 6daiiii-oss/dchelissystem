@@ -1,3 +1,11 @@
+// Los pedidos de casinos conservan el texto de la celda, sin aliases del catálogo.
+function nombreDetalleProduccion(detalle, resolver = (nombre) => nombre) {
+  if (String(detalle?.origen || '').toLowerCase() === 'casino' || detalle?.producto_nombre_fuente) {
+    return String(detalle.producto_nombre_fuente || detalle.producto_nombre_original || detalle.producto_nombre || '').trim();
+  }
+  return resolver(detalle?.producto_nombre) || detalle?.producto_nombre || 'Producto';
+}
+
 function normalizarBaseProduccion(nombre) {
   return String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
     .replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -156,8 +164,8 @@ function filtrarItemsEmbalaje(detalles, resolver, normalizar) {
     const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa);
     if (categoriaManual === 'Tortas' || categoriaManual === 'Kekes') return false;
     if (categoriaManual) return true;
-    const original = detalle.producto_nombre;
-    if (!nombres.has(original)) nombres.set(original, resolver(original) || original);
+    const original = `${detalle.origen || 'pg'}::${nombreDetalleProduccion(detalle)}`;
+    if (!nombres.has(original)) nombres.set(original, nombreDetalleProduccion(detalle, resolver));
     const tipo = tipoItemCocina(nombres.get(original), cantidad, normalizar);
     return !tipo.esKeke && !tipo.esTorta;
   });
@@ -180,7 +188,8 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
     const cantidad = Number(detalle.cantidad || 0);
     if (!Number.isFinite(cantidad) || cantidad <= 0) continue;
     const fuenteTipo = detalle.producto_nombre_original || detalle.producto_nombre || 'Producto';
-    const conservarIdentidadCasino = /^(?:TRIPLES?|SANDWICH|SANGUCHE|FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO|BAGUETINA)\b/.test(normalizar(fuenteTipo)) || /^(?:PAN )?FRANCES MINI$/.test(normalizar(fuenteTipo));
+    const esCasino = String(detalle.origen || '').toLowerCase() === 'casino' || Boolean(detalle.producto_nombre_fuente);
+    const conservarIdentidadCasino = esCasino || /^(?:TRIPLES?|SANDWICH|SANGUCHE|FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO|BAGUETINA)\b/.test(normalizar(fuenteTipo)) || /^(?:PAN )?FRANCES MINI$/.test(normalizar(fuenteTipo));
     const nombreBase = String(
       (conservarIdentidadCasino ? fuenteTipo : null)
       || resolverPetipanNombre(detalle.producto_nombre)
@@ -192,7 +201,7 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
 
     const tipo = tipoItemCocina(fuenteTipo, cantidad, normalizar);
     const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa);
-    const nombre = resolverPyePorCantidad(nombreBase, cantidad, normalizar);
+    const nombre = esCasino ? nombreDetalleProduccion(detalle) : resolverPyePorCantidad(nombreBase, cantidad, normalizar);
     const clave = normalizar(nombre);
     const esKeke = categoriaManual === 'Kekes' || (!categoriaManual && tipo.esKeke);
     const esTorta = categoriaManual === 'Tortas' || (!categoriaManual && tipo.esTorta);
@@ -220,7 +229,7 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
     }
 
     const etiqueta = esPastel ? `${nombre} (BOCADITOS)` : nombre;
-    const llave = `principal:${clave}`;
+    const llave = `principal:${grupo}:${clave}`;
     if (!principales.has(llave)) {
       principales.set(llave, { nombre: etiqueta, grupo, urgente: 0, normal: 0, total: 0, orden: orden.get(clave) ?? 99999 });
     }
@@ -251,7 +260,7 @@ function resolverNombreEspecialProduccion(nombre) {
 }
 
 if (typeof module !== 'undefined') module.exports = {
-  clasificarHojaProduccion, resolverPetipanNombre, resolverCiabattaNombre,
+  nombreDetalleProduccion, clasificarHojaProduccion, resolverPetipanNombre, resolverCiabattaNombre,
   grupoProductoProduccion, tipoItemCocina, filtrarItemsEmbalaje, resolverPyePorCantidad,
   resolverNombreEspecialProduccion, normalizarCategoriaOperativa
 };

@@ -2,7 +2,7 @@ function prepararDetalleCasino(detalle, resolverNombre, resolverCategoria) {
   const nombreFuente = String(detalle?.producto_nombre_fuente || detalle?.producto_nombre || '').trim();
   return {
     ...detalle,
-    producto_nombre: resolverNombre(nombreFuente),
+    producto_nombre: nombreFuente,
     producto_nombre_original: nombreFuente,
     categoria_operativa: resolverCategoria(
       nombreFuente,
@@ -33,7 +33,9 @@ function extraerPedidosCasino(cronograma, fecha, resolverProducto) {
         fecha_recoge: fecha,
         hora_recoge: '09:00',
         es_urgente: false,
-        producto_nombre: resolverProducto(producto.nombre),
+        producto_nombre: producto.nombre_fuente || producto.nombre,
+        casino_clave_fuente: producto.clave_fuente || '',
+        casino_orden_fuente: producto.orden_fuente,
         producto_nombre_original: producto.nombre_fuente || producto.nombre,
         categoria_operativa: producto.categoria_operativa || '',
         cantidad,
