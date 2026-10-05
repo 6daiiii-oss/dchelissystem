@@ -6,16 +6,16 @@ const {
 } = require('./public/production-classification');
 
 function normalizar(nombre) {
-  return String(nombre || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase()
-    .replace(/[^A-Z0-9]+/g, ' ').replace(/\\s+/g, ' ').trim();
+  return String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function nombreFuenteProducto(producto) {
-  return String(producto?.nombre_fuente || producto?.nombre || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
+  return String(producto?.nombre_fuente || producto?.nombre || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function esIdentidadProductoCasino(nombre) {
-  return /^(?:TRIPLES?|SANDWICH|SANGUCHE|FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO|BAGUETINA)\\b/.test(normalizar(nombre));
+  return /^(?:TRIPLES?|SANDWICH|SANGUCHE|FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO|BAGUETINA)\b/.test(normalizar(nombre));
 }
 
 function nombreCanonico(producto) {
@@ -32,13 +32,13 @@ function categoriaProducto(producto, nombre) {
   // El francés mini sin relleno siempre es pan; el prefijo "Mini" evita
   // confundirlo con Francesito, que sí es un sánguche relleno.
   if (/^(?:MINI FRANCES|(?:PAN )?FRANCES MINI|PAN MINI FRANCES)$/.test(clave)) return 'Panes';
-  if (/^TRIPLES?\\b/.test(clave)) return 'Triples';
+  if (/^TRIPLES?\b/.test(clave)) return 'Triples';
   const fuente = normalizarCategoriaOperativa(producto?.categoria_operativa);
   if (fuente) return fuente;
   const categoriaTexto = normalizar(producto?.categoria_fuente);
-  if (/\\b(MINI )?SANDWICH(?:ES)?\\b/.test(categoriaTexto)) return 'Sándwiches';
-  if (/\\b(TRIPLE|TRIPLES)\\b/.test(categoriaTexto)) return 'Triples';
-  if (/\\b(PAN|PANES|SIN RELLENO)\\b/.test(categoriaTexto)) return 'Panes';
+  if (/\b(MINI )?SANDWICH(?:ES)?\b/.test(categoriaTexto)) return 'Sándwiches';
+  if (/\b(TRIPLE|TRIPLES)\b/.test(categoriaTexto)) return 'Triples';
+  if (/\b(PAN|PANES|SIN RELLENO)\b/.test(categoriaTexto)) return 'Panes';
   const grupo = grupoProductoProduccion(nombre, normalizar);
   return grupo === 'Bocaditos' ? 'Bocaditos' : grupo;
 }
