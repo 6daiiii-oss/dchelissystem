@@ -897,10 +897,23 @@ function instanteLima(fechaIso, hora = '08:00') {
   return Number.isNaN(fecha.getTime()) ? null : fecha;
 }
 
-function esUrgentePorEmision(fechaHoja, pedido = {}) {
-  // Urgente solo si el recojo es en la fecha de la hoja.
-  // La hora de registro no vuelve urgente un pedido del día siguiente.
-  return String(pedido.fecha_recoge || '') === String(fechaHoja || '');
+function esUrgentePorEmision(fechaHoja, pedido = {}, grupoProducto = '') {
+  if (String(pedido.fecha_recoge || '') !== String(fechaHoja || '')) return false;
+
+  const categoria = normalizarProducto(grupoProducto || pedido.categoria_operativa || '');
+  // Sánguches, triples y piqueos se preparan el día del recojo y no se marcan rojos.
+  if (/SANDWICH|TRIPLE|PIQUEO/.test(categoria)) return false;
+
+  const fechaAnterior = sumarDiasIso(fechaHoja, -1);
+  const desde = instanteLima(fechaAnterior, '08:00');
+  const hasta = instanteLima(fechaHoja, '08:00');
+  if (!desde || !hasta) return false;
+
+  const valorEmision = pedido.fecha_emision || pedido.fecha_registro;
+  if (!valorEmision) return false;
+  const emision = valorEmision instanceof Date ? valorEmision : new Date(valorEmision);
+  if (Number.isNaN(emision.getTime())) return false;
+  return emision.getTime() >= desde.getTime() && emision.getTime() <= hasta.getTime();
 }
 function fechaIsoLimaDesdeValor(valor) {
   if (!valor) return '';
@@ -947,11 +960,25 @@ function fechaProduccionAnticipada(pedido = {}) {
   const fechaRecoge = String(pedido.fecha_recoge || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaRecoge)) return '';
   const fechaLimiteAnticipada = sumarDiasIso(fechaRecoge, -1);
-  const fechaEmision = fechaIsoLimaDesdeValor(pedido.fecha_emision || pedido.fecha_registro);
-  if (fechaEmision && fechaEmision < fechaRecoge) {
-    return fechaLimiteAnticipada;
+  const horaRecoge = String(pedido.hora_recoge || '').slice(0, 5);
+
+  // La hoja del día previo cubre recojos hasta las 7:30 p. m.
+  if (horaRecoge && horaRecoge > '19:30') return fechaRecoge;
+
+  const valorEmision = pedido.fecha_emision || pedido.fecha_registro;
+  const fechaEmision = fechaIsoLimaDesdeValor(valorEmision);
+  if (!fechaEmision) return fechaRecoge;
+  if (fechaEmision < fechaLimiteAnticipada) return fechaLimiteAnticipada;
+  if (fechaEmision > fechaLimiteAnticipada) return fechaRecoge;
+
+  // La hoja empieza a cerrarse a las 8:00 a. m. Una alta desde ese corte
+  // pasa a la siguiente producción; si el recojo es mañana, se prepara mañana.
+  const emision = valorEmision instanceof Date ? valorEmision : new Date(valorEmision);
+  const corte = instanteLima(fechaLimiteAnticipada, '08:00');
+  if (corte && !Number.isNaN(emision.getTime()) && emision.getTime() >= corte.getTime()) {
+    return fechaRecoge;
   }
-  return fechaRecoge;
+  return fechaLimiteAnticipada;
 }
 
 function firmaDetallesPedido(detalles = []) {
@@ -3801,7 +3828,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
           tipo_cliente: det.tipo_cliente || 'Cliente',
           fecha_recoge: det.fecha_recoge,
           hora_recoge: det.hora_recoge,
-          es_urgente: esUrgentePorEmision(fecha, det),
+          es_urgente: esUrgentePorEmision(fecha, det, grupo),
           producto_nombre: det.origen === 'casino' ? resolverProductoCasinoOperacion(det.producto_nombre) : resuelto,
           producto_nombre_original: det.producto_nombre,
           categoria_operativa: det.categoria_operativa || '',
