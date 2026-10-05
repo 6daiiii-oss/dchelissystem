@@ -4800,6 +4800,23 @@
       return Promise.resolve([...window.__quickCakePhotos.values()][0] || '');
     }
 
+    function detalleExtraTorta(nombreSabor, detalles) {
+      const tortaBase = detalles.find((detalle) =>
+        normalizarCategoriaOperativa(detalle?.categoria_operativa || '') === 'Tortas'
+      );
+      const porciones = String(tortaBase?.producto_nombre || '').match(/\b(\d+)\s+porciones?\b/i);
+      const nombre = porciones
+        ? `${nombreSabor} (${porciones[1]} porciones aprox)`
+        : nombreSabor;
+      return {
+        producto_nombre: nombre,
+        categoria_operativa: 'Tortas',
+        cantidad: 1,
+        subtotal: 10,
+        paquetes: {}
+      };
+    }
+
     async function registrarPedidoRapido(event) {
       event.preventDefault();
       if (quickOrderInFlight) return;
@@ -4865,8 +4882,12 @@
       }
 
       const montoTotal = detalles.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
-      if (document.getElementById('quickExtraChocolate')?.checked) detalles.push({ producto_nombre: 'Extra de Chocolate', cantidad: 1, subtotal: 10, paquetes: {} });
-      if (document.getElementById('quickExtraSelva')?.checked) detalles.push({ producto_nombre: 'Extra de Selva Negra', cantidad: 1, subtotal: 10, paquetes: {} });
+      if (document.getElementById('quickExtraChocolate')?.checked) {
+        detalles.push(detalleExtraTorta('Torta de Chocolate', detalles));
+      }
+      if (document.getElementById('quickExtraSelva')?.checked) {
+        detalles.push(detalleExtraTorta('Torta Selva Negra', detalles));
+      }
       const fotoTorta = detalles.find((item) => item.foto_torta)?.foto_torta || await leerFotoDigitacion();
       const montoConExtras = Number(detalles.reduce((sum, item) => sum + Number(item.subtotal || 0), 0).toFixed(2));
       const adelanto = Number.isFinite(adelantoInput) ? Math.max(0, adelantoInput) : 0;
