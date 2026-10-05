@@ -129,3 +129,32 @@ test('Cocina y embalaje leen los campos fuente persistidos del cronograma', () =
     assert.match(ruta, /prepararDetalleCasino\(det, resolverProductoCasinoOperacion, categoriaOperativaCasino\)/);
   }
 });
+
+
+test('los panes del pedido de mañana pasan al día de recojo desde el corte de las 8 a. m.', () => {
+  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  const inicio = server.indexOf('function fechaProduccionAnticipada(');
+  const fin = server.indexOf('\nfunction firmaDetallesPedido', inicio);
+  assert.ok(inicio >= 0 && fin > inicio);
+  const funcion = server.slice(inicio, fin);
+  const sumarDiasIso = (fecha, dias) => {
+    const [anio, mes, dia] = fecha.split('-').map(Number);
+    return new Date(Date.UTC(anio, mes - 1, dia + dias)).toISOString().slice(0, 10);
+  };
+  const fechaIsoLimaDesdeValor = (valor) => {
+    const fecha = valor instanceof Date ? valor : new Date(valor);
+    const partes = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(fecha).map(({ type, value }) => [type, value]));
+    return `${partes.year}-${partes.month}-${partes.day}`;
+  };
+  const instanteLima = (fecha, hora) => new Date(`${fecha}T${hora}:00-05:00`);
+  const producir = new Function(
+    'sumarDiasIso', 'normalizarProducto', 'fechaIsoLimaDesdeValor', 'instanteLima',
+    `${funcion}; return fechaProduccionAnticipada;`
+  )(sumarDiasIso, (valor) => String(valor || '').toUpperCase(), fechaIsoLimaDesdeValor, instanteLima);
+  const base = { fecha_recoge: '2026-10-05', hora_recoge: '09:00' };
+  assert.equal(producir({ ...base, fecha_emision: '2026-10-04T07:59:00-05:00' }, 'Panes'), '2026-10-04');
+  assert.equal(producir({ ...base, fecha_emision: '2026-10-04T08:00:00-05:00' }, 'Panes'), '2026-10-05');
+  assert.equal(producir({ ...base, fecha_emision: '2026-10-04T10:00:00-05:00' }, 'Sándwiches'), '2026-10-05');
+});
