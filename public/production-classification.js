@@ -179,15 +179,17 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
   for (const detalle of detalles || []) {
     const cantidad = Number(detalle.cantidad || 0);
     if (!Number.isFinite(cantidad) || cantidad <= 0) continue;
+    const fuenteTipo = detalle.producto_nombre_original || detalle.producto_nombre || 'Producto';
+    const conservarIdentidadCasino = /^(?:TRIPLES?|SANDWICH|SANGUCHE|FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO|BAGUETINA)\\b/.test(normalizar(fuenteTipo));
     const nombreBase = String(
-      resolverPetipanNombre(detalle.producto_nombre)
+      (conservarIdentidadCasino ? fuenteTipo : null)
+      || resolverPetipanNombre(detalle.producto_nombre)
       || resolverNombreEspecialProduccion(detalle.producto_nombre)
       || resolver(detalle.producto_nombre)
       || detalle.producto_nombre
       || 'Producto'
-    ).replace(/^(?:KEKES\s+)+(?=KEKE\b)/i, '').trim();
+    ).replace(/^(?:KEKES\\s+)+(?=KEKE\\b)/i, '').trim();
 
-    const fuenteTipo = detalle.producto_nombre_original || detalle.producto_nombre || nombreBase;
     const tipo = tipoItemCocina(fuenteTipo, cantidad, normalizar);
     const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa);
     const nombre = resolverPyePorCantidad(nombreBase, cantidad, normalizar);
