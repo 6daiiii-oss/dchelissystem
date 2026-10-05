@@ -3892,7 +3892,8 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       const rows = await dbAllAsync(
         `SELECT p.id AS pedido_id, p.origen, p.tipo_cliente, p.fecha_recoge, p.hora_recoge,
                 p.fecha_emision, p.fecha_registro,
-                dp.producto_nombre, dp.categoria_operativa, dp.cantidad, dp.paquetes, dp.foto_torta
+                dp.producto_nombre, dp.producto_nombre_fuente, dp.categoria_operativa,
+                dp.casino_categoria_fuente, dp.cantidad, dp.paquetes, dp.foto_torta
          FROM detalles_pedido dp
          JOIN pedidos p ON dp.pedido_id = p.id
          WHERE p.id IN (${placeholders})
@@ -3900,20 +3901,26 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         idsEmbalaje
       );
 
-      detallesEmbalaje = (rows || []).map((det) => ({
-        pedido_id: det.pedido_id,
-        origen: det.origen || 'pg',
-        tipo_cliente: det.tipo_cliente || 'Cliente',
-        fecha_recoge: det.fecha_recoge,
-        hora_recoge: horaRecogidaOperativa(det),
-        es_urgente: esUrgentePorEmision(fecha, det),
-        producto_nombre: det.origen === 'casino' ? resolverProductoCasinoOperacion(det.producto_nombre) : resolverProductoProduccion(det.producto_nombre),
-        producto_nombre_original: det.producto_nombre,
-        categoria_operativa: det.categoria_operativa || '',
-        cantidad: Number(det.cantidad || 0),
-        paquetes: det.paquetes ? JSON.parse(det.paquetes) : {},
-        foto_torta: det.foto_torta || ''
-      }));
+      detallesEmbalaje = (rows || []).map((det) => {
+        const esCasino = String(det.origen || '').toLowerCase() === 'casino';
+        const detalleBase = esCasino
+          ? prepararDetalleCasino(det, resolverProductoCasinoOperacion, categoriaOperativaCasino)
+          : det;
+        return {
+          pedido_id: det.pedido_id,
+          origen: det.origen || 'pg',
+          tipo_cliente: det.tipo_cliente || 'Cliente',
+          fecha_recoge: det.fecha_recoge,
+          hora_recoge: horaRecogidaOperativa(det),
+          es_urgente: esUrgentePorEmision(fecha, det),
+          producto_nombre: esCasino ? detalleBase.producto_nombre : resolverProductoProduccion(det.producto_nombre),
+          producto_nombre_original: esCasino ? detalleBase.producto_nombre_original : det.producto_nombre,
+          categoria_operativa: esCasino ? detalleBase.categoria_operativa : (det.categoria_operativa || ''),
+          cantidad: Number(det.cantidad || 0),
+          paquetes: det.paquetes ? JSON.parse(det.paquetes) : {},
+          foto_torta: det.foto_torta || ''
+        };
+      });
     }
 
     return res.json({
