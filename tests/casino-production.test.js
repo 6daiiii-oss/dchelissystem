@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { extraerPedidosCasino } = require('../casino-production');
+const { extraerPedidosCasino, prepararDetalleCasino } = require('../casino-production');
 const { unirCronogramasCasino } = require('../casino-archive');
 const { clasificarHojaProduccion } = require('../public/production-classification');
 
@@ -73,4 +73,41 @@ test('Cocina conserva Francesito relleno separado de Mini Francés aunque el cat
     ['FRANCESITO JAMON QUESO', 'Sándwiches', 20],
     ['PAN FRANCES MINI', 'Panes', 60]
   ]);
+});
+
+
+test('la producción recupera fuente y categoría del detalle guardado antes de agrupar', () => {
+  const datosGuardados = [
+    { pedido_id: -1, origen: 'casino', producto_nombre: 'Empanada pollo', producto_nombre_fuente: 'EMPANADITAS DE POLLO', casino_categoria_fuente: 'Bocaditos salados', cantidad: 30 },
+    { pedido_id: -1, origen: 'casino', producto_nombre: 'Petipan', producto_nombre_fuente: 'PETIPAN CON POLLO', casino_categoria_fuente: 'Mini sandwich', cantidad: 20 },
+    { pedido_id: -2, origen: 'casino', producto_nombre: 'Mini Francés', producto_nombre_fuente: 'FRANCESITO CON HOT DOG', casino_categoria_fuente: 'Mini sandwich', cantidad: 20 },
+    { pedido_id: -2, origen: 'casino', producto_nombre: 'Mini Francés', producto_nombre_fuente: 'FRANCESITO POLLO A LA BRASA', casino_categoria_fuente: 'Mini sandwich', cantidad: 20 },
+    { pedido_id: -2, origen: 'casino', producto_nombre: 'Mini Francés', producto_nombre_fuente: 'FRANCESITO CON CHORIZO', casino_categoria_fuente: 'Mini sandwich', cantidad: 20 }
+  ];
+  const resolverNombre = (nombre) => {
+    if (nombre === 'EMPANADITAS DE POLLO') return 'Empanada de pollo';
+    if (nombre === 'PETIPAN CON POLLO') return 'Petipan de Pollo';
+    return nombre;
+  };
+  const resolverCategoria = (nombre) => {
+    if (/^FRANCESITO|^PETIPAN/.test(nombre)) return 'Sándwiches';
+    if (/^TRIPLE/.test(nombre)) return 'Triples';
+    if (/^PAN FRANCES MINI$|^MINI FRANCES$/.test(nombre)) return 'Panes';
+    return 'Bocaditos';
+  };
+  const detalles = datosGuardados.map((detalle) =>
+    prepararDetalleCasino(detalle, resolverNombre, resolverCategoria)
+  );
+  assert.equal(detalles.find((d) => d.producto_nombre_original === 'EMPANADITAS DE POLLO').cantidad, 30);
+  assert.ok(detalles.every((d) => d.producto_nombre_original !== 'Mini Francés'));
+  assert.deepEqual(detalles.slice(2).map((d) => [d.producto_nombre, d.categoria_operativa]), [
+    ['FRANCESITO CON HOT DOG', 'Sándwiches'],
+    ['FRANCESITO POLLO A LA BRASA', 'Sándwiches'],
+    ['FRANCESITO CON CHORIZO', 'Sándwiches']
+  ]);
+  const normalizar = (nombre) => String(nombre || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+  const { filas } = clasificarHojaProduccion(detalles, [], resolverNombre, normalizar);
+  assert.ok(filas.some((f) => f.nombre === 'Empanada de pollo' && f.total === 30 && f.grupo === 'Bocaditos'));
+  assert.ok(filas.some((f) => f.nombre === 'Petipan de Pollo' && f.total === 20 && f.grupo === 'Sándwiches'));
+  assert.equal(filas.filter((f) => f.nombre === 'Mini Francés').length, 0);
 });
