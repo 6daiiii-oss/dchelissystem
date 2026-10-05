@@ -223,7 +223,7 @@ async function asegurarSemanaCasinoOctubre2026() {
     for (const casino of casinos) {
       const casinoUid = `cronograma:${Number(meta.id)}:${fecha}:${normalizarProducto(casino)}`;
       const hash = crypto.createHash('sha1').update(casinoUid).digest('hex').slice(0, 8).toUpperCase();
-      valores.push(`(?, 'Casino', ?, 'CASINO', 0, 0, 'Cuenta Casino', ?, '12:00', '', '', '', '', '',
+      valores.push(`(?, 'Casino', ?, 'CASINO', 0, 0, 'Cuenta Casino', ?, '09:00', '', '', '', '', '',
         'Registrado', CURRENT_TIMESTAMP, 'casino', ?, ?, ?, ?)`);
       parametros.push(
         `CAS-${fecha.replace(/-/g, '')}-${hash}`,
@@ -307,7 +307,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
     const valoresPedidos = [];
     const parametrosPedidos = [];
     for (const registro of registros) {
-      valoresPedidos.push(`(?, 'Casino', ?, 'CASINO', 0, 0, 'Cuenta Casino', ?, '12:00', '', '', '', '', '',
+      valoresPedidos.push(`(?, 'Casino', ?, 'CASINO', 0, 0, 'Cuenta Casino', ?, '09:00', '', '', '', '', '',
         'Registrado', CURRENT_TIMESTAMP, 'casino', ?, ?, ?, ?)`);
       parametrosPedidos.push(
         registro.codigo,
@@ -406,7 +406,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
           fecha_recoge, hora_recoge, dedicatoria, foto_torta, tipo_comprobante, numero_documento,
           nro_operacion, estado, fecha_emision, origen, cronograma_casino_id,
           casino_nombre, casino_semana, casino_uid
-        ) VALUES (?, 'Casino', ?, 'CASINO', 0, 0, 'Cuenta Casino', ?, '12:00', '', '', '', '', '',
+        ) VALUES (?, 'Casino', ?, 'CASINO', 0, 0, 'Cuenta Casino', ?, '09:00', '', '', '', '', '',
                   'Registrado', CURRENT_TIMESTAMP, 'casino', ?, ?, ?, ?)
       `, [codigo, casino, dia.fecha, Number(cronogramaId), casino, inicioSemanaCasino(dia.fecha), casinoUid]);
 
