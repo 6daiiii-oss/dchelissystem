@@ -17,7 +17,7 @@ function extraerPedidosCasino(cronograma, fecha, resolverProducto) {
         origen: 'casino',
         tipo_cliente: 'Casino',
         fecha_recoge: fecha,
-        hora_recoge: '12:00',
+        hora_recoge: '09:00',
         es_urgente: false,
         producto_nombre: resolverProducto(producto.nombre),
         producto_nombre_original: producto.nombre,
@@ -33,7 +33,7 @@ function extraerPedidosCasino(cronograma, fecha, resolverProducto) {
       tipo_cliente: 'Casino',
       origen: 'casino',
       fecha_recoge: fecha,
-      hora_recoge: '12:00',
+      hora_recoge: '09:00',
       es_urgente: false
     });
     detalles.push(...items);
