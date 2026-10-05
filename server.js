@@ -4,7 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const db = require('./db');
-const { extraerPedidosCasino } = require('./casino-production');
+const { extraerPedidosCasino, prepararDetalleCasino } = require('./casino-production');
 const { unirCronogramasCasino } = require('./casino-archive');
 const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion, resolverPyePorCantidad, resolverNombreEspecialProduccion, normalizarCategoriaOperativa, tipoItemCocina } = require('./public/production-classification');
 
@@ -3829,15 +3829,12 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
 
       detallesProduccion = (rows || []).map((det) => {
         const esCasino = String(det.origen || '').toLowerCase() === 'casino';
-        const nombreOriginal = esCasino
-          ? String(det.producto_nombre_fuente || det.producto_nombre || '').trim()
-          : det.producto_nombre;
-        const resuelto = esCasino
-          ? resolverProductoCasinoOperacion(nombreOriginal)
-          : resolverProductoProduccion(det.producto_nombre);
-        const categoriaCasino = esCasino
-          ? categoriaOperativaCasino(nombreOriginal, det.casino_categoria_fuente || '', det.cantidad)
-          : '';
+        const detalleBase = esCasino
+          ? prepararDetalleCasino(det, resolverProductoCasinoOperacion, categoriaOperativaCasino)
+          : det;
+        const nombreOriginal = esCasino ? detalleBase.producto_nombre_original : det.producto_nombre;
+        const resuelto = esCasino ? detalleBase.producto_nombre : resolverProductoProduccion(det.producto_nombre);
+        const categoriaCasino = esCasino ? detalleBase.categoria_operativa : '';
         const categoriaManual = normalizarCategoriaOperativa(
           esCasino ? categoriaCasino : (det.categoria_operativa || '')
         );
@@ -3982,18 +3979,12 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
       );
       detalles = detalles.map((det) => {
         const esCasino = String(det.origen || '').toLowerCase() === 'casino';
-        const nombreOriginal = esCasino
-          ? String(det.producto_nombre_fuente || det.producto_nombre || '').trim()
-          : det.producto_nombre;
+        const detalleBase = esCasino
+          ? prepararDetalleCasino(det, resolverProductoCasinoOperacion, categoriaOperativaCasino)
+          : det;
         return {
-          ...det,
-          producto_nombre_original: nombreOriginal,
-          producto_nombre: esCasino
-            ? resolverProductoCasinoOperacion(nombreOriginal)
-            : resolverProductoProduccion(det.producto_nombre),
-          categoria_operativa: esCasino
-            ? categoriaOperativaCasino(nombreOriginal, det.casino_categoria_fuente || '', det.cantidad)
-            : det.categoria_operativa
+          ...detalleBase,
+          producto_nombre: esCasino ? detalleBase.producto_nombre : resolverProductoProduccion(det.producto_nombre)
         };
       });
     }
