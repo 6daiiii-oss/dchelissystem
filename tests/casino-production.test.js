@@ -105,7 +105,7 @@ test('la producción recupera fuente y categoría del detalle guardado antes de 
     ['FRANCESITO POLLO A LA BRASA', 'Sándwiches'],
     ['FRANCESITO CON CHORIZO', 'Sándwiches']
   ]);
-  const normalizar = (nombre) => String(nombre || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+  const normalizar = (nombre) => String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
   const { filas } = clasificarHojaProduccion(detalles, [], resolverNombre, normalizar);
   assert.ok(filas.some((f) => f.nombre === 'Empanada de pollo' && f.total === 30 && f.grupo === 'Bocaditos'));
   assert.ok(filas.some((f) => f.nombre === 'Petipan de Pollo' && f.total === 20 && f.grupo === 'Sándwiches'));
