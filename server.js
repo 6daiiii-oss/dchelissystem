@@ -971,19 +971,14 @@ function fechaProduccionAnticipada(pedido = {}, grupoProducto = '') {
   // La hoja del día previo cubre recojos hasta las 7:30 p. m.
   if (horaRecoge && horaRecoge > '19:30') return fechaRecoge;
 
-  // El pan siempre se produce el día anterior al despacho, incluso cuando
-  // el pedido se registra después del corte diario de las 8:00 a. m.
-  const categoria = normalizarProducto(grupoProducto || pedido.categoria_operativa || '');
-  if (/\bPANES?\b/.test(categoria)) return fechaLimiteAnticipada;
-
   const valorEmision = pedido.fecha_emision || pedido.fecha_registro;
   const fechaEmision = fechaIsoLimaDesdeValor(valorEmision);
   if (!fechaEmision) return fechaRecoge;
   if (fechaEmision < fechaLimiteAnticipada) return fechaLimiteAnticipada;
   if (fechaEmision > fechaLimiteAnticipada) return fechaRecoge;
 
-  // La hoja empieza a cerrarse a las 8:00 a. m. Una alta desde ese corte
-  // pasa a la siguiente producción; si el recojo es mañana, se prepara mañana.
+  // El corte de las 8:00 a. m. aplica también a panes. Una alta desde ese corte
+  // pasa a la fecha de recojo cuando el pedido es para el día siguiente.
   const emision = valorEmision instanceof Date ? valorEmision : new Date(valorEmision);
   const corte = instanteLima(fechaLimiteAnticipada, '08:00');
   if (corte && !Number.isNaN(emision.getTime()) && emision.getTime() >= corte.getTime()) {
