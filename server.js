@@ -930,13 +930,37 @@ function fechaIsoLimaDesdeValor(valor) {
   return match ? match[1] : '';
 }
 
+function filtrarVersionesVigentesCronogramasCasino(pedidos = []) {
+  const cronogramaMasRecientePorCasinoFecha = new Map();
+
+  for (const pedido of pedidos) {
+    if (String(pedido.origen || '').trim().toLowerCase() !== 'casino') continue;
+    const casino = normalizarProducto(pedido.casino_nombre || pedido.cliente_nombre || '');
+    const fecha = String(pedido.fecha_recoge || '');
+    const cronogramaId = Number(pedido.cronograma_casino_id || 0);
+    if (!casino || !fecha || !Number.isInteger(cronogramaId) || cronogramaId <= 0) continue;
+    const clave = `${fecha}::${casino}`;
+    const actual = cronogramaMasRecientePorCasinoFecha.get(clave) || 0;
+    if (cronogramaId > actual) cronogramaMasRecientePorCasinoFecha.set(clave, cronogramaId);
+  }
+
+  return pedidos.filter((pedido) => {
+    if (String(pedido.origen || '').trim().toLowerCase() !== 'casino') return true;
+    const casino = normalizarProducto(pedido.casino_nombre || pedido.cliente_nombre || '');
+    const fecha = String(pedido.fecha_recoge || '');
+    const cronogramaId = Number(pedido.cronograma_casino_id || 0);
+    if (!casino || !fecha || !Number.isInteger(cronogramaId) || cronogramaId <= 0) return true;
+    return cronogramaId === cronogramaMasRecientePorCasinoFecha.get(`${fecha}::${casino}`);
+  });
+}
+
 function fechaProduccionAnticipada(pedido = {}) {
   const fechaRecoge = String(pedido.fecha_recoge || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaRecoge)) return '';
-  const fechaLimiteAnticipada = sumarDiasIso(fechaRecoge, -2);
+  const fechaLimiteAnticipada = sumarDiasIso(fechaRecoge, -1);
   const fechaEmision = fechaIsoLimaDesdeValor(pedido.fecha_emision || pedido.fecha_registro);
-  if (fechaEmision && fechaLimiteAnticipada && fechaEmision <= fechaLimiteAnticipada) {
-    return sumarDiasIso(fechaRecoge, -1);
+  if (fechaEmision && fechaEmision < fechaRecoge) {
+    return fechaLimiteAnticipada;
   }
   return fechaRecoge;
 }
@@ -3738,9 +3762,9 @@ app.delete('/api/admin/pedidos/:id', requireAdminAuth, (req, res) => {
   });
 });
 
-// Endpoint: producción diaria. La producción anticipada se asigna por fecha de emisión,
-// no por la hora de recojo: si el pedido existía con 2 días de anticipación, se produce
-// el día anterior; si llegó después, se produce el mismo día del recojo como urgente.
+// Endpoint: producción diaria. Bocaditos, tortas, kekes y panes se producen el día
+// anterior al recojo cuando el pedido ya estaba registrado; las altas del mismo día
+// quedan para producción urgente. Sánguches, piqueos y triples se trabajan el día de recojo.
 app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
   try {
     const fecha = String(req.query.fecha || '').trim();
@@ -3748,8 +3772,8 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
     const fechaSiguiente = sumarDiasIso(fecha, 1);
     if (!fechaSiguiente) return res.status(400).json({ error: 'Fecha inválida' });
 
-    const candidatosBase = await dbAllAsync(`
-      SELECT id, codigo, cliente_nombre, tipo_cliente, origen, fecha_recoge, hora_recoge,
+    let candidatosBase = await dbAllAsync(`
+      SELECT id, codigo, cliente_nombre, casino_nombre, tipo_cliente, origen, fecha_recoge, hora_recoge,
              fecha_emision, fecha_registro, cronograma_casino_id
       FROM pedidos
       WHERE fecha_recoge IN (?, ?)
@@ -3758,6 +3782,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       ORDER BY fecha_recoge ASC, hora_recoge ASC, id ASC
     `, [fecha, fechaSiguiente]);
 
+    candidatosBase = filtrarVersionesVigentesCronogramasCasino(candidatosBase);
     const idsCandidatos = candidatosBase.map((item) => Number(item.id)).filter(Boolean);
     let detallesProduccion = [];
 
@@ -3817,15 +3842,9 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         || Number(a.id) - Number(b.id)
       );
 
-    const clientesEmbalajeBase = await dbAllAsync(`
-      SELECT id, codigo, cliente_nombre, tipo_cliente, origen, fecha_recoge, hora_recoge,
-             fecha_emision, fecha_registro, cronograma_casino_id
-      FROM pedidos
-      WHERE fecha_recoge = ?
-        AND COALESCE(estado, 'Registrado') NOT IN ('Pendiente de verificación de pago', 'Pendiente de pago', 'Despachado (D''chelis)', 'Cancelado')
-        ${FILTRO_NEWPORT_HOJAS_SQL}
-      ORDER BY hora_recoge ASC, id ASC
-    `, [fecha]);
+    const clientesEmbalajeBase = candidatosBase.filter(
+      (pedido) => String(pedido.fecha_recoge || '') === fecha
+    );
 
     const clientesEmbalaje = clientesEmbalajeBase
       .map((pedido) => ({ ...pedido, es_urgente: esUrgentePorEmision(fecha, pedido) }))
