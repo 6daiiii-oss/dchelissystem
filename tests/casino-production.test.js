@@ -123,11 +123,19 @@ test('Cocina y embalaje leen los campos fuente persistidos del cronograma', () =
   assert.ok(inicioProduccion >= 0 && inicioExcel > inicioProduccion && finExcel > inicioExcel);
   const rutaProduccion = server.slice(inicioProduccion, inicioExcel);
   const rutaExcel = server.slice(inicioExcel, finExcel);
-  for (const ruta of [rutaProduccion, rutaExcel]) {
-    assert.match(ruta, /dp\.producto_nombre_fuente/);
-    assert.match(ruta, /dp\.casino_categoria_fuente/);
-    assert.match(ruta, /prepararDetalleCasino\(det, resolverProductoCasinoOperacion, categoriaOperativaCasino\)/);
-  }
+  const contar = (texto, patron) => (texto.match(patron) || []).length;
+  assert.equal(contar(rutaProduccion, /dp\.producto_nombre_fuente/g), 2);
+  assert.equal(contar(rutaProduccion, /dp\.casino_categoria_fuente/g), 2);
+  assert.equal(contar(rutaProduccion, /prepararDetalleCasino\(det, resolverProductoCasinoOperacion, categoriaOperativaCasino\)/g), 2);
+  assert.equal(contar(rutaExcel, /dp\.producto_nombre_fuente/g), 1);
+  assert.equal(contar(rutaExcel, /dp\.casino_categoria_fuente/g), 1);
+  assert.equal(contar(rutaExcel, /prepararDetalleCasino\(det, resolverProductoCasinoOperacion, categoriaOperativaCasino\)/g), 1);
+
+  const inicioEmbalaje = rutaProduccion.indexOf('const idsEmbalaje');
+  const rutaEmbalaje = rutaProduccion.slice(inicioEmbalaje);
+  assert.ok(inicioEmbalaje >= 0);
+  assert.match(rutaEmbalaje, /producto_nombre_original: esCasino \? detalleBase\.producto_nombre_original/);
+  assert.match(rutaEmbalaje, /categoria_operativa: esCasino \? detalleBase\.categoria_operativa/);
 });
 
 
