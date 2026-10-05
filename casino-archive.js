@@ -31,7 +31,7 @@ function categoriaProducto(producto, nombre) {
   const clave = normalizar(nombre);
   // El francés mini sin relleno siempre es pan; el prefijo "Mini" evita
   // confundirlo con Francesito, que sí es un sánguche relleno.
-  if (/^(?:PAN )?MINI FRANCES(?:ITO)?$/.test(clave)) return 'Panes';
+  if (/^(?:MINI FRANCES|(?:PAN )?FRANCES MINI|PAN MINI FRANCES)$/.test(clave)) return 'Panes';
   if (/^TRIPLES?\\b/.test(clave)) return 'Triples';
   const fuente = normalizarCategoriaOperativa(producto?.categoria_operativa);
   if (fuente) return fuente;
