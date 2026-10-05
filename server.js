@@ -3944,7 +3944,7 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
       ORDER BY hora_recoge, id
     `, [fecha]);
     const clientes = clientesBase
-      .map((pedido) => ({ ...pedido, es_urgente: esUrgentePorEmision(fecha, pedido) }))
+      .map((pedido) => ({ ...pedido, hora_recoge: horaRecogidaOperativa(pedido), es_urgente: esUrgentePorEmision(fecha, pedido) }))
       .sort((a, b) =>
         Number(Boolean(b.es_urgente)) - Number(Boolean(a.es_urgente))
         || String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
