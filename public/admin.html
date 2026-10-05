@@ -5069,6 +5069,7 @@
                 nombre: nombreVisible,
                 clave_fuente: claveFuente,
                 categoria_fuente: String(producto?.categoria_fuente || '').trim(),
+                categoria_operativa: producto?.categoria_operativa || '',
                 grupo: producto.grupo === 'extra' ? 'extra' : 'principal',
                 por_fecha: {},
                 total: 0,
@@ -5178,6 +5179,10 @@
       const categoriaFuente = typeof producto === 'string' ? '' : String(producto?.categoria_fuente || '');
       const clave = normalizarNombreProducto(nombre || '');
       const fuente = normalizarNombreProducto(categoriaFuente || '');
+      const categoriaOperativa = typeof producto === 'string' ? '' : normalizarCategoriaOperativa(producto?.categoria_operativa || '');
+      const mapaOperativo = { Tortas: 'tortas', Kekes: 'kekes', 'Sándwiches': 'sanguches', Triples: 'triples', Piqueos: 'piqueos', Panes: 'panes' };
+      if (mapaOperativo[categoriaOperativa]) return mapaOperativo[categoriaOperativa];
+      if (categoriaOperativa === 'Bocaditos' && /\b(PIE|PYE)\b/.test(clave)) return 'dulces';
 
       // La sección explícita del Excel manda sobre el nombre del producto.
       if (/\bTORTAS?\b/.test(fuente)) return 'tortas';

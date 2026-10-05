@@ -6,7 +6,7 @@ const ExcelJS = require('exceljs');
 const db = require('./db');
 const { extraerPedidosCasino } = require('./casino-production');
 const { unirCronogramasCasino } = require('./casino-archive');
-const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion, resolverPyePorCantidad, resolverNombreEspecialProduccion, normalizarCategoriaOperativa } = require('./public/production-classification');
+const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion, resolverPyePorCantidad, resolverNombreEspecialProduccion, normalizarCategoriaOperativa, tipoItemCocina } = require('./public/production-classification');
 
 const app = express();
 
@@ -68,8 +68,8 @@ function resolverProductoCasinoOperacion(nombre) {
   return resolverNombreCasino(original);
 }
 
-// PALANCA TEMPORAL: cambiar a true para volver a incluir NEWPORT en Producción y Embalaje.
-const INCLUIR_NEWPORT_EN_PRODUCCION_EMBALAJE = false;
+// Newport se incluye por defecto; establecer INCLUIR_NEWPORT_EN_PRODUCCION_EMBALAJE=false para pausarlo.
+const INCLUIR_NEWPORT_EN_PRODUCCION_EMBALAJE = String(process.env.INCLUIR_NEWPORT_EN_PRODUCCION_EMBALAJE || 'true').toLowerCase() !== 'false';
 const FILTRO_NEWPORT_HOJAS_SQL = INCLUIR_NEWPORT_EN_PRODUCCION_EMBALAJE ? '' : `
   AND NOT (
     origen = 'casino'
@@ -268,6 +268,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
             casino_clave_fuente: String(producto?.clave_fuente || `${normalizarProducto(casino)}::${dia.fecha}::${indiceProducto}::${normalizarProducto(nombreFuente || nombreOperacion)}`),
             casino_orden_fuente: Number.isFinite(Number(producto?.orden_fuente)) ? Number(producto.orden_fuente) : indiceProducto,
             casino_categoria_fuente: String(producto?.categoria_fuente || '').trim(),
+            categoria_operativa: categoriaOperativaCasino(nombreOperacion, producto?.categoria_fuente || '', cantidad),
             cantidad
           };
         }).filter((item) => item.producto_nombre && Number.isFinite(item.cantidad) && item.cantidad > 0);
@@ -324,10 +325,11 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
       const pedidoId = idsPorUid.get(registro.casinoUid);
       if (!pedidoId) continue;
       for (const item of registro.items) {
-        valoresDetalles.push("(?, ?, '', ?, 0, '{}', '', ?, ?, ?, ?)");
+        valoresDetalles.push("(?, ?, ?, ?, 0, '{}', '', ?, ?, ?, ?)");
         parametrosDetalles.push(
           pedidoId,
           item.producto_nombre,
+          item.categoria_operativa,
           item.cantidad,
           item.producto_nombre_fuente,
           item.casino_clave_fuente,
@@ -369,6 +371,7 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
           casino_clave_fuente: String(producto?.clave_fuente || `${normalizarProducto(casino)}::${dia.fecha}::${indiceProducto}::${normalizarProducto(nombreFuente || nombreOperacion)}`),
           casino_orden_fuente: Number.isFinite(Number(producto?.orden_fuente)) ? Number(producto.orden_fuente) : indiceProducto,
           casino_categoria_fuente: String(producto?.categoria_fuente || '').trim(),
+          categoria_operativa: categoriaOperativaCasino(nombreOperacion, producto?.categoria_fuente || '', cantidad),
           cantidad
         };
       }).filter((item) => item.producto_nombre && Number.isFinite(item.cantidad) && item.cantidad > 0);
@@ -403,10 +406,11 @@ async function sincronizarPedidosCasinoCronograma(cronogramaId, datos, opciones 
         const valores = [];
         const parametros = [];
         for (const item of items) {
-          valores.push("(?, ?, '', ?, 0, '{}', '', ?, ?, ?, ?)");
+          valores.push("(?, ?, ?, ?, 0, '{}', '', ?, ?, ?, ?)");
           parametros.push(
             pedidoId,
             item.producto_nombre,
+            item.categoria_operativa,
             item.cantidad,
             item.producto_nombre_fuente,
             item.casino_clave_fuente,
@@ -448,7 +452,7 @@ async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '', c
   const rows = await dbAllAsync(`
     SELECT p.id, p.cliente_nombre, p.casino_nombre, p.fecha_recoge, p.cronograma_casino_id,
            dp.producto_nombre, dp.producto_nombre_fuente, dp.casino_clave_fuente,
-           dp.casino_orden_fuente, dp.casino_categoria_fuente, dp.cantidad
+           dp.casino_orden_fuente, dp.casino_categoria_fuente, dp.categoria_operativa, dp.cantidad
     FROM pedidos p
     JOIN detalles_pedido dp ON dp.pedido_id = p.id
     WHERE ${condiciones.join(' AND ')}
@@ -492,6 +496,7 @@ async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '', c
         clave_fuente: claveFuente,
         orden_fuente: Number.isFinite(Number(row.casino_orden_fuente)) ? Number(row.casino_orden_fuente) : null,
         categoria_fuente: String(row.casino_categoria_fuente || '').trim(),
+        categoria_operativa: normalizarCategoriaOperativa(row.categoria_operativa) || categoriaOperativaCasino(nombreOperacion, row.casino_categoria_fuente, row.cantidad),
         grupo: grupoProductoCasino(nombreFuente || nombreOperacion) === 'extra' ? 'extra' : 'principal',
         por_casino: {},
         total: 0
@@ -590,12 +595,17 @@ function combinarCronogramaCasinoConPedidos(baseOriginal, editado) {
           clave_fuente: claveFuente,
           orden_fuente: Number.isFinite(Number(productoEditado?.orden_fuente)) ? Number(productoEditado.orden_fuente) : null,
           categoria_fuente: String(productoEditado?.categoria_fuente || '').trim(),
+          categoria_operativa: normalizarCategoriaOperativa(productoEditado?.categoria_operativa) || categoriaOperativaCasino(productoEditado?.nombre_operacion || nombre, productoEditado?.categoria_fuente, productoEditado?.total || Object.values(productoEditado?.por_casino || {}).find((cantidad) => Number(cantidad) > 0)),
           grupo: productoEditado.grupo || (grupoProductoCasino(nombre) === 'extra' ? 'extra' : 'principal'),
           por_casino: {},
           total: 0
         };
         destino.productos.push(producto);
       }
+      producto.nombre = String(productoEditado?.nombre || nombre).trim();
+      producto.nombre_fuente = String(productoEditado?.nombre_fuente || productoEditado?.nombre || nombre).trim();
+      producto.nombre_operacion = String(productoEditado?.nombre_operacion || resolverProductoCasinoOperacion(producto.nombre_fuente) || producto.nombre_fuente).trim();
+      producto.categoria_operativa = normalizarCategoriaOperativa(productoEditado?.categoria_operativa) || categoriaOperativaCasino(producto.nombre_operacion, productoEditado?.categoria_fuente || producto.categoria_fuente, productoEditado?.total || Object.values(productoEditado?.por_casino || {}).find((cantidad) => Number(cantidad) > 0));
       if (Number.isFinite(Number(productoEditado?.orden_fuente))) {
         producto.orden_fuente = Number(productoEditado.orden_fuente);
       }
@@ -1501,37 +1511,42 @@ function numeroCasino(valor) {
   return Number.isFinite(numero) ? numero : 0;
 }
 
+function fechaUtcCasinoValida(anio, mes, dia) {
+  const fecha = new Date(Date.UTC(Number(anio), Number(mes), Number(dia)));
+  if (fecha.getUTCFullYear() !== Number(anio) || fecha.getUTCMonth() !== Number(mes) || fecha.getUTCDate() !== Number(dia)) return null;
+  return fecha;
+}
+
 function fechaExcelCasino(valor, anioReferencia = new Date().getFullYear(), mesReferencia = null) {
   if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
-    return new Date(Date.UTC(valor.getFullYear(), valor.getMonth(), valor.getDate()));
+    return fechaUtcCasinoValida(valor.getFullYear(), valor.getMonth(), valor.getDate());
   }
 
   if (typeof valor === 'number' && Number.isFinite(valor) && valor > 20000 && valor < 80000) {
     const milisegundos = Date.UTC(1899, 11, 30) + Math.round(valor * 86400000);
-    return new Date(milisegundos);
+    const fecha = new Date(milisegundos);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
   }
   if (typeof valor === 'number' && Number.isFinite(valor) && valor >= 1 && valor <= 31 && Number.isInteger(mesReferencia)) {
-    return new Date(Date.UTC(Number(anioReferencia), mesReferencia, Number(valor)));
+    return fechaUtcCasinoValida(anioReferencia, mesReferencia, valor);
   }
 
   const textoOriginal = String(valor ?? '').trim();
   if (!textoOriginal) return null;
+  let match = textoOriginal.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+  if (match) {
+    let anio = Number(match[3]);
+    if (anio < 100) anio += 2000;
+    return fechaUtcCasinoValida(anio, Number(match[2]) - 1, Number(match[1]));
+  }
+  match = textoOriginal.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
+  if (match) return fechaUtcCasinoValida(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
   const texto = normalizarProducto(textoOriginal);
 
   if (/^\d{1,2}$/.test(texto) && Number.isInteger(mesReferencia)) {
     const dia = Number(texto);
-    if (dia >= 1 && dia <= 31) return new Date(Date.UTC(Number(anioReferencia), mesReferencia, dia));
+    if (dia >= 1 && dia <= 31) return fechaUtcCasinoValida(anioReferencia, mesReferencia, dia);
   }
-
-  let match = texto.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
-  if (match) {
-    let anio = Number(match[3]);
-    if (anio < 100) anio += 2000;
-    return new Date(Date.UTC(anio, Number(match[2]) - 1, Number(match[1])));
-  }
-
-  match = texto.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
-  if (match) return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
 
   match = texto.match(/^(\d{1,2})[\s\/-]+([A-Z]+)(?:[\s\/-]+(\d{2,4}))?$/);
   if (match) {
@@ -1539,7 +1554,7 @@ function fechaExcelCasino(valor, anioReferencia = new Date().getFullYear(), mesR
     if (mes !== undefined) {
       let anio = match[3] ? Number(match[3]) : Number(anioReferencia);
       if (anio < 100) anio += 2000;
-      return new Date(Date.UTC(anio, mes, Number(match[1])));
+      return fechaUtcCasinoValida(anio, mes, Number(match[1]));
     }
   }
 
@@ -1648,9 +1663,31 @@ function compactarNombreCasinoVista(nombre) {
   return texto;
 }
 
-function categoriaPlantillaCasino(nombre, categoriaFuente = '') {
+function categoriaOperativaCasino(nombre, categoriaFuente = '', cantidad = 0) {
+  const claveNombre = normalizarProducto(nombre || '');
+  const unidades = Number(cantidad || 0);
+  if (/\bCIABAT[A-Z]*\b.*\b(CHORIZO|HOT\s*DOG)\b/.test(claveNombre)) return 'Sándwiches';
+  if (/\bENROLLADO\b.*\bJAMON\b.*\bESPARRAGOS?\b/.test(claveNombre) || /\bPIONON(?:O|ITO|ITOS)\b.*\bESPINACA\b/.test(claveNombre)) return 'Triples';
+  if (/\b(PIE|PYE)\b/.test(claveNombre)) {
+    if (unidades > 0 && unidades <= 5) return 'Tortas';
+    if (unidades >= 10) return 'Bocaditos';
+  }
+  const categoriaGuardada = normalizarCategoriaOperativa(categoriaFuente);
+  if (categoriaGuardada) return categoriaGuardada;
+  const fuente = normalizarProducto(categoriaFuente || '');
+  if (/\b(BOCADITOS?|DULCES?|SALADOS?)\b/.test(fuente)) return 'Bocaditos';
+  const tipo = tipoItemCocina(nombre || '', unidades, normalizarProducto);
+  if (tipo.esKeke) return 'Kekes';
+  if (tipo.esTorta) return 'Tortas';
+  return normalizarCategoriaOperativa(tipo.grupo) || 'Bocaditos';
+}
+
+function categoriaPlantillaCasino(nombre, categoriaFuente = '', categoriaOperativa = '') {
   const clave = normalizarProducto(nombre || '');
   const fuente = normalizarProducto(categoriaFuente || '');
+  const mapaOperativo = { Tortas: 'tortas', Kekes: 'kekes', 'Sándwiches': 'sanguches', Triples: 'triples', Piqueos: 'piqueos', Panes: 'panes' };
+  if (mapaOperativo[categoriaOperativa]) return mapaOperativo[categoriaOperativa];
+  if (categoriaOperativa === 'Bocaditos' && /\b(PIE|PYE)\b/.test(clave)) return 'dulces';
 
   // La sección explícita del Excel manda sobre el nombre. Así, por ejemplo,
   // "Kekito de zanahoria" dentro de Bocaditos dulces sigue siendo bocadito dulce.
@@ -1717,15 +1754,9 @@ async function procesarCronogramaCasinos(buffer) {
     return { hoja, contextoHoja: { ...contextoHoja } };
   });
 
-  const periodos = hojasConContexto
-    .filter(({ contextoHoja }) => Number.isInteger(contextoHoja.anio) && Number.isInteger(contextoHoja.mes))
-    .map(({ contextoHoja }) => contextoHoja.anio * 12 + contextoHoja.mes);
-  const periodoMasReciente = periodos.length ? Math.max(...periodos) : null;
-  const hojasObjetivo = periodoMasReciente === null
-    ? hojasConContexto
-    : hojasConContexto.filter(({ contextoHoja }) =>
-        contextoHoja.anio * 12 + contextoHoja.mes === periodoMasReciente
-      );
+  // Cada hoja del libro representa un bloque válido del cronograma. No se descartan
+  // meses anteriores: las semanas importadas también deben llegar a Cocina.
+  const hojasObjetivo = hojasConContexto;
 
   const claveBaseHojaCasino = (hoja) => normalizarProducto(hoja?.name || '')
     .replace(/\b(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SETIEMBRE|SEPTIEMBRE|SETIEMB|SEPTIEMB|ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SET|SEP|SEPT|OCT|NOV|DIC)\b/g, ' ')
@@ -1750,13 +1781,6 @@ async function procesarCronogramaCasinos(buffer) {
     );
   }
 
-  if (hojasObjetivo.length < libro.worksheets.length && periodoMasReciente !== null) {
-    const anio = Math.floor(periodoMasReciente / 12);
-    const mes = (periodoMasReciente % 12) + 1;
-    advertencias.push(
-      `Se omitieron ${libro.worksheets.length - hojasObjetivo.length} hoja(s) históricas; se importó solo el período más reciente ${String(mes).padStart(2, '0')}/${anio}.`
-    );
-  }
 
   hojasProcesables.forEach(({ hoja, contextoHoja }) => {
     // Una misma hoja puede contener varios bloques de fechas (por ejemplo
@@ -1822,26 +1846,31 @@ async function procesarCronogramaCasinos(buffer) {
         }
       }
 
-      const fechasColumnas = columnasDia
-        .map((item) => {
-          const fecha = fechaExcelCasino(
-            valorCeldaCasino(hoja.getCell(filaFechas, item.columna)),
-            anioReferencia,
-            mesReferencia
-          );
-          if (!fecha) return null;
-          const fechaIso = isoFechaCasino(fecha);
+      const fechasDetectadas = columnasDia.map((item) => {
+        const valorFecha = valorCeldaCasino(hoja.getCell(filaFechas, item.columna));
+        const fecha = fechaExcelCasino(valorFecha, anioReferencia, mesReferencia);
+        return { ...item, fecha, valorFecha };
+      });
+      const fechaSinAsignar = fechasDetectadas.find(({ columna, fecha }) => !fecha
+        && Array.from({ length: Math.max(0, siguienteCabecera - filaFechas - 1) }, (_, indice) => filaFechas + 1 + indice)
+          .some((filaDato) => numeroCasino(valorCeldaCasino(hoja.getCell(filaDato, columna))) > 0));
+      if (fechaSinAsignar) {
+        throw new Error(`${casino}: la columna del día ${fechaSinAsignar.encabezado} tiene cantidades, pero no una fecha válida en la fila ${filaFechas}. Corrige la fecha antes de importar.`);
+      }
+      const fechasColumnas = fechasDetectadas
+        .filter(({ fecha }) => Boolean(fecha))
+        .map(({ valorFecha, ...item }) => {
+          const fechaIso = isoFechaCasino(item.fecha);
           if (!diasMap.has(fechaIso)) {
             diasMap.set(fechaIso, {
               fecha: fechaIso,
-              dia: diaFechaCasino(fecha),
+              dia: diaFechaCasino(item.fecha),
               casinos: new Set(),
               productos: new Map()
             });
           }
-          return { ...item, fecha, fechaIso };
-        })
-        .filter(Boolean);
+          return { ...item, fechaIso };
+        });
 
       if (!fechasColumnas.length) {
         advertencias.push(`${casino}: el bloque ${indiceBloque + 1} tiene días pero no fechas válidas.`);
@@ -1869,7 +1898,19 @@ async function procesarCronogramaCasinos(buffer) {
           ? String(valorCeldaCasino(hoja.getCell(fila, columnaArticulo)) ?? '').replace(/\u00a0/g, ' ').trim()
           : [pan, tipo].filter(Boolean).join(' ').trim();
 
-        if (!nombreOriginal) continue;
+        if (columnaArticulo) {
+          const celdaNombre = hoja.getCell(fila, columnaArticulo);
+          if (celdaNombre.isMerged && celdaNombre.master.row !== fila
+              && fechasColumnas.some(({ columna }) => numeroCasino(valorCeldaCasino(hoja.getCell(fila, columna))) > 0)) {
+            throw new Error(`${casino}: la fila ${fila} tiene cantidades, pero comparte una celda combinada para el nombre del producto. Separa los artículos antes de importar.`);
+          }
+        }
+        if (!nombreOriginal) {
+          if (fechasColumnas.some(({ columna }) => numeroCasino(valorCeldaCasino(hoja.getCell(fila, columna))) > 0)) {
+            throw new Error(`${casino}: la fila ${fila} tiene cantidades, pero no un nombre de producto. Completa el nombre antes de importar.`);
+          }
+          continue;
+        }
         const claveOriginal = normalizarProducto(nombreOriginal);
         if (
           !claveOriginal
@@ -1933,6 +1974,7 @@ async function procesarCronogramaCasinos(buffer) {
               clave_fuente: claveFuente,
               orden_fuente: ordenFuente,
               categoria_fuente: categoriaFuente,
+              categoria_operativa: categoriaOperativaCasino(nombreProducto, categoriaFuente, cantidad),
               grupo,
               por_casino: {},
               total: 0,
@@ -2307,12 +2349,16 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
           if (!(cantidad > 0)) return;
           const nombre = String(producto?.nombre_operacion || producto?.nombre || producto?.nombre_fuente || 'Producto').trim();
           const claveFuente = String(producto?.clave_fuente || '').trim();
-          const clave = claveFuente || normalizarProducto(nombre) || nombre;
+          const claveBase = claveFuente || normalizarProducto(nombre) || nombre;
+          const categoriaOperativa = normalizarCategoriaOperativa(producto?.categoria_operativa)
+            || categoriaOperativaCasino(nombre, producto?.categoria_fuente || '', cantidad);
+          const categoria = categoriaPlantillaCasino(nombre, producto?.categoria_fuente || '', categoriaOperativa);
+          const clave = `${claveBase}::${categoria}`;
           if (!mapa.has(clave)) {
             mapa.set(clave, {
               nombre,
               por_fecha: {},
-              categoria: categoriaPlantillaCasino(nombre, producto?.categoria_fuente || ''),
+              categoria,
               indice: indice++,
               orden_fuente: Number.isFinite(Number(producto?.orden_fuente)) ? Number(producto.orden_fuente) : null
             });
@@ -2492,14 +2538,9 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
     // Si se vuelve a importar el mismo archivo para un período que se solapa,
     // se considera una revisión del mismo cronograma y reemplaza la versión vieja.
     // Esto evita duplicar producción al corregir un archivo ya importado.
-    const reemplazo = await dbGetAsync(`
-      SELECT id, nombre_archivo, fecha_inicio, fecha_fin
-      FROM casino_cronogramas
-      WHERE LOWER(nombre_archivo) = LOWER(?)
-        AND NOT (fecha_fin < ? OR fecha_inicio > ?)
-      ORDER BY id DESC
-      LIMIT 1
-    `, [nombreGuardado, fechaInicio, fechaFin]);
+    // Los nombres de archivo se repiten entre casinos y semanas. Solo se detecta
+    // como duplicado una huella idéntica; una revisión distinta se guarda aparte.
+    const reemplazo = null;
 
     etapaImportacion = reemplazo ? 'reemplazo del cronograma anterior' : 'guardado del cronograma';
     await dbRunAsync('BEGIN TRANSACTION');
