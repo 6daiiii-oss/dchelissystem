@@ -898,21 +898,10 @@ function instanteLima(fechaIso, hora = '08:00') {
 }
 
 function esUrgentePorEmision(fechaHoja, pedido = {}) {
-  if (String(pedido.fecha_recoge || '') !== String(fechaHoja || '')) return false;
-
-  const fechaAnterior = sumarDiasIso(fechaHoja, -1);
-  const desde = instanteLima(fechaAnterior, '08:00');
-  const hasta = instanteLima(fechaHoja, '08:00');
-  if (!desde || !hasta) return false;
-
-  const valorEmision = pedido.fecha_emision || pedido.fecha_registro;
-  if (!valorEmision) return false;
-  const emision = valorEmision instanceof Date ? valorEmision : new Date(valorEmision);
-  if (Number.isNaN(emision.getTime())) return false;
-
-  return emision.getTime() >= desde.getTime() && emision.getTime() <= hasta.getTime();
+  // Urgente solo si el recojo es en la fecha de la hoja.
+  // La hora de registro no vuelve urgente un pedido del día siguiente.
+  return String(pedido.fecha_recoge || '') === String(fechaHoja || '');
 }
-
 function fechaIsoLimaDesdeValor(valor) {
   if (!valor) return '';
   const fecha = valor instanceof Date ? valor : new Date(valor);
@@ -3812,7 +3801,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
           tipo_cliente: det.tipo_cliente || 'Cliente',
           fecha_recoge: det.fecha_recoge,
           hora_recoge: det.hora_recoge,
-          es_urgente: esUrgentePorEmision(det.fecha_recoge, det),
+          es_urgente: esUrgentePorEmision(fecha, det),
           producto_nombre: det.origen === 'casino' ? resolverProductoCasinoOperacion(det.producto_nombre) : resuelto,
           producto_nombre_original: det.producto_nombre,
           categoria_operativa: det.categoria_operativa || '',
