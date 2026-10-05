@@ -956,6 +956,12 @@ function filtrarVersionesVigentesCronogramasCasino(pedidos = []) {
   });
 }
 
+function horaRecogidaOperativa(pedido = {}) {
+  return String(pedido.origen || '').toLowerCase() === 'casino'
+    ? '09:00'
+    : String(pedido.hora_recoge || '');
+}
+
 function fechaProduccionAnticipada(pedido = {}) {
   const fechaRecoge = String(pedido.fecha_recoge || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaRecoge)) return '';
@@ -3827,7 +3833,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
           origen: det.origen || 'pg',
           tipo_cliente: det.tipo_cliente || 'Cliente',
           fecha_recoge: det.fecha_recoge,
-          hora_recoge: det.hora_recoge,
+          hora_recoge: horaRecogidaOperativa(det),
           es_urgente: esUrgentePorEmision(fecha, det, grupo),
           producto_nombre: det.origen === 'casino' ? resolverProductoCasinoOperacion(det.producto_nombre) : resuelto,
           producto_nombre_original: det.producto_nombre,
@@ -3850,7 +3856,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
     );
     const clientes = candidatosBase
       .filter((pedido) => idsProduccion.has(Number(pedido.id)))
-      .map((pedido) => ({ ...pedido, es_urgente: urgentesProduccion.has(Number(pedido.id)) }))
+      .map((pedido) => ({ ...pedido, hora_recoge: horaRecogidaOperativa(pedido), es_urgente: urgentesProduccion.has(Number(pedido.id)) }))
       .sort((a, b) =>
         Number(Boolean(b.es_urgente)) - Number(Boolean(a.es_urgente))
         || String(a.fecha_recoge || '').localeCompare(String(b.fecha_recoge || ''))
@@ -3863,7 +3869,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
     );
 
     const clientesEmbalaje = clientesEmbalajeBase
-      .map((pedido) => ({ ...pedido, es_urgente: esUrgentePorEmision(fecha, pedido) }))
+      .map((pedido) => ({ ...pedido, hora_recoge: horaRecogidaOperativa(pedido), es_urgente: esUrgentePorEmision(fecha, pedido) }))
       .sort((a, b) =>
         Number(Boolean(b.es_urgente)) - Number(Boolean(a.es_urgente))
         || String(a.hora_recoge || '').localeCompare(String(b.hora_recoge || ''))
@@ -3890,7 +3896,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         origen: det.origen || 'pg',
         tipo_cliente: det.tipo_cliente || 'Cliente',
         fecha_recoge: det.fecha_recoge,
-        hora_recoge: det.hora_recoge,
+        hora_recoge: horaRecogidaOperativa(det),
         es_urgente: esUrgentePorEmision(fecha, det),
         producto_nombre: det.origen === 'casino' ? resolverProductoCasinoOperacion(det.producto_nombre) : resolverProductoProduccion(det.producto_nombre),
         producto_nombre_original: det.producto_nombre,
