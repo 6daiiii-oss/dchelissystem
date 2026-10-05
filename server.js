@@ -3812,7 +3812,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
           tipo_cliente: det.tipo_cliente || 'Cliente',
           fecha_recoge: det.fecha_recoge,
           hora_recoge: det.hora_recoge,
-          es_urgente: fechaProduccion === det.fecha_recoge || esUrgentePorEmision(det.fecha_recoge, det),
+          es_urgente: esUrgentePorEmision(det.fecha_recoge, det),
           producto_nombre: det.origen === 'casino' ? resolverProductoCasinoOperacion(det.producto_nombre) : resuelto,
           producto_nombre_original: det.producto_nombre,
           categoria_operativa: det.categoria_operativa || '',
