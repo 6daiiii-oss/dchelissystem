@@ -1,14 +1,52 @@
-const { resolverPetipanNombre, resolverCiabattaNombre } = require('./public/production-classification');
+const {
+  resolverPetipanNombre,
+  resolverCiabattaNombre,
+  grupoProductoProduccion,
+  normalizarCategoriaOperativa
+} = require('./public/production-classification');
 
 function normalizar(nombre) {
-  return String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
-    .replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(nombre || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ').replace(/\\s+/g, ' ').trim();
+}
+
+function nombreFuenteProducto(producto) {
+  return String(producto?.nombre_fuente || producto?.nombre || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
+}
+
+function esIdentidadProductoCasino(nombre) {
+  return /^(?:TRIPLES?|SANDWICH|SANGUCHE|FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO|BAGUETINA)\\b/.test(normalizar(nombre));
 }
 
 function nombreCanonico(producto) {
-  return resolverPetipanNombre(producto?.nombre)
-    || resolverCiabattaNombre(producto?.nombre)
-    || String(producto?.nombre || '').trim();
+  const fuente = nombreFuenteProducto(producto);
+  // Conserva la identidad de cada fila de sánguches/triples. Los archivos ya
+  // importados pueden tener un nombre normalizado distinto al de su fuente.
+  if (fuente && esIdentidadProductoCasino(fuente)) return fuente;
+  const nombre = fuente || String(producto?.nombre || '').trim();
+  return resolverPetipanNombre(nombre) || resolverCiabattaNombre(nombre) || nombre;
+}
+
+function categoriaProducto(producto, nombre) {
+  const clave = normalizar(nombre);
+  // El francés mini sin relleno siempre es pan; el prefijo "Mini" evita
+  // confundirlo con Francesito, que sí es un sánguche relleno.
+  if (/^(?:PAN )?MINI FRANCES(?:ITO)?$/.test(clave)) return 'Panes';
+  if (/^TRIPLES?\\b/.test(clave)) return 'Triples';
+  const fuente = normalizarCategoriaOperativa(producto?.categoria_operativa);
+  if (fuente) return fuente;
+  const categoriaTexto = normalizar(producto?.categoria_fuente);
+  if (/\\b(MINI )?SANDWICH(?:ES)?\\b/.test(categoriaTexto)) return 'Sándwiches';
+  if (/\\b(TRIPLE|TRIPLES)\\b/.test(categoriaTexto)) return 'Triples';
+  if (/\\b(PAN|PANES|SIN RELLENO)\\b/.test(categoriaTexto)) return 'Panes';
+  const grupo = grupoProductoProduccion(nombre, normalizar);
+  return grupo === 'Bocaditos' ? 'Bocaditos' : grupo;
+}
+
+function claveProducto(producto, nombre, categoria) {
+  const fuente = nombreFuenteProducto(producto);
+  const identidad = fuente && esIdentidadProductoCasino(fuente) ? fuente : nombre;
+  return [normalizar(identidad), normalizar(categoria)].filter(Boolean).join('::');
 }
 
 function unirCronogramasCasino(rows) {
@@ -43,11 +81,15 @@ function unirCronogramasCasino(rows) {
 
       for (const producto of dia.productos || []) {
         const nombre = nombreCanonico(producto);
-        const clave = normalizar(nombre);
+        const categoria = categoriaProducto(producto, nombre);
+        const clave = claveProducto(producto, nombre, categoria);
         if (!clave) continue;
         if (!destino.productos.has(clave)) {
           destino.productos.set(clave, {
             nombre,
+            nombre_fuente: nombreFuenteProducto(producto),
+            categoria_fuente: producto.categoria_fuente || '',
+            categoria_operativa: categoria,
             grupo: producto.grupo || 'principal',
             por_casino: {},
             total: 0
