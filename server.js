@@ -82,22 +82,37 @@ const FILTRO_NEWPORT_HOJAS_SQL = INCLUIR_NEWPORT_EN_PRODUCCION_EMBALAJE ? '' : `
 `;
 
 async function cargarCasinosProduccion(fecha) {
-  const cronogramas = await dbAllAsync(`
-    SELECT id, datos_json FROM casino_cronogramas
-    WHERE fecha_inicio <= ? AND fecha_fin >= ?
-    ORDER BY id DESC
-  `, [fecha, fecha]);
+  const cronogramas = await dbAllAsync("SELECT id, datos_json FROM casino_cronogramas WHERE fecha_inicio <= ? AND fecha_fin >= ? ORDER BY id DESC", [fecha, fecha]);
+  const clientes = [];
+  const detalles = [];
+  const casinosIncluidos = new Set();
+  let idSintetico = -1;
+
   for (const row of cronogramas) {
     let datos;
     try { datos = JSON.parse(row.datos_json); } catch { continue; }
     if (!Array.isArray(datos?.dias) || !datos.dias.some((dia) => dia.fecha === fecha)) continue;
     const resultado = extraerPedidosCasino(datos, fecha, resolverProductoCasinoOperacion);
-    resultado.clientes.forEach((cliente) => { cliente.cronograma_casino_id = row.id; });
-    return resultado;
-  }
-  return { clientes: [], detalles: [] };
-}
+    const idsPorCliente = new Map();
 
+    for (const cliente of resultado.clientes || []) {
+      const claveCasino = normalizarProducto(cliente.cliente_nombre || '');
+      if (!claveCasino || casinosIncluidos.has(claveCasino)) continue;
+      casinosIncluidos.add(claveCasino);
+      const id = idSintetico--;
+      idsPorCliente.set(Number(cliente.id), id);
+      clientes.push({ ...cliente, id, cronograma_casino_id: Number(row.id) });
+    }
+
+    for (const detalle of resultado.detalles || []) {
+      const pedidoId = idsPorCliente.get(Number(detalle.pedido_id));
+      if (!pedidoId) continue;
+      detalles.push({ ...detalle, pedido_id: pedidoId, cronograma_casino_id: Number(row.id) });
+    }
+  }
+
+  return { clientes, detalles };
+}
 function inicioSemanaCasino(fechaIso) {
   const fecha = new Date(`${fechaIso}T12:00:00Z`);
   if (Number.isNaN(fecha.getTime())) return '';
@@ -2535,34 +2550,19 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
       });
     }
 
-    // Si se vuelve a importar el mismo archivo para un período que se solapa,
-    // se considera una revisión del mismo cronograma y reemplaza la versión vieja.
-    // Esto evita duplicar producción al corregir un archivo ya importado.
-    // Los nombres de archivo se repiten entre casinos y semanas. Solo se detecta
-    // como duplicado una huella idéntica; una revisión distinta se guarda aparte.
-    const reemplazo = null;
-
-    etapaImportacion = reemplazo ? 'reemplazo del cronograma anterior' : 'guardado del cronograma';
+    // Los nombres de archivo se repiten entre casinos y semanas. Los cronogramas
+    // con contenido idéntico se detienen arriba; las revisiones distintas se guardan
+    // como registros separados para no borrar pedidos de otro cronograma.
+    etapaImportacion = 'guardado del cronograma';
     await dbRunAsync('BEGIN TRANSACTION');
     transaccion = true;
 
-    let cronogramaId;
-    if (reemplazo) {
-      cronogramaId = Number(reemplazo.id);
-      await dbRunAsync(`DELETE FROM pedidos WHERE origen = 'casino' AND cronograma_casino_id = ?`, [cronogramaId]);
-      await dbRunAsync(`
-        UPDATE casino_cronogramas
-        SET huella = ?, nombre_archivo = ?, fecha_inicio = ?, fecha_fin = ?, datos_json = ?, creado_en = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `, [huella, nombreGuardado, fechaInicio, fechaFin, JSON.stringify(resultado), cronogramaId]);
-    } else {
-      const cronograma = await dbRunAsync(
-        `INSERT INTO casino_cronogramas (huella, nombre_archivo, fecha_inicio, fecha_fin, datos_json)
-         VALUES (?, ?, ?, ?, ?)`,
-        [huella, nombreGuardado, fechaInicio, fechaFin, JSON.stringify(resultado)]
-      );
-      cronogramaId = cronograma.lastID;
-    }
+    const cronograma = await dbRunAsync(
+      `INSERT INTO casino_cronogramas (huella, nombre_archivo, fecha_inicio, fecha_fin, datos_json)
+       VALUES (?, ?, ?, ?, ?)`,
+      [huella, nombreGuardado, fechaInicio, fechaFin, JSON.stringify(resultado)]
+    );
+    const cronogramaId = cronograma.lastID;
 
     etapaImportacion = 'creación de pedidos Casino';
     const pedidosCreados = await sincronizarPedidosCasinoCronograma(
@@ -2578,7 +2578,7 @@ app.post('/api/admin/casinos/procesar-excel', requireAdminAuth, async (req, res)
       ok: true,
       nombre_archivo: nombreGuardado,
       cronograma_id: cronogramaId,
-      reemplazado: Boolean(reemplazo),
+      reemplazado: false,
       pedidos_casino_creados: pedidosCreados,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
