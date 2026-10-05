@@ -1,3 +1,17 @@
+function prepararDetalleCasino(detalle, resolverNombre, resolverCategoria) {
+  const nombreFuente = String(detalle?.producto_nombre_fuente || detalle?.producto_nombre || '').trim();
+  return {
+    ...detalle,
+    producto_nombre: resolverNombre(nombreFuente),
+    producto_nombre_original: nombreFuente,
+    categoria_operativa: resolverCategoria(
+      nombreFuente,
+      detalle?.casino_categoria_fuente || detalle?.categoria_fuente || '',
+      detalle?.cantidad
+    )
+  };
+}
+
 function extraerPedidosCasino(cronograma, fecha, resolverProducto) {
   const dia = cronograma?.dias?.find((item) => item.fecha === fecha);
   if (!dia) return { clientes: [], detalles: [] };
@@ -42,4 +56,4 @@ function extraerPedidosCasino(cronograma, fecha, resolverProducto) {
   return { clientes, detalles };
 }
 
-module.exports = { extraerPedidosCasino };
+module.exports = { extraerPedidosCasino, prepararDetalleCasino };
