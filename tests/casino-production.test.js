@@ -20,8 +20,8 @@ test('Cocina recibe los mismos ítems de cada casino sin combinarlos ni perder n
     nombre === 'Empanada de pollo' ? 'Empanada pollo' : nombre
   );
   assert.deepEqual(clientes.map((item) => [item.id, item.cliente_nombre, item.origen, item.hora_recoge]), [
-    [-1, 'Casino Norte', 'casino', '12:00'],
-    [-2, 'Casino Sur', 'casino', '12:00']
+    [-1, 'Casino Norte', 'casino', '09:00'],
+    [-2, 'Casino Sur', 'casino', '09:00']
   ]);
   assert.deepEqual(detalles.map((item) => [item.pedido_id, item.producto_nombre, item.cantidad]), [
     [-1, 'Empanada pollo', 30],
