@@ -962,7 +962,7 @@ function horaRecogidaOperativa(pedido = {}) {
     : String(pedido.hora_recoge || '');
 }
 
-function fechaProduccionAnticipada(pedido = {}) {
+function fechaProduccionAnticipada(pedido = {}, grupoProducto = '') {
   const fechaRecoge = String(pedido.fecha_recoge || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaRecoge)) return '';
   const fechaLimiteAnticipada = sumarDiasIso(fechaRecoge, -1);
@@ -970,6 +970,11 @@ function fechaProduccionAnticipada(pedido = {}) {
 
   // La hoja del día previo cubre recojos hasta las 7:30 p. m.
   if (horaRecoge && horaRecoge > '19:30') return fechaRecoge;
+
+  // El pan siempre se produce el día anterior al despacho, incluso cuando
+  // el pedido se registra después del corte diario de las 8:00 a. m.
+  const categoria = normalizarProducto(grupoProducto || pedido.categoria_operativa || '');
+  if (/\bPANES?\b/.test(categoria)) return fechaLimiteAnticipada;
 
   const valorEmision = pedido.fecha_emision || pedido.fecha_registro;
   const fechaEmision = fechaIsoLimaDesdeValor(valorEmision);
@@ -3827,7 +3832,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
         const grupo = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes', 'Tortas', 'Kekes'].includes(categoriaManual)
           ? categoriaManual
           : grupoProductoProduccion(resuelto, normalizarProducto);
-        const fechaProduccion = fechaProduccionAnticipada(det);
+        const fechaProduccion = fechaProduccionAnticipada(det, grupo);
         return {
           pedido_id: det.pedido_id,
           origen: det.origen || 'pg',
