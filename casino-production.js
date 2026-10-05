@@ -20,7 +20,8 @@ function extraerPedidosCasino(cronograma, fecha, resolverProducto) {
         hora_recoge: '09:00',
         es_urgente: false,
         producto_nombre: resolverProducto(producto.nombre),
-        producto_nombre_original: producto.nombre,
+        producto_nombre_original: producto.nombre_fuente || producto.nombre,
+        categoria_operativa: producto.categoria_operativa || '',
         cantidad,
         paquetes: {},
         foto_torta: ''
