@@ -4079,6 +4079,13 @@
       }
       if (mejorAlias) return mejorAlias;
 
+      // Mantener separados los triples y sánguches con rellenos distintos.
+      // El fuzzy matching que sigue puede confundir, por ejemplo,
+      // "TRIPLE ... JAMON" con el alias más corto "TRIPLE ...".
+      if (/^(?:TRIPLES?|SANDWICH(?:ES)?|SANGUCHE(?:S)?)\b/.test(valor)) {
+        return String(nombre || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+      }
+
       for (const [clave, aliases] of Object.entries(PRODUCTOS_COCINA_ALIASES)) {
         const claveNormalizada = normalizarNombreProducto(clave);
         const aliasCoincide = aliases.some((alias) => {
