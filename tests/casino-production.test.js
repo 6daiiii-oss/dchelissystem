@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 const { extraerPedidosCasino, prepararDetalleCasino } = require('../casino-production');
 const { unirCronogramasCasino } = require('../casino-archive');
@@ -110,4 +112,20 @@ test('la producción recupera fuente y categoría del detalle guardado antes de 
   assert.ok(filas.some((f) => f.nombre === 'Empanada de pollo' && f.total === 30 && f.grupo === 'Bocaditos'));
   assert.ok(filas.some((f) => f.nombre === 'Petipan de Pollo' && f.total === 20 && f.grupo === 'Sándwiches'));
   assert.equal(filas.filter((f) => f.nombre === 'Mini Francés').length, 0);
+});
+
+
+test('Cocina y embalaje leen los campos fuente persistidos del cronograma', () => {
+  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  const inicioProduccion = server.indexOf("app.get('/api/admin/produccion'");
+  const inicioExcel = server.indexOf("app.get('/api/admin/exportar-excel'", inicioProduccion);
+  const finExcel = server.indexOf('\nconst PORT =', inicioExcel);
+  assert.ok(inicioProduccion >= 0 && inicioExcel > inicioProduccion && finExcel > inicioExcel);
+  const rutaProduccion = server.slice(inicioProduccion, inicioExcel);
+  const rutaExcel = server.slice(inicioExcel, finExcel);
+  for (const ruta of [rutaProduccion, rutaExcel]) {
+    assert.match(ruta, /dp\\.producto_nombre_fuente/);
+    assert.match(ruta, /dp\\.casino_categoria_fuente/);
+    assert.match(ruta, /prepararDetalleCasino\\(det, resolverProductoCasinoOperacion, categoriaOperativaCasino\\)/);
+  }
 });
