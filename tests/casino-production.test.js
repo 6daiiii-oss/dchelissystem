@@ -67,7 +67,7 @@ test('Cocina conserva Francesito relleno separado de Mini Francés aunque el cat
     { pedido_id: -1, producto_nombre: 'Mini Francés', producto_nombre_original: 'FRANCESITO JAMON QUESO', categoria_operativa: 'Sándwiches', cantidad: 20 },
     { pedido_id: -2, producto_nombre: 'Mini Francés', producto_nombre_original: 'PAN FRANCES MINI', categoria_operativa: 'Panes', cantidad: 60 }
   ];
-  const normalizar = (nombre) => String(nombre || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+  const normalizar = (nombre) => String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
   const { filas } = clasificarHojaProduccion(entradas, [], () => 'Mini Francés', normalizar);
   assert.deepEqual(filas.map((fila) => [fila.nombre, fila.grupo, fila.total]), [
     ['FRANCESITO JAMON QUESO', 'Sándwiches', 20],
