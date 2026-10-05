@@ -124,8 +124,8 @@ test('Cocina y embalaje leen los campos fuente persistidos del cronograma', () =
   const rutaProduccion = server.slice(inicioProduccion, inicioExcel);
   const rutaExcel = server.slice(inicioExcel, finExcel);
   for (const ruta of [rutaProduccion, rutaExcel]) {
-    assert.match(ruta, /dp\\.producto_nombre_fuente/);
-    assert.match(ruta, /dp\\.casino_categoria_fuente/);
-    assert.match(ruta, /prepararDetalleCasino\\(det, resolverProductoCasinoOperacion, categoriaOperativaCasino\\)/);
+    assert.match(ruta, /dp\.producto_nombre_fuente/);
+    assert.match(ruta, /dp\.casino_categoria_fuente/);
+    assert.match(ruta, /prepararDetalleCasino\(det, resolverProductoCasinoOperacion, categoriaOperativaCasino\)/);
   }
 });
