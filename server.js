@@ -3818,7 +3818,8 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       const rows = await dbAllAsync(
         `SELECT p.id AS pedido_id, p.origen, p.tipo_cliente, p.fecha_recoge, p.hora_recoge,
                 p.fecha_emision, p.fecha_registro,
-                dp.producto_nombre, dp.categoria_operativa, dp.cantidad, dp.paquetes, dp.foto_torta
+                dp.producto_nombre, dp.producto_nombre_fuente, dp.casino_categoria_fuente,
+                dp.categoria_operativa, dp.cantidad, dp.paquetes, dp.foto_torta
          FROM detalles_pedido dp
          JOIN pedidos p ON dp.pedido_id = p.id
          WHERE p.id IN (${placeholders})
@@ -3827,8 +3828,19 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       );
 
       detallesProduccion = (rows || []).map((det) => {
-        const resuelto = resolverProductoProduccion(det.producto_nombre);
-        const categoriaManual = normalizarCategoriaOperativa(det.categoria_operativa || '');
+        const esCasino = String(det.origen || '').toLowerCase() === 'casino';
+        const nombreOriginal = esCasino
+          ? String(det.producto_nombre_fuente || det.producto_nombre || '').trim()
+          : det.producto_nombre;
+        const resuelto = esCasino
+          ? resolverProductoCasinoOperacion(nombreOriginal)
+          : resolverProductoProduccion(det.producto_nombre);
+        const categoriaCasino = esCasino
+          ? categoriaOperativaCasino(nombreOriginal, det.casino_categoria_fuente || '', det.cantidad)
+          : '';
+        const categoriaManual = normalizarCategoriaOperativa(
+          esCasino ? categoriaCasino : (det.categoria_operativa || '')
+        );
         const grupo = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes', 'Tortas', 'Kekes'].includes(categoriaManual)
           ? categoriaManual
           : grupoProductoProduccion(resuelto, normalizarProducto);
@@ -3840,9 +3852,9 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
           fecha_recoge: det.fecha_recoge,
           hora_recoge: horaRecogidaOperativa(det),
           es_urgente: esUrgentePorEmision(fecha, det, grupo),
-          producto_nombre: det.origen === 'casino' ? resolverProductoCasinoOperacion(det.producto_nombre) : resuelto,
-          producto_nombre_original: det.producto_nombre,
-          categoria_operativa: det.categoria_operativa || '',
+          producto_nombre: resuelto,
+          producto_nombre_original: nombreOriginal,
+          categoria_operativa: esCasino ? categoriaCasino : (det.categoria_operativa || ''),
           grupo_operativo: grupo,
           fecha_produccion: fechaProduccion,
           cantidad: Number(det.cantidad || 0),
@@ -3961,14 +3973,29 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
     if (ids.length) {
       const placeholders = ids.map(() => '?').join(',');
       detalles = await dbAllAsync(
-        `SELECT dp.pedido_id, dp.producto_nombre, dp.categoria_operativa, dp.cantidad
-         FROM detalles_pedido dp WHERE dp.pedido_id IN (${placeholders})`,
+        `SELECT dp.pedido_id, p.origen, dp.producto_nombre, dp.producto_nombre_fuente,
+                dp.categoria_operativa, dp.casino_categoria_fuente, dp.cantidad
+         FROM detalles_pedido dp
+         JOIN pedidos p ON p.id = dp.pedido_id
+         WHERE dp.pedido_id IN (${placeholders})`,
         ids
       );
-      detalles = detalles.map((det) => ({
-        ...det,
-        producto_nombre: resolverProductoProduccion(det.producto_nombre)
-      }));
+      detalles = detalles.map((det) => {
+        const esCasino = String(det.origen || '').toLowerCase() === 'casino';
+        const nombreOriginal = esCasino
+          ? String(det.producto_nombre_fuente || det.producto_nombre || '').trim()
+          : det.producto_nombre;
+        return {
+          ...det,
+          producto_nombre_original: nombreOriginal,
+          producto_nombre: esCasino
+            ? resolverProductoCasinoOperacion(nombreOriginal)
+            : resolverProductoProduccion(det.producto_nombre),
+          categoria_operativa: esCasino
+            ? categoriaOperativaCasino(nombreOriginal, det.casino_categoria_fuente || '', det.cantidad)
+            : det.categoria_operativa
+        };
+      });
     }
 
     const workbook = new ExcelJS.Workbook();
