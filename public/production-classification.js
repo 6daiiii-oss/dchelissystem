@@ -180,7 +180,7 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
     const cantidad = Number(detalle.cantidad || 0);
     if (!Number.isFinite(cantidad) || cantidad <= 0) continue;
     const fuenteTipo = detalle.producto_nombre_original || detalle.producto_nombre || 'Producto';
-    const conservarIdentidadCasino = /^(?:TRIPLES?|SANDWICH|SANGUCHE|FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO|BAGUETINA)\\b/.test(normalizar(fuenteTipo));
+    const conservarIdentidadCasino = /^(?:TRIPLES?|SANDWICH|SANGUCHE|FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO|BAGUETINA)\\b/.test(normalizar(fuenteTipo)) || /^(?:PAN )?FRANCES MINI$/.test(normalizar(fuenteTipo));
     const nombreBase = String(
       (conservarIdentidadCasino ? fuenteTipo : null)
       || resolverPetipanNombre(detalle.producto_nombre)
