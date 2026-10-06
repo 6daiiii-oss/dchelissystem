@@ -96,3 +96,12 @@ test('HE separa el mismo nombre cuando corresponde a bocaditos y a tortas; no du
   assert.equal((html.match(/class="pack-badge"/g) || []).length, 2);
   assert.match(html, />1x25<\/div>/); assert.match(html, />1x1<\/div>/); assert.doesNotMatch(html, /1x26|2x26/);
 });
+
+test('el recuadro del total de HE se renderiza dentro de su celda', () => {
+  const clientes = [{ id: 1, cliente_nombre: 'Casino' }];
+  const detalles = [{ pedido_id: 1, producto_nombre: 'EMPANADA CARNE', cantidad: 25 }];
+  const { context, containers } = matriz(clientes, detalles);
+  context.renderizarMatrizProducto([{ titulo: 'BOCADITOS', productosLista: ['EMPANADA CARNE'] }]);
+  const html = containers.hojaProduccion.innerHTML;
+  assert.match(html, /<td class="pack-cell"><div class="pack-badge">1x25<\/div><\/td>/);
+});

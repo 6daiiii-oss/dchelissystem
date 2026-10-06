@@ -788,7 +788,14 @@
       text-overflow: ellipsis;
     }
 
-    .pack-cell { max-height:none; overflow:visible; text-overflow:clip; }
+    .kitchen-page td.pack-cell {
+      max-height:none;
+      overflow:visible;
+      text-overflow:clip;
+      box-sizing:border-box;
+      background:#fff5f5;
+      border:1px solid #f5c7c1;
+    }
     .pack-badge { display:block; white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; }
 
     .pack-total {
@@ -2915,6 +2922,15 @@
       html[data-theme="dark"] th { background:#1e2b23; color:#d7e5dc; }
       html[data-theme="dark"] td { background:#131c17; border-color:#3a4a40; }
       html[data-theme="dark"] th { border-color:#3a4a40; }
+      html[data-theme="dark"] .kitchen-page td.pack-cell {
+        background:#271c1a;
+        border:1px solid #a75e51;
+      }
+      html[data-theme="dark"] .kitchen-page .pack-badge {
+        background:#3a2420;
+        border-color:#a75e51;
+        color:#ffb09d;
+      }
       html[data-theme="dark"] .pedido-modal { background:rgba(0,0,0,.62); }
       html[data-theme="dark"] .pedido-modal-head {
         background:rgba(19,28,23,.96);

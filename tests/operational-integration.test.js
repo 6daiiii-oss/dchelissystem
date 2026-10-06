@@ -151,6 +151,17 @@ test('Excel completo → PostgreSQL → HP/HE/HPE sin faltantes, sobrantes ni fi
     await page.locator('#fecha_embalaje').fill('2026-10-05'); await page.locator('#actualizarEmbalajeBtn').click();
     await page.waitForFunction(() => !document.querySelector('#actualizarEmbalajeBtn').disabled);
     assert.ok((await page.locator('#hojaProduccion').innerText()).includes('PRODUCTO'));
+    await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+    const totalBox = page.locator('#hojaProduccion td.pack-cell').first();
+    assert.ok(await totalBox.locator('.pack-badge').count(), 'cada total debe tener su recuadro dentro de la celda TOTAL');
+    const totalBoxStyle = await totalBox.evaluate(cell => ({
+      background: getComputedStyle(cell).backgroundColor,
+      border: getComputedStyle(cell).borderTopColor,
+      badgeBorder: getComputedStyle(cell.querySelector('.pack-badge')).borderTopColor
+    }));
+    assert.notEqual(totalBoxStyle.background, 'rgb(19, 28, 23)', 'la celda TOTAL debe conservar fondo destacado en tema oscuro');
+    assert.equal(totalBoxStyle.border, 'rgb(167, 94, 81)');
+    assert.equal(totalBoxStyle.badgeBorder, 'rgb(167, 94, 81)');
     const expectedHe = (await dataFor('2026-10-05')).embalaje.detalles;
     const actualHe = await page.locator('#hojaProduccion tbody').evaluateAll(bodies => {
       const totals = new Map();
