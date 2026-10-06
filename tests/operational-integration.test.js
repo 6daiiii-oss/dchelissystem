@@ -109,7 +109,8 @@ test('Excel completo → PostgreSQL → HP/HE/HPE sin faltantes, sobrantes ni fi
   const oct = await dataFor('2026-10-05');
   const excel = await fetch(`${origin}/api/admin/exportar-excel?fecha=2026-10-05`, { headers }); assert.equal(excel.status, 200);
   const exported = new ExcelJS.Workbook(); await exported.xlsx.load(Buffer.from(await excel.arrayBuffer()));
-  assert.equal(exported.getWorksheet('Detalle de pedidos').rowCount - 1, oct.embalaje.detalles.length);
+  assert.equal(exported.getWorksheet('Detalle de pedidos').rowCount - 1,
+    oct.embalaje.detalles.length + oct.produccion_embalaje.detalles.length);
   // Remove all cells for one casino/date in a revision: old quantities must not revive.
   const target = expected.find(r => r[1] === '2026-10-06'); assert.ok(target);
   const sheet = book.getWorksheet(target[0]);

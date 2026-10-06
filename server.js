@@ -8,7 +8,7 @@ const { fechaTrabajo, construirHojasOperativas, verificarImportacion,
   esFilaTotalCasino, validarVersionesCronogramaOperativo, MENSAJE_REIMPORTAR_CRONOGRAMA } = require('./production-sheets');
 const { extraerPedidosCasino, prepararDetalleCasino } = require('./casino-production');
 const { unirCronogramasCasino } = require('./casino-archive');
-const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion, resolverPyePorCantidad, resolverNombreEspecialProduccion, normalizarCategoriaOperativa, tipoItemCocina } = require('./public/production-classification');
+const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion, resolverPyePorCantidad, resolverNombreEspecialProduccion, normalizarCategoriaOperativa, tipoItemCocina, nombreVisibleProductoCronograma } = require('./public/production-classification');
 
 const app = express();
 
@@ -3732,98 +3732,113 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
   }
 });
 
-// Hoja de embalaje en Excel: urgentes a la izquierda, normales a la derecha y casinos al extremo derecho.
+function agregarMatrizHojasExcel(workbook, { titulo, fecha, clientes = [], detalles = [], orientacion = 'landscape', clientesPorPagina = 14, separarPanes = false }) {
+  const nombreVisible = (detalle) => {
+    const nombre = String(detalle.producto_nombre_fuente || detalle.producto_nombre || '').trim();
+    const esCasino = String(detalle.origen || '').toLowerCase() === 'casino' || Boolean(detalle.producto_nombre_fuente);
+    return esCasino ? nombreVisibleProductoCronograma(nombre) : nombre;
+  };
+  const grupoDetalle = (detalle, nombre) => normalizarCategoriaOperativa(detalle.categoria_operativa)
+    || grupoProductoProduccion(nombre, normalizarProducto);
+  const ordenGrupos = new Map([['Bocaditos', 0], ['Sándwiches', 1], ['Triples', 2], ['Piqueos', 3], ['Panes', 4]]);
+  const ordenCatalogo = new Map([...PRODUCTOS_COCINA, ...PRODUCTOS_COCINA_EXTRA]
+    .map((nombre, indice) => [normalizarProducto(nombre), indice]));
+  const filas = new Map();
+  for (const detalle of detalles) {
+    const cantidad = Number(detalle.cantidad || 0);
+    if (!(cantidad > 0)) continue;
+    const nombre = nombreVisible(detalle);
+    if (!nombre) continue;
+    const categoria = grupoDetalle(detalle, nombre);
+    const clave = JSON.stringify([categoria, String(nombre).normalize('NFC')]);
+    if (!filas.has(clave)) filas.set(clave, { nombre, categoria, porCliente: new Map() });
+    const fila = filas.get(clave);
+    const clienteId = Number(detalle.pedido_id);
+    fila.porCliente.set(clienteId, (fila.porCliente.get(clienteId) || 0) + cantidad);
+  }
+  const productos = [...filas.values()].sort((a, b) =>
+    (ordenGrupos.get(a.categoria) ?? 99) - (ordenGrupos.get(b.categoria) ?? 99)
+    || (ordenCatalogo.get(normalizarProducto(a.nombre)) ?? 9999) - (ordenCatalogo.get(normalizarProducto(b.nombre)) ?? 9999)
+    || a.nombre.localeCompare(b.nombre, 'es'));
+  const segmentos = separarPanes
+    ? [{ nombre: titulo.includes('HE') ? 'Embalaje' : 'Producción', filas: productos.filter(fila => fila.categoria !== 'Panes') },
+      { nombre: 'Panes', filas: productos.filter(fila => fila.categoria === 'Panes') }]
+    : [{ nombre: titulo.includes('HPE') ? 'Sánguches' : titulo, filas: productos }];
+  let indiceHoja = 0;
+  for (const segmento of segmentos) {
+    if (!segmento.filas.length && !(productos.length === 0 && indiceHoja === 0)) continue;
+    const ids = new Set(segmento.filas.flatMap(fila => [...fila.porCliente.keys()]));
+    const clientesActivos = clientes.filter(cliente => ids.has(Number(cliente.id)));
+    const gruposClientes = [];
+    for (let indice = 0; indice < clientesActivos.length; indice += clientesPorPagina) {
+      gruposClientes.push(clientesActivos.slice(indice, indice + clientesPorPagina));
+    }
+    if (!gruposClientes.length) gruposClientes.push([]);
+    for (const [indiceGrupo, clientesGrupo] of gruposClientes.entries()) {
+      indiceHoja += 1;
+      const hojaBase = `${titulo} ${segmento.nombre}`.replace(/\s+/g, ' ').trim();
+      const hojaNombre = `${hojaBase}${indiceGrupo ? ` ${indiceGrupo + 1}` : ''}`.slice(0, 31);
+      const worksheet = workbook.addWorksheet(hojaNombre, {
+        pageSetup: { paperSize: 9, orientation: orientacion, fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+          margins: { left: 0.25, right: 0.25, top: 0.35, bottom: 0.35, header: 0.15, footer: 0.15 } }
+      });
+      worksheet.getCell('A1').value = `${titulo.toUpperCase()} · ${fecha} · ${segmento.nombre.toUpperCase()}`;
+      worksheet.getCell('A1').font = { bold: true, size: 14 };
+      worksheet.getCell('A2').value = 'PRODUCTO';
+      worksheet.getCell('A2').font = { bold: true, size: 11 };
+      clientesGrupo.forEach((cliente, indice) => {
+        const cell = worksheet.getCell(2, indice + 2);
+        cell.value = String(cliente.cliente_nombre || '').toUpperCase();
+        cell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center', wrapText: true };
+        cell.font = { bold: true, size: orientacion === 'portrait' ? 10 : 9,
+          color: { argb: cliente.es_urgente ? 'FFCC0000' : 'FF111111' } };
+      });
+      const totalIdx = Math.max(clientesGrupo.length + 2, 3);
+      const totalHeader = gruposClientes.length > 1 ? 'SUBTOTAL PÁGINA' : 'TOTAL';
+      worksheet.getCell(2, totalIdx).value = totalHeader;
+      worksheet.getCell(2, totalIdx).font = { bold: true, size: 10 };
+      segmento.filas.forEach((producto, indice) => {
+        const row = indice + 3;
+        worksheet.getCell(row, 1).value = producto.nombre;
+        worksheet.getCell(row, 1).font = { bold: true, size: 11 };
+        worksheet.getCell(row, 1).note = producto.categoria;
+        clientesGrupo.forEach((cliente, col) => {
+          const cantidad = producto.porCliente.get(Number(cliente.id)) || 0;
+          if (!cantidad) return;
+          const cell = worksheet.getCell(row, col + 2);
+          cell.value = cantidad;
+          cell.font = { bold: true, size: 11, color: { argb: cliente.es_urgente ? 'FFCC0000' : 'FF111111' } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+        const desde = clientesGrupo.length ? worksheet.getColumn(2).letter : 'B';
+        const hasta = clientesGrupo.length ? worksheet.getColumn(totalIdx - 1).letter : 'B';
+        const valoresTotal = clientesGrupo.map(cliente => producto.porCliente.get(Number(cliente.id)) || 0);
+        worksheet.getCell(row, totalIdx).value = {
+          formula: `SUM(${desde}${row}:${hasta}${row})`, result: valoresTotal.reduce((suma, cantidad) => suma + cantidad, 0)
+        };
+        worksheet.getCell(row, totalIdx).font = { bold: true, size: 11 };
+      });
+      worksheet.getColumn(1).width = 30;
+      for (let col = 2; col <= totalIdx; col += 1) worksheet.getColumn(col).width = col === totalIdx ? 15 : (orientacion === 'portrait' ? 10 : 11);
+      worksheet.getRow(2).height = orientacion === 'portrait' ? 120 : 90;
+      worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
+      worksheet.autoFilter = { from: { row: 2, column: 1 }, to: { row: Math.max(2, segmento.filas.length + 2), column: totalIdx } };
+    }
+  }
+}
+
+// Exporta las tres hojas operativas con los mismos detalles y cantidades que usa la pantalla.
 app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
   try {
     const fecha = String(req.query.fecha || '').trim();
     if (!fecha) return res.status(400).send('Fecha requerida');
     const data = await cargarDatosHojas(fecha);
-    const clientes = data.embalaje.clientes;
-    const detalles = data.embalaje.detalles;
-
     const workbook = new ExcelJS.Workbook();
-    const visibles = detalles;
-    const grupoDetalle = (det) => normalizarCategoriaOperativa(det.categoria_operativa) || grupoProductoProduccion(det.producto_nombre, normalizarProducto);
-    const grupos = [
-      { nombre: 'Embalaje', filtro: (det) => grupoDetalle(det) !== 'Panes' },
-      { nombre: 'Panes', filtro: (det) => grupoDetalle(det) === 'Panes' }
-    ];
+    agregarMatrizHojasExcel(workbook, { titulo: 'HP', fecha, clientes: data.clientes, detalles: data.detalles, orientacion: 'landscape', separarPanes: true });
+    agregarMatrizHojasExcel(workbook, { titulo: 'HE', fecha, clientes: data.embalaje.clientes, detalles: data.embalaje.detalles, orientacion: 'portrait', clientesPorPagina: 7, separarPanes: true });
+    agregarMatrizHojasExcel(workbook, { titulo: 'HPE', fecha, clientes: data.produccion_embalaje.clientes, detalles: data.produccion_embalaje.detalles, orientacion: 'landscape' });
 
-    for (const grupo of grupos) {
-      const datosGrupo = visibles.filter((det) => grupo.filtro(det));
-      if (grupo.nombre === 'Panes' && !datosGrupo.length) continue;
-      const idClientes = new Set(datosGrupo.map((det) => Number(det.pedido_id)));
-      const clientesGrupo = clientes.filter((cli) => idClientes.has(Number(cli.id)));
-      const porProducto = new Map();
-      for (const det of datosGrupo) {
-        const clave = JSON.stringify([grupoDetalle(det), String(det.producto_nombre).normalize('NFC')]);
-        if (!porProducto.has(clave)) porProducto.set(clave, { nombre: det.producto_nombre, categoria: grupoDetalle(det), porCliente: new Map() });
-        const fila = porProducto.get(clave);
-        const id = Number(det.pedido_id);
-        fila.porCliente.set(id, (fila.porCliente.get(id) || 0) + Number(det.cantidad || 0));
-      }
-      const ordenGrupos = new Map([
-        ['Bocaditos', 0],
-        ['Sándwiches', 1],
-        ['Triples', 2],
-        ['Piqueos', 3],
-        ['Panes', 4]
-      ]);
-      const ordenCatalogo = new Map(
-        [...PRODUCTOS_COCINA, ...PRODUCTOS_COCINA_EXTRA]
-          .map((nombre, indice) => [normalizarProducto(nombre), indice])
-      );
-      const productosGrupo = [...porProducto.values()].sort((a, b) => {
-        const grupoA = a.categoria;
-        const grupoB = b.categoria;
-        const rangoA = ordenGrupos.get(grupoA) ?? 99;
-        const rangoB = ordenGrupos.get(grupoB) ?? 99;
-        const ordenA = ordenCatalogo.get(normalizarProducto(a.nombre)) ?? 9999;
-        const ordenB = ordenCatalogo.get(normalizarProducto(b.nombre)) ?? 9999;
-        return rangoA - rangoB || ordenA - ordenB || a.nombre.localeCompare(b.nombre, 'es');
-      });
-      const worksheet = workbook.addWorksheet(grupo.nombre, {
-        pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
-      });
-      worksheet.getCell('A1').value = `${grupo.nombre.toUpperCase()} · HOJA ${fecha}`;
-      worksheet.getCell('A1').font = { bold: true, size: 12 };
-
-      clientesGrupo.forEach((cli, idx) => {
-        const cell = worksheet.getCell(2, idx + 2);
-        cell.value = String(cli.cliente_nombre || '').toUpperCase();
-        cell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
-        cell.font = { bold: true, color: { argb: cli.es_urgente ? 'FFCC0000' : 'FF111111' } };
-      });
-
-      const colTotalIdx = Math.max(clientesGrupo.length + 2, 3);
-      worksheet.getCell(2, colTotalIdx).value = 'TOTAL';
-      worksheet.getCell(2, colTotalIdx).font = { bold: true };
-      productosGrupo.forEach((producto, pIdx) => {
-        const rowNum = pIdx + 3;
-        worksheet.getCell(rowNum, 1).value = producto.nombre;
-        worksheet.getCell(rowNum, 1).font = { bold: true };
-        worksheet.getCell(rowNum, 1).note = producto.categoria;
-        clientesGrupo.forEach((cli, cIdx) => {
-          const cantidad = producto.porCliente.get(Number(cli.id)) || 0;
-          if (cantidad > 0) {
-            const cell = worksheet.getCell(rowNum, cIdx + 2);
-            cell.value = cantidad;
-            cell.font = { bold: true, color: { argb: cli.es_urgente ? 'FFCC0000' : 'FF111111' } };
-          }
-        });
-        const desde = worksheet.getColumn(2).letter;
-        const hasta = worksheet.getColumn(colTotalIdx - 1).letter;
-        worksheet.getCell(rowNum, colTotalIdx).value = { formula: `SUM(${desde}${rowNum}:${hasta}${rowNum})`, result: [...producto.porCliente.values()].reduce((a, b) => a + b, 0) };
-        worksheet.getCell(rowNum, colTotalIdx).font = { bold: true };
-      });
-      worksheet.getColumn(1).width = 30;
-      for (let i = 2; i <= colTotalIdx; i += 1) worksheet.getColumn(i).width = i === colTotalIdx ? 10 : 8;
-      worksheet.getRow(2).height = 115;
-      worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
-    }
-
-    // Una fila por detalle original, incluidas tortas y kekes. Las matrices
-    // anteriores son resúmenes; esta hoja permite comprobar cada pedido.
+    // Una fila por detalle exacto conserva el nombre del cronograma para auditoría.
     const fuente = workbook.addWorksheet('Detalle de pedidos');
     fuente.columns = [
       { header: 'Cliente / Casino', key: 'cliente', width: 24 },
@@ -3833,23 +3848,31 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
       { header: 'Producción', key: 'produccion', width: 16 },
       { header: 'Embalaje', key: 'embalaje', width: 16 },
       { header: 'Entrega', key: 'entrega', width: 16 },
-      { header: 'Fila de origen', key: 'fuente', width: 45 }
+      { header: 'Fila de origen', key: 'fuente', width: 45 },
+      { header: 'Nombre del cronograma', key: 'nombreFuente', width: 48 }
     ];
-    const clientePorId = new Map(clientes.map((cliente) => [Number(cliente.id), cliente]));
-    for (const detalle of detalles) {
+    const detallesAuditoria = [...data.detalles, ...data.produccion_embalaje.detalles];
+    const clientesAuditoria = [...data.clientes, ...data.produccion_embalaje.clientes];
+    const clientePorId = new Map(clientesAuditoria.map((cliente) => [Number(cliente.id), cliente]));
+    const grupoDetalle = (detalle) => normalizarCategoriaOperativa(detalle.categoria_operativa)
+      || grupoProductoProduccion(detalle.producto_nombre, normalizarProducto);
+    for (const detalle of detallesAuditoria) {
       const cliente = clientePorId.get(Number(detalle.pedido_id));
       if (!cliente || !(Number(detalle.cantidad) > 0)) continue;
       const categoria = grupoDetalle(detalle);
-      fuente.addRow({ cliente: cliente.cliente_nombre, producto: detalle.producto_nombre,
+      const nombreFuente = String(detalle.producto_nombre_fuente || detalle.producto_nombre || '').trim();
+      const nombre = String(detalle.origen || '').toLowerCase() === 'casino' || detalle.producto_nombre_fuente
+        ? nombreVisibleProductoCronograma(nombreFuente) : detalle.producto_nombre;
+      fuente.addRow({ cliente: cliente.cliente_nombre, producto: nombre,
         cantidad: Number(detalle.cantidad), categoria,
         produccion: fechaProduccionAnticipada(cliente, categoria),
-        embalaje: detalle.fecha_he, entrega: cliente.fecha_recoge, fuente: detalle.casino_clave_fuente || '' });
+        embalaje: detalle.fecha_he, entrega: cliente.fecha_recoge, fuente: detalle.casino_clave_fuente || '', nombreFuente });
     }
     fuente.getRow(1).font = { bold: true };
     fuente.views = [{ state: 'frozen', ySplit: 1 }];
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="Embalaje_${fecha}.xlsx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="Hojas_HP_HE_HPE_${fecha}.xlsx"`);
     await workbook.xlsx.write(res);
     res.end();
   } catch (error) {
