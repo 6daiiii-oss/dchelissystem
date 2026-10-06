@@ -105,3 +105,28 @@ test('el recuadro del total de HE se renderiza dentro de su celda', () => {
   const html = containers.hojaProduccion.innerHTML;
   assert.match(html, /<td class="pack-cell"><div class="pack-badge">1x25<\/div><\/td>/);
 });
+
+test('HE muestra la cantidad de Barranco junto a EMPANADA CARNE aunque el cronograma diga EMPANADITAS DE CARNE', () => {
+  const clientes = [
+    { id: 1, cliente_nombre: 'Pedido general', origen: 'pg' },
+    { id: -2, cliente_nombre: 'Barranco', origen: 'casino' }
+  ];
+  const detalles = [
+    { pedido_id: 1, origen: 'pg', producto_nombre: 'EMPANADA CARNE', categoria_operativa: 'Bocaditos', cantidad: 25 },
+    { pedido_id: -2, origen: 'casino', producto_nombre_fuente: 'EMPANADITAS DE CARNE', producto_nombre: 'EMPANADITAS DE CARNE', categoria_operativa: 'Bocaditos salados', cantidad: 20 }
+  ];
+  const { context, containers } = matriz(clientes, detalles);
+  const filtrados = context.filtrarDetallesEmbalaje(detalles);
+  const listas = context.obtenerListasEmbalaje(filtrados);
+  context.renderizarMatrizProducto(Object.entries(listas).map(([titulo, productosLista]) => ({
+    titulo: titulo.toUpperCase(), productosLista, grupo: ({ bocaditos: 'Bocaditos', sandwiches: 'Sándwiches', triples: 'Triples', piqueos: 'Piqueos', panes: 'Panes', tortas: 'Tortas', kekes: 'Kekes' })[titulo]
+  })), filtrados);
+  const html = containers.hojaProduccion.innerHTML;
+  const rows = [...html.matchAll(/<tr><td class="prod-col">([^<]*)<\/td>([\s\S]*?)<\/tr>/g)];
+  const carne = rows.filter(([, nombre]) => nombre === 'EMPANADA CARNE');
+  assert.equal(carne.length, 1, 'los alias exactos de empanada de carne quedan en una sola fila operativa');
+  assert.match(carne[0][2], /<td class="qty-cell kitchen-normal kitchen-casino">20<\/td>/, 'la celda de Barranco conserva sus 20 unidades');
+  assert.match(carne[0][2], /1x20 \/ 1x25/, 'el total incluye los dos pedidos sin perder su distribución');
+  assert.ok(!rows.some(([, nombre]) => nombre === 'EMPANADITAS DE CARNE'));
+  assert.equal(detalles[1].producto_nombre_fuente, 'EMPANADITAS DE CARNE', 'el detalle conserva el nombre original del cronograma');
+});

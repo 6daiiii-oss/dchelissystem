@@ -197,10 +197,21 @@ test('Excel completo → PostgreSQL → HP/HE/HPE sin faltantes, sobrantes ni fi
     });
     const expectedTotals = new Map();
     for (const row of expectedHe) {
-      const key = JSON.stringify([row.producto_nombre, row.categoria_operativa.toUpperCase()]);
+      const nombre = ['EMPANADITA DE CARNE', 'EMPANADITAS DE CARNE', 'EMPANADAS DE CARNE', 'EMPANADA DE CARNE'].includes(row.producto_nombre.toUpperCase())
+        && row.categoria_operativa.toUpperCase() === 'BOCADITOS' ? 'EMPANADA CARNE' : row.producto_nombre;
+      const key = JSON.stringify([nombre, row.categoria_operativa.toUpperCase()]);
       expectedTotals.set(key, (expectedTotals.get(key) || 0) + row.cantidad);
     }
     assert.deepEqual(actualHe, [...expectedTotals.entries()].sort());
+    const barrancoEmpanada = await page.locator('#hojaProduccion tr').filter({ has: page.locator('td.prod-col', { hasText: /^EMPANADA CARNE$/ }) }).evaluateAll(rows => {
+      for (const row of rows) {
+        const headers = [...row.closest('table').querySelectorAll('thead th.client-header')].map(cell => cell.textContent.trim());
+        const barranco = headers.findIndex(name => name === 'BARRANCO');
+        if (barranco >= 0) return row.children[barranco + 1]?.textContent.trim() || '';
+      }
+      return '';
+    });
+    assert.equal(barrancoEmpanada, '20', 'Barranco debe figurar en la fila consolidada de empanada de carne');
     assert.equal(await page.locator('#panel-produccion').isVisible(), false);
     assert.equal(await page.locator('#fecha_filtro').inputValue(), '2026-10-06');
     await page.emulateMedia({ media: 'print' });

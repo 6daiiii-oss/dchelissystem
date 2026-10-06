@@ -7337,6 +7337,19 @@
       return (detalles || []).filter(det => Number.isFinite(Number(det.cantidad)) && Number(det.cantidad) > 0);
     }
 
+    const ALIASES_EMPANADA_CARNE_EMBALAJE = new Set([
+      'EMPANADITA DE CARNE', 'EMPANADITAS DE CARNE', 'EMPANADAS DE CARNE', 'EMPANADA DE CARNE'
+    ]);
+
+    function nombreMatrizEmbalaje(detalle, nombre) {
+      const categoria = normalizarCategoriaOperativa(detalle?.categoria_operativa || '')
+        || grupoProductoProduccion(nombre, normalizarNombreProducto);
+      if (categoria !== 'Bocaditos') return nombre;
+      const clave = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase().replace(/[.,;:()]/g, ' ').replace(/\s+/g, ' ').trim();
+      return ALIASES_EMPANADA_CARNE_EMBALAJE.has(clave) ? 'EMPANADA CARNE' : nombre;
+    }
+
     function obtenerListasEmbalaje(detalles) {
       const activos = new Map();
       const resueltos = new Map();
@@ -7344,7 +7357,7 @@
         if (!(Number(detalle.cantidad || 0) > 0)) continue;
         const original = `${detalle.origen || 'pg'}::${nombreDetalleProduccion(detalle)}`;
         if (!resueltos.has(original)) resueltos.set(original, nombreDetalleProduccion(detalle, obtenerProductoResolucion));
-        const nombre = resueltos.get(original);
+        const nombre = nombreMatrizEmbalaje(detalle, resueltos.get(original));
         const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa || '');
         const grupo = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes', 'Tortas', 'Kekes'].includes(categoriaManual)
           ? categoriaManual
@@ -7520,7 +7533,7 @@
       if (!nombresResueltos.has(original)) {
         nombresResueltos.set(original, nombreDetalleProduccion(detalle, obtenerProductoResolucion));
       }
-      const nombre = nombresResueltos.get(original);
+      const nombre = nombreMatrizEmbalaje(detalle, nombresResueltos.get(original));
       const grupo = normalizarCategoriaOperativa(detalle.categoria_operativa) || grupoProductoProduccion(nombre, normalizarNombreProducto);
       const clave = JSON.stringify([claveNombreProduccion(nombre), grupo]);
       if (!indice.has(clave)) indice.set(clave, { clientes: new Set(), cantidades: new Map(), detalles: [] });
