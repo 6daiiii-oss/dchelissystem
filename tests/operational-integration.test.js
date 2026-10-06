@@ -138,6 +138,16 @@ test('Excel completo → PostgreSQL → HP/HE/HPE sin faltantes, sobrantes ni fi
     const context = await browser.newContext(); await context.addCookies([{ name: cookie.split('=')[0], value: cookie.split('=').slice(1).join('='), url: origin }]);
     const page = await context.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('dialog', dialog => { errors.push(dialog.message()); dialog.dismiss(); });
     await page.goto(`${origin}/produccion`);
+    await page.locator('#settingsBtn').click();
+    await page.locator('#settingsMenu').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('[data-theme-choice="dark"]').getAttribute('aria-checked'), 'false');
+    await page.locator('[data-theme-choice="dark"]').click();
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+    assert.equal(await page.locator('#settingsMenu').isVisible(), false);
+    await page.locator('#settingsBtn').click();
+    await page.locator('[data-theme-choice="light"]').click();
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+    assert.equal(await page.locator('#settingsMenu').isVisible(), false);
     await page.locator('#panel-produccion').waitFor({ state: 'visible' });
     await page.locator('#fecha_filtro').fill('2026-10-06'); await page.locator('#actualizarCocinaBtn').click();
     await page.waitForFunction(() => !document.querySelector('#actualizarCocinaBtn').disabled);
@@ -151,7 +161,9 @@ test('Excel completo → PostgreSQL → HP/HE/HPE sin faltantes, sobrantes ni fi
     await page.locator('#fecha_embalaje').fill('2026-10-05'); await page.locator('#actualizarEmbalajeBtn').click();
     await page.waitForFunction(() => !document.querySelector('#actualizarEmbalajeBtn').disabled);
     assert.ok((await page.locator('#hojaProduccion').innerText()).includes('PRODUCTO'));
-    await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+    await page.locator('#settingsBtn').click();
+    await page.locator('[data-theme-choice="dark"]').click();
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
     const totalBox = page.locator('#hojaProduccion td.pack-cell').first();
     assert.ok(await totalBox.locator('.pack-badge').count(), 'cada total debe tener su recuadro dentro de la celda TOTAL');
     const totalBoxStyle = await totalBox.evaluate(cell => ({
@@ -162,6 +174,11 @@ test('Excel completo → PostgreSQL → HP/HE/HPE sin faltantes, sobrantes ni fi
     assert.notEqual(totalBoxStyle.background, 'rgb(19, 28, 23)', 'la celda TOTAL debe conservar fondo destacado en tema oscuro');
     assert.equal(totalBoxStyle.border, 'rgb(167, 94, 81)');
     assert.equal(totalBoxStyle.badgeBorder, 'rgb(167, 94, 81)');
+    const normalQty = page.locator('#hojaProduccion td.qty-cell.kitchen-normal:not(.kitchen-casino)').first();
+    if (await normalQty.count()) assert.equal(await normalQty.evaluate(cell => getComputedStyle(cell).color), 'rgb(237, 244, 239)');
+    await page.locator('#settingsBtn').click();
+    await page.locator('[data-theme-choice="light"]').click();
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
     const expectedHe = (await dataFor('2026-10-05')).embalaje.detalles;
     const actualHe = await page.locator('#hojaProduccion tbody').evaluateAll(bodies => {
       const totals = new Map();
