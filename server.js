@@ -2575,7 +2575,7 @@ app.get('/index.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get(['/produccion', '/embalaje', '/admin'], (req, res) => {
+app.get(['/produccion', '/embalaje', '/hpe', '/admin'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 

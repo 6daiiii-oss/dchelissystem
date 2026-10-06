@@ -2377,13 +2377,14 @@
     }
 
     @media print {
-      body.printing-cocina.printing-embalaje #panel-produccion { display:none !important; }
-      body.printing-cocina.printing-embalaje #panel-embalaje { display:block !important; }
-      body.printing-cocina.printing-produccion #panel-embalaje,
-      body.printing-cocina.printing-distribucion #panel-embalaje { display:none !important; }
+      body.printing-cocina.printing-distribucion #panel-produccion,
+      body.printing-cocina.printing-embalaje #panel-hpe,
+      body.printing-cocina.printing-produccion #panel-hpe { display:none !important; }
+      body.printing-cocina.printing-distribucion #panel-hpe { display:block !important; }
       body.printing-cocina.printing-produccion #panel-produccion,
-      body.printing-cocina.printing-distribucion #panel-produccion { display:block !important; }
-      body.printing-cocina #panel-embalaje .header-row { display:none !important; }
+      body.printing-cocina.printing-embalaje #panel-produccion { display:block !important; }
+      body.printing-cocina #panel-produccion > .panel > .header-row,
+      body.printing-cocina #panel-hpe > .panel > .header-row { display:none !important; }
     }
 
     /* ===== Professional UI polish · screen only ===== */
@@ -3165,8 +3166,8 @@
 
     <nav class="tab-nav no-print" aria-label="Navegación">
       <button class="tab-btn active" data-tab="general">Pedidos generales</button>
-      <button class="tab-btn" data-tab="produccion">Producción</button>
-      <button class="tab-btn" data-tab="embalaje">Embalaje</button>
+      <button class="tab-btn" data-tab="produccion">HP + HE</button>
+      <button class="tab-btn" data-tab="hpe">HPE</button>
       <button class="tab-btn" data-tab="casinos">Casinos</button>
       <button class="tab-btn" data-tab="inventario">Inventario</button>
       <button class="tab-btn" data-tab="historial">Historial</button>
@@ -3284,16 +3285,49 @@
       <div class="panel">
         <div class="header-row">
           <div>
-            <h3>Producción</h3>
-            <div id="kitchenWindowLabel" style="margin-top:5px;color:var(--muted);font-size:.8rem;font-weight:700;">HP: día anterior a la entrega. HPE: triples, sánguches y piqueos del día de entrega.</div>
+            <h3>Producción y embalaje</h3>
+            <div id="kitchenWindowLabel" style="margin-top:5px;color:var(--muted);font-size:.8rem;font-weight:700;">HP y HE: un día antes de la entrega. Los panes siempre quedan el día anterior. Los pedidos tardíos pasan al día de entrega. Triples, sánguches y piqueos aparecen solo en HPE.</div>
           </div>
           <div class="controls no-print">
-            <label><strong>Fecha de producción:</strong></label>
+            <label><strong>Fecha de HP y HE:</strong></label>
             <input type="date" id="fecha_filtro" />
-            <button id="actualizarCocinaBtn" class="btn btn-success" type="button" onclick="cargarMatriz('produccion')">Actualizar hojas</button>
+            <button id="actualizarCocinaBtn" class="btn btn-success" type="button" onclick="cargarMatriz('produccion', { force:true })">Actualizar HP + HE</button>
           </div>
         </div>
 
+        <div id="productionPaperWrapper" class="kitchen-document-block" style="margin-bottom:26px;">
+          <div class="kitchen-doc-heading">
+            <div><span>HOJA DE PRODUCCIÓN · HP</span></div>
+          </div>
+          <div id="hojaProduccionCocina"></div>
+          <div class="no-print" style="display:flex; justify-content:flex-end; margin-top:14px;">
+            <button class="btn btn-primary" type="button" onclick="imprimirHojaProduccion()">Imprimir HP</button>
+          </div>
+        </div>
+
+        <div id="embalajeWrapper" class="kitchen-document-block">
+          <div class="kitchen-doc-heading">
+            <div><span>HOJA DE EMBALAJE · HE</span></div>
+          </div>
+          <div id="hojaProduccion" class="table-container"></div>
+          <div class="no-print" style="display:flex; justify-content:flex-end; margin-top:14px;">
+            <button class="btn btn-warning" type="button" onclick="imprimirHojaEmbalaje()">Imprimir HE</button>
+            <button class="btn btn-ghost" type="button" onclick="descargarExcel()">Excel HE</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-hpe" class="tab-panel">
+      <div class="panel">
+        <div class="header-row">
+          <div><h3>Producción y embalaje · HPE</h3><div style="margin-top:5px;color:var(--muted);font-size:.8rem;font-weight:700;">Triples, sánguches y piqueos salen solo aquí, en la fecha de entrega.</div></div>
+          <div class="controls no-print">
+            <label for="fecha_hpe"><strong>Fecha de HPE:</strong></label>
+            <input type="date" id="fecha_hpe" />
+            <button id="actualizarHpeBtn" class="btn btn-success" type="button" onclick="cargarMatriz('hpe', { force:true })">Actualizar HPE</button>
+          </div>
+        </div>
         <div id="distributionPaperWrapper" class="kitchen-document-block" style="margin-bottom:26px;">
           <div class="kitchen-doc-heading">
             <div><span>HOJA DE PRODUCCIÓN / EMBALAJE · HPE</span></div>
@@ -3303,38 +3337,6 @@
             <button class="btn btn-warning" type="button" onclick="imprimirHojaDistribucion()">Imprimir HPE</button>
           </div>
         </div>
-
-        <div id="productionPaperWrapper" class="kitchen-document-block">
-          <div class="kitchen-doc-heading">
-            <div><span>HOJA DE PRODUCCIÓN · HP</span></div>
-          </div>
-          <div id="hojaProduccionCocina"></div>
-          <div class="no-print" style="display:flex; justify-content:flex-end; margin-top:14px;">
-            <button class="btn btn-primary" type="button" onclick="imprimirHojaProduccion()">Imprimir HP</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="panel-embalaje" class="tab-panel">
-      <div class="panel">
-        <div class="header-row">
-          <div><h3>Embalaje</h3><div style="margin-top:5px;color:var(--muted);font-size:.8rem;font-weight:700;">HE: día anterior a la entrega. Después del corte de las 8 a. m., los pedidos tardíos pasan al día de entrega. Los panes siempre permanecen en el día anterior. Triples, sánguches y piqueos aparecen solo en HPE.</div></div>
-          <div class="controls no-print">
-            <label for="fecha_embalaje"><strong>Fecha de embalaje:</strong></label>
-            <input type="date" id="fecha_embalaje" />
-            <button id="actualizarEmbalajeBtn" class="btn btn-success" type="button" onclick="cargarMatriz('embalaje')">Actualizar HE</button>
-            <button class="btn btn-warning" type="button" onclick="imprimirHojaEmbalaje()">Imprimir HE</button>
-            <button class="btn btn-ghost" type="button" onclick="descargarExcel()">Excel HE</button>
-          </div>
-        </div>
-        <div id="embalajeWrapper" class="kitchen-document-block" style="margin-bottom:26px;">
-          <div class="kitchen-doc-heading">
-            <div><span>HOJA DE EMBALAJE</span></div>
-          </div>
-          <div id="hojaProduccion" class="table-container"></div>
-        </div>
-
       </div>
     </section>
 
@@ -5851,12 +5853,17 @@
         mostrarCargaCasino(true, 'Guardado. Actualizando la lista de cronogramas…');
         await cargarCronogramaCasinoPersistido(data.cronograma_id);
         firmaProduccion = '';
+        window.__cargasHojas ||= {};
+        window.__cargasHojas.produccion = false;
+        window.__cargasHojas.hpe = false;
+        await cargarMatriz('produccion', { force:true });
+        await cargarMatriz('hpe', { force:true });
 
         const sinReconocer = Array.isArray(data.productos_no_reconocidos) ? data.productos_no_reconocidos.length : 0;
         const advertencias = Array.isArray(data.advertencias) ? data.advertencias.length : 0;
         if (estado) {
           estado.className = 'casino-status success';
-          estado.textContent = `${data.reemplazado ? 'Cronograma actualizado' : 'Cronograma importado'} · ${Number(data.casinos_detectados || 0)} casino(s) · ${Number(data.dias_detectados || 0)} día(s) · guardado por separado y disponible en Embalaje y Producción${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
+          estado.textContent = `${data.reemplazado ? 'Cronograma actualizado' : 'Cronograma importado'} · ${Number(data.casinos_detectados || 0)} casino(s) · ${Number(data.dias_detectados || 0)} día(s) · transferido a HP, HE y HPE${sinReconocer ? ` · ${sinReconocer} nombre(s) conservados` : ''}${advertencias ? ` · ${advertencias} advertencia(s)` : ''}.`;
         }
       } catch (error) {
         if (estado) {
@@ -5921,7 +5928,9 @@
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('adminApp').classList.remove('hidden');
       const guardado = localStorage.getItem(ADMIN_TAB_KEY) || 'general';
-      const tab = location.pathname === '/produccion' ? 'produccion' : location.pathname === '/embalaje' ? 'embalaje' : guardado === 'cocina' ? 'produccion' : guardado;
+      const tab = location.pathname === '/hpe' ? 'hpe'
+        : ['/produccion', '/embalaje'].includes(location.pathname) ? 'produccion'
+          : ['cocina', 'embalaje'].includes(guardado) ? 'produccion' : guardado;
       const tabButton = document.querySelector(`.tab-btn[data-tab="${tab}"]`) || document.querySelector('.tab-btn');
       if (tabButton) tabButton.click();
       if (!adminStarted) {
@@ -5990,7 +5999,7 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
         document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${btn.dataset.tab}`));
         localStorage.setItem(ADMIN_TAB_KEY, btn.dataset.tab);
-        history.replaceState(null, '', ['produccion', 'embalaje'].includes(btn.dataset.tab) ? `/${btn.dataset.tab}` : '/admin');
+        history.replaceState(null, '', btn.dataset.tab === 'hpe' ? '/hpe' : btn.dataset.tab === 'produccion' ? '/produccion' : '/admin');
         if (adminStarted) cargarPanelActivo(btn.dataset.tab);
       });
     });
@@ -5998,11 +6007,11 @@
     async function cargarPanelActivo(tab) {
       if (tab === 'general') return cargarPedidosGenerales();
       if (tab === 'historial' && !panelesCargados.has(tab)) return cargarHistorialPedidos();
-      if ((tab === 'digitacion' || tab === 'produccion' || tab === 'embalaje') && !panelesCargados.has('catalogo')) {
+      if ((tab === 'digitacion' || tab === 'produccion' || tab === 'hpe') && !panelesCargados.has('catalogo')) {
         await cargarCatalogoRapido();
         panelesCargados.add('catalogo');
       }
-      if (tab === 'produccion' || tab === 'embalaje') return cargarMatriz(tab);
+      if (tab === 'produccion' || tab === 'hpe') return cargarMatriz(tab);
       if (tab === 'usuarios') return cargarUsuariosAdmin();
       if (tab === 'casinos' && !window.__casinoCronogramasCargados) return cargarCronogramaCasinoPersistido();
       if (tab === 'digitacion' && !panelesCargados.has(tab)) {
@@ -6022,7 +6031,7 @@
       const tab = document.querySelector('.tab-btn.active')?.dataset.tab;
       if (tab === 'general') await cargarPedidosGenerales();
       if (tab === 'historial') await cargarHistorialPedidos();
-      if (tab === 'produccion' || tab === 'embalaje') await cargarMatriz(tab);
+      if (tab === 'produccion' || tab === 'hpe') await cargarMatriz(tab, { force:true });
       if (tab === 'casinos') {
         if (window.__casinoCronogramaId) await abrirCronogramaCasino(window.__casinoCronogramaId, { forzar:true });
         else await cargarCronogramaCasinoPersistido();
@@ -6111,7 +6120,7 @@
     }
 
     document.getElementById('fecha_filtro').value = fechaHoyPeru();
-    document.getElementById('fecha_embalaje').value = fechaHoyPeru();
+    document.getElementById('fecha_hpe').value = fechaHoyPeru();
     document.getElementById('quickPickupDate').value = fechaHoyPeru();
     poblarHorasSelector('quickPickupTime', '18:00');
     document.getElementById('quickAdelanto').addEventListener('input', renderQuickEntryPreview);
@@ -7489,12 +7498,12 @@
   }
 
   function imprimirHojaEmbalaje() {
-    if (!document.getElementById('fecha_embalaje')?.value) return alert('Selecciona una fecha primero.');
+    if (!document.getElementById('fecha_filtro')?.value) return alert('Selecciona una fecha primero.');
     marcarPedidosVentanaEnPreparacion().finally(() => setTimeout(() => prepararImpresionCocina('embalaje'), 120));
   }
 
   function imprimirHojaDistribucion() {
-    if (!document.getElementById('fecha_filtro')?.value) return alert('Selecciona una fecha primero.');
+    if (!document.getElementById('fecha_hpe')?.value) return alert('Selecciona una fecha primero.');
     prepararImpresionCocina('distribucion');
   }
 
@@ -7592,7 +7601,7 @@
       }
     }
 
-    const fechaEmbalaje = document.getElementById('fecha_embalaje')?.value || '';
+    const fechaEmbalaje = document.getElementById('fecha_filtro')?.value || '';
     contenedor.innerHTML = paginas.map(({ grupoClientes, productosBloque, mostrarTotal }) => {
         let html = `<div class="kitchen-page"><div class="kitchen-page-date">EMBALAJE · ${escapeHtmlAdmin(formatearFecha(fechaEmbalaje).toUpperCase())}</div><table><thead><tr><th class="prod-col">PRODUCTO</th>`;
 
@@ -7808,40 +7817,34 @@
     `).join('');
   }
 
-  async function cargarMatriz(pagina = document.querySelector('.tab-btn.active')?.dataset.tab || 'produccion') {
+  async function cargarMatriz(pagina = document.querySelector('.tab-btn.active')?.dataset.tab || 'produccion', opciones = {}) {
     window.__cargasHojas ||= {};
     if (window.__cargasHojas[pagina]) return;
-    const esEmbalaje = pagina === 'embalaje';
-    const fecha = document.getElementById(esEmbalaje ? 'fecha_embalaje' : 'fecha_filtro').value;
+    const esHpe = pagina === 'hpe';
+    const fecha = document.getElementById(esHpe ? 'fecha_hpe' : 'fecha_filtro')?.value;
     if (!fecha) return alert('Selecciona una fecha');
     window.__cargasHojas[pagina] = true;
-    const boton = document.getElementById(esEmbalaje ? 'actualizarEmbalajeBtn' : 'actualizarCocinaBtn');
+    const boton = document.getElementById(esHpe ? 'actualizarHpeBtn' : 'actualizarCocinaBtn');
+    const textoBoton = boton?.textContent || '';
     if (boton) { boton.disabled = true; boton.textContent = 'Actualizando…'; }
 
     try {
-      const res = await fetch(`/api/admin/produccion?fecha=${fecha}`);
+      const res = await fetch(`/api/admin/produccion?fecha=${encodeURIComponent(fecha)}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'No se pudo cargar la producción.');
+      if (!res.ok) throw new Error(data.error || 'No se pudieron actualizar las hojas.');
 
-      if (esEmbalaje) {
-        window.__datosEmbalajeClientes = data.embalaje?.clientes || [];
-        window.__datosEmbalajeDetalles = data.embalaje?.detalles || [];
+      if (esHpe) {
+        renderizarHojasEmbalajePorHora(data.produccion_embalaje || {});
+        window.__datosHpe = data.produccion_embalaje || {};
       } else {
         window.__datosProduccionClientes = data.clientes || [];
         window.__datosProduccionDetalles = data.detalles || [];
-      }
-      const nuevaFirmaProduccion = JSON.stringify({
-        pagina, fecha, clientes:data.clientes,
-        detalles:data.detalles,
-        embalaje:data.embalaje, hpe:data.produccion_embalaje,
-        ventana:data.ventana
-      });
-      if (firmaProduccion === nuevaFirmaProduccion) return;
+        window.__datosEmbalajeClientes = data.embalaje?.clientes || [];
+        window.__datosEmbalajeDetalles = data.embalaje?.detalles || [];
+        window.__datosHpe = data.produccion_embalaje || {};
+        firmaProduccion = JSON.stringify({ fecha, hp:data.detalles, he:data.embalaje, hpe:data.produccion_embalaje });
 
-      if (!esEmbalaje) {
         renderizarHojaProduccionCocina(data);
-        renderizarHojasEmbalajePorHora(data.produccion_embalaje || {});
-      } else {
         const detallesEmbalaje = filtrarDetallesEmbalaje(data.embalaje?.detalles || []);
         const listasEmbalaje = obtenerListasEmbalaje(detallesEmbalaje);
         renderizarMatrizProducto([
@@ -7850,23 +7853,21 @@
           { titulo:'KEKES', productosLista:listasEmbalaje.kekes },
           { titulo:'PANES', productosLista:listasEmbalaje.panes }
         ], detallesEmbalaje);
+
+        const paginasCocina = [...document.querySelectorAll('#embalajeWrapper .kitchen-page')];
+        paginasCocina.forEach((paginaHoja) => paginaHoja.classList.remove('last-kitchen-page'));
+        paginasCocina.at(-1)?.classList.add('last-kitchen-page');
       }
-
-      const paginasCocina = [...document.querySelectorAll('#embalajeWrapper .kitchen-page')];
-      paginasCocina.forEach((pagina) => pagina.classList.remove('last-kitchen-page'));
-      paginasCocina.at(-1)?.classList.add('last-kitchen-page');
-
-      firmaProduccion = nuevaFirmaProduccion;
     } catch (error) {
-      alert(error.message || 'Error al obtener los datos de producción.');
+      alert(error.message || 'Error al actualizar HP, HE y HPE.');
     } finally {
       window.__cargasHojas[pagina] = false;
-      if (boton) { boton.disabled = false; boton.textContent = 'Actualizar hojas'; }
+      if (boton) { boton.disabled = false; boton.textContent = textoBoton; }
     }
   }
 
   function descargarExcel() {
-    const fecha = document.getElementById('fecha_embalaje').value;
+    const fecha = document.getElementById('fecha_filtro').value;
     if (!fecha) return alert('Selecciona una fecha');
     window.location.href = `/api/admin/exportar-excel?fecha=${fecha}`;
   }
@@ -7883,13 +7884,13 @@
         if (document.hidden || actualizacionEnCurso) return;
         if (document.getElementById('pedidoDetalleModal').classList.contains('active')) return;
         const tab = document.querySelector('.tab-btn.active')?.dataset.tab;
-        if (!['general', 'historial', 'produccion', 'embalaje'].includes(tab)) return;
+        if (!['general', 'historial', 'produccion', 'hpe'].includes(tab)) return;
         actualizacionEnCurso = true;
         try {
           ciclos += 1;
           if (tab === 'general') await cargarPedidosGenerales();
           if (tab === 'historial' && ciclos % 3 === 0 && pedidosHistorialCargados.length <= 50) await cargarHistorialPedidos();
-          if (['produccion', 'embalaje'].includes(tab) && ciclos % 3 === 0) await cargarMatriz();
+          if (['produccion', 'hpe'].includes(tab) && ciclos % 3 === 0) await cargarMatriz(tab, { force:true });
         } finally {
           actualizacionEnCurso = false;
         }
