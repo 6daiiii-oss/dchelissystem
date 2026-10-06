@@ -1,55 +1,35 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const test = require('node:test');
-const { filtrarItemsEmbalaje, grupoProductoProduccion } = require('../public/production-classification');
+const ExcelJS = require('exceljs');
+const { Writable } = require('node:stream');
+const { serverContext } = require('./helpers/server-context');
 
-test('el Excel de embalaje separa panes y excluye solo kekes y tortas', async () => {
-  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-  const desde = server.indexOf("app.get('/api/admin/exportar-excel'");
-  const hasta = server.indexOf('\nconst PORT =', desde);
-  assert.ok(desde > 0 && hasta > desde);
-  let workbook;
-  class Worksheet {
-    constructor(name) { this.name = name; this.cells = new Map(); this.columns = new Map(); this.rows = new Map(); }
-    getCell(fila, columna) {
-      const clave = columna ? `${fila}:${columna}` : fila;
-      if (!this.cells.has(clave)) this.cells.set(clave, { value: undefined });
-      return this.cells.get(clave);
-    }
-    getColumn(numero) {
-      if (!this.columns.has(numero)) this.columns.set(numero, { letter: String.fromCharCode(64 + numero) });
-      return this.columns.get(numero);
-    }
-    getRow(numero) {
-      if (!this.rows.has(numero)) this.rows.set(numero, {});
-      return this.rows.get(numero);
-    }
-  }
-  class Workbook {
-    constructor() { workbook = this; this.worksheets = []; this.xlsx = { write: async () => {} }; }
-    addWorksheet(nombre) { const hoja = new Worksheet(nombre); this.worksheets.push(hoja); return hoja; }
-  }
+test('el Excel HE conserva cada fila fuente, incluye kekes/tortas y separa panes', async () => {
+  const ctx = serverContext();
   const detalles = [
-    ['Empanada de boda', 25], ['Ciabatta con hotdog', 15], ['Keke de chocolate', 2],
-    ['Torta chantilly', 1], ['Pye de limón', 1], ['Pye de limón', 25], ['Petipan de pollo', 20]
-  ].map(([producto_nombre, cantidad]) => ({ pedido_id: 1, producto_nombre, cantidad }));
-  const normalizar = (nombre) => String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
-  const app = { get: (_, __, handler) => { app.handler = handler; } };
-  const cargar = new Function('app', 'requireAdminAuth', 'dbAllAsync', 'cargarCasinosProduccion', 'ExcelJS',
-    'sumarDiasIso', 'resolverProductoProduccion', 'normalizarProducto', 'grupoProductoProduccion',
-    'filtrarItemsEmbalaje', 'console', `${server.slice(desde, hasta)}; return app.handler;`);
-  let consultas = 0;
-  const handler = cargar(app, () => {}, async () => ++consultas === 1
-    ? [{ id:1, cliente_nombre:'Casino', origen:'casino', es_urgente:false }]
-    : detalles, async () => ({ clientes:[], detalles:[] }), { Workbook },
-  () => '2026-09-24', (nombre) => nombre, normalizar, grupoProductoProduccion, filtrarItemsEmbalaje, console);
-  const res = { setHeader: () => {}, end: () => {}, status: () => { throw new Error('No debería fallar'); } };
-  await handler({ query:{ fecha:'2026-09-23' } }, res);
-  assert.deepEqual(workbook.worksheets.map((hoja) => hoja.name), ['Embalaje', 'Panes']);
-  const nombres = (hoja) => [...hoja.cells.entries()].filter(([clave]) => /^\d+:1$/.test(clave)).map(([, celda]) => celda.value);
-  assert.deepEqual(nombres(workbook.worksheets[0]), ['Empanada de boda', 'Pye de limón', 'Petipan de pollo']);
-  assert.deepEqual(nombres(workbook.worksheets[1]), ['Ciabatta con hotdog']);
-  assert.equal(workbook.worksheets[0].getCell(4, 2).value, 25);
-  assert.equal(workbook.worksheets[1].getCell(3, 2).value, 15);
+    ['EMPANADA, CARNE', 'Bocaditos', 25], ['EMPANADA CARNE', 'Bocaditos', 15],
+    ['PAN FRANCES MINI', 'Panes', 60], ['KEKE CHOCOLATE', 'Kekes', 2], ['TORTA MOKA', 'Tortas', 1]
+  ].map(([producto_nombre, categoria_operativa, cantidad], i) => ({ pedido_id: 1, producto_nombre,
+    categoria_operativa, cantidad, fecha_he: '2026-10-05', casino_clave_fuente: `hoja::${i}`, origen: 'casino' }));
+  ctx.cargarDatosHojas = async () => ({ embalaje: { clientes: [{ id: 1, cliente_nombre: 'Casino', origen: 'casino', fecha_recoge: '2026-10-06', cronograma_casino_id: 1 }], detalles } });
+  const chunks = [];
+  const response = new Writable({ write(chunk, encoding, cb) { chunks.push(chunk); cb(); } });
+  response.setHeader = () => {}; response.status = () => { throw Error('La exportación debe funcionar'); };
+  await ctx.routes['/api/admin/exportar-excel']({ query: { fecha: '2026-10-05' } }, response);
+  const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(Buffer.concat(chunks));
+  assert.deepEqual(workbook.worksheets.map(s => s.name), ['Embalaje', 'Panes', 'Detalle de pedidos']);
+  const fuente = workbook.getWorksheet('Detalle de pedidos');
+  assert.equal(fuente.rowCount, 6);
+  for (let i = 0; i < detalles.length; i++) {
+    const row = fuente.getRow(i + 2).values;
+    assert.equal(row[2], detalles[i].producto_nombre); assert.equal(row[3], detalles[i].cantidad);
+    assert.equal(row[5], '2026-10-05'); assert.equal(row[6], '2026-10-05'); assert.equal(row[7], '2026-10-06');
+    assert.equal(row[8], detalles[i].casino_clave_fuente);
+  }
+  const panes = workbook.getWorksheet('Panes');
+  assert.equal(panes.getCell('A3').value, 'PAN FRANCES MINI'); assert.equal(panes.getCell('B3').value, 60);
+  assert.equal(panes.getCell('C3').result, 60, 'el total lleva resultado cacheado verificable sin recalcular el Excel');
+  const embalaje = workbook.getWorksheet('Embalaje');
+  const nombres = embalaje.getColumn(1).values.filter(v => typeof v === 'string');
+  for (const n of ['EMPANADA, CARNE', 'EMPANADA CARNE', 'KEKE CHOCOLATE', 'TORTA MOKA']) assert.ok(nombres.includes(n));
 });

@@ -1046,8 +1046,8 @@
       #loginScreen,
       #panel-general,
       #panel-config,
-      #panel-cocina .header-row,
-      body:not(.printing-cocina) #panel-cocina {
+      #panel-produccion .header-row,
+      body:not(.printing-cocina) #panel-produccion {
         display: none !important;
       }
       #boletasTriplesImpresion,
@@ -1067,7 +1067,7 @@
       #panel-digitacion,
       #panel-inventario,
       #panel-historial { display: none !important; }
-      body.printing-cocina #panel-cocina { display: block !important; }
+      body.printing-cocina #panel-produccion { display: block !important; }
       .panel { border: none; padding: 0; box-shadow: none; }
       .kitchen-page {
         page-break-after: always;
@@ -2366,6 +2366,16 @@
       }
     }
 
+    @media print {
+      body.printing-cocina.printing-embalaje #panel-produccion { display:none !important; }
+      body.printing-cocina.printing-embalaje #panel-embalaje { display:block !important; }
+      body.printing-cocina.printing-produccion #panel-embalaje,
+      body.printing-cocina.printing-distribucion #panel-embalaje { display:none !important; }
+      body.printing-cocina.printing-produccion #panel-produccion,
+      body.printing-cocina.printing-distribucion #panel-produccion { display:block !important; }
+      body.printing-cocina #panel-embalaje .header-row { display:none !important; }
+    }
+
     /* ===== Professional UI polish · screen only ===== */
     @media screen {
       :root {
@@ -3128,7 +3138,8 @@
 
     <nav class="tab-nav no-print" aria-label="Navegación">
       <button class="tab-btn active" data-tab="general">Pedidos generales</button>
-      <button class="tab-btn" data-tab="cocina">Cocina</button>
+      <button class="tab-btn" data-tab="produccion">Producción</button>
+      <button class="tab-btn" data-tab="embalaje">Embalaje</button>
       <button class="tab-btn" data-tab="casinos">Casinos</button>
       <button class="tab-btn" data-tab="inventario">Inventario</button>
       <button class="tab-btn" data-tab="historial">Historial</button>
@@ -3242,22 +3253,54 @@
       </div>
     </section>
 
-    <section id="panel-cocina" class="tab-panel">
+    <section id="panel-produccion" class="tab-panel">
       <div class="panel">
         <div class="header-row">
           <div>
-            <h3>Embalaje y producción</h3>
-            <div id="kitchenWindowLabel" style="margin-top:5px;color:var(--muted);font-size:.8rem;font-weight:700;">Producción anticipada: día anterior si el pedido fue registrado con 2 días de anticipación; pedidos tardíos pasan al día del recojo.</div>
+            <h3>Producción</h3>
+            <div id="kitchenWindowLabel" style="margin-top:5px;color:var(--muted);font-size:.8rem;font-weight:700;">HP: día anterior a la entrega. HPE: triples, sánguches y piqueos del día de entrega.</div>
           </div>
           <div class="controls no-print">
-            <label><strong>Fecha de hojas:</strong></label>
+            <label><strong>Fecha de producción:</strong></label>
             <input type="date" id="fecha_filtro" />
-            <button id="actualizarCocinaBtn" class="btn btn-success" type="button" onclick="cargarMatriz()">Actualizar hojas</button>
-            <button class="btn btn-warning" type="button" onclick="imprimirHojaEmbalaje()">Imprimir embalaje</button>
-            <button class="btn btn-ghost" type="button" onclick="descargarExcel()">Excel embalaje</button>
+            <button id="actualizarCocinaBtn" class="btn btn-success" type="button" onclick="cargarMatriz('produccion')">Actualizar hojas</button>
           </div>
         </div>
 
+        <div id="distributionPaperWrapper" class="kitchen-document-block" style="margin-bottom:26px;">
+          <div class="kitchen-doc-heading">
+            <div><span>HOJA DE PRODUCCIÓN / EMBALAJE · HPE</span></div>
+          </div>
+          <div id="hojaDistribucionCocina"></div>
+          <div class="no-print" style="display:flex; justify-content:flex-end; margin-top:14px;">
+            <button class="btn btn-warning" type="button" onclick="imprimirHojaDistribucion()">Imprimir HPE</button>
+          </div>
+        </div>
+
+        <div id="productionPaperWrapper" class="kitchen-document-block">
+          <div class="kitchen-doc-heading">
+            <div><span>HOJA DE PRODUCCIÓN · HP</span></div>
+          </div>
+          <div id="hojaProduccionCocina"></div>
+          <div class="no-print" style="display:flex; justify-content:flex-end; margin-top:14px;">
+            <button class="btn btn-primary" type="button" onclick="imprimirHojaProduccion()">Imprimir HP</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-embalaje" class="tab-panel">
+      <div class="panel">
+        <div class="header-row">
+          <div><h3>Embalaje</h3><div style="margin-top:5px;color:var(--muted);font-size:.8rem;font-weight:700;">HE: día anterior a la entrega. Después del corte de las 8 a. m., los pedidos tardíos pasan al día de entrega. Los panes siempre permanecen en el día anterior. Triples, sánguches y piqueos aparecen solo en HPE.</div></div>
+          <div class="controls no-print">
+            <label for="fecha_embalaje"><strong>Fecha de embalaje:</strong></label>
+            <input type="date" id="fecha_embalaje" />
+            <button id="actualizarEmbalajeBtn" class="btn btn-success" type="button" onclick="cargarMatriz('embalaje')">Actualizar HE</button>
+            <button class="btn btn-warning" type="button" onclick="imprimirHojaEmbalaje()">Imprimir HE</button>
+            <button class="btn btn-ghost" type="button" onclick="descargarExcel()">Excel HE</button>
+          </div>
+        </div>
         <div id="embalajeWrapper" class="kitchen-document-block" style="margin-bottom:26px;">
           <div class="kitchen-doc-heading">
             <div><span>HOJA DE EMBALAJE</span></div>
@@ -3265,25 +3308,6 @@
           <div id="hojaProduccion" class="table-container"></div>
         </div>
 
-        <div id="distributionPaperWrapper" class="kitchen-document-block" style="margin-bottom:26px;">
-          <div class="kitchen-doc-heading">
-            <div><span>HOJA DE EMBALAJE / PRODUCCIÓN</span></div>
-          </div>
-          <div id="hojaDistribucionCocina"></div>
-          <div class="no-print" style="display:flex; justify-content:flex-end; margin-top:14px;">
-            <button class="btn btn-warning" type="button" onclick="imprimirHojaDistribucion()">Imprimir embalaje / producción</button>
-          </div>
-        </div>
-
-        <div id="productionPaperWrapper" class="kitchen-document-block">
-          <div class="kitchen-doc-heading">
-            <div><span>HOJA DE PRODUCCIÓN</span></div>
-          </div>
-          <div id="hojaProduccionCocina"></div>
-          <div class="no-print" style="display:flex; justify-content:flex-end; margin-top:14px;">
-            <button class="btn btn-primary" type="button" onclick="imprimirHojaProduccion()">Imprimir producción</button>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -3565,7 +3589,6 @@
     let pedidosConocidos = null;
     let fechaPedidosConocida = '';
     let firmaProduccion = '';
-    let cargaMatrizEnCurso = false;
     let actualizacionEnCurso = false;
     let audioContext = null;
     let pedidosDisponibles = new Map();
@@ -5829,7 +5852,8 @@
     function openDashboard() {
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('adminApp').classList.remove('hidden');
-      const tab = localStorage.getItem(ADMIN_TAB_KEY) || 'general';
+      const guardado = localStorage.getItem(ADMIN_TAB_KEY) || 'general';
+      const tab = location.pathname === '/produccion' ? 'produccion' : location.pathname === '/embalaje' ? 'embalaje' : guardado === 'cocina' ? 'produccion' : guardado;
       const tabButton = document.querySelector(`.tab-btn[data-tab="${tab}"]`) || document.querySelector('.tab-btn');
       if (tabButton) tabButton.click();
       if (!adminStarted) {
@@ -5898,6 +5922,7 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
         document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${btn.dataset.tab}`));
         localStorage.setItem(ADMIN_TAB_KEY, btn.dataset.tab);
+        history.replaceState(null, '', ['produccion', 'embalaje'].includes(btn.dataset.tab) ? `/${btn.dataset.tab}` : '/admin');
         if (adminStarted) cargarPanelActivo(btn.dataset.tab);
       });
     });
@@ -5905,11 +5930,11 @@
     async function cargarPanelActivo(tab) {
       if (tab === 'general') return cargarPedidosGenerales();
       if (tab === 'historial' && !panelesCargados.has(tab)) return cargarHistorialPedidos();
-      if ((tab === 'digitacion' || tab === 'cocina') && !panelesCargados.has('catalogo')) {
+      if ((tab === 'digitacion' || tab === 'produccion' || tab === 'embalaje') && !panelesCargados.has('catalogo')) {
         await cargarCatalogoRapido();
         panelesCargados.add('catalogo');
       }
-      if (tab === 'cocina') return cargarMatriz();
+      if (tab === 'produccion' || tab === 'embalaje') return cargarMatriz(tab);
       if (tab === 'usuarios') return cargarUsuariosAdmin();
       if (tab === 'casinos' && !window.__casinoCronogramasCargados) return cargarCronogramaCasinoPersistido();
       if (tab === 'digitacion' && !panelesCargados.has(tab)) {
@@ -5929,7 +5954,7 @@
       const tab = document.querySelector('.tab-btn.active')?.dataset.tab;
       if (tab === 'general') await cargarPedidosGenerales();
       if (tab === 'historial') await cargarHistorialPedidos();
-      if (tab === 'cocina') await cargarMatriz();
+      if (tab === 'produccion' || tab === 'embalaje') await cargarMatriz(tab);
       if (tab === 'casinos') {
         if (window.__casinoCronogramaId) await abrirCronogramaCasino(window.__casinoCronogramaId, { forzar:true });
         else await cargarCronogramaCasinoPersistido();
@@ -6018,6 +6043,7 @@
     }
 
     document.getElementById('fecha_filtro').value = fechaHoyPeru();
+    document.getElementById('fecha_embalaje').value = fechaHoyPeru();
     document.getElementById('quickPickupDate').value = fechaHoyPeru();
     poblarHorasSelector('quickPickupTime', '18:00');
     document.getElementById('quickAdelanto').addEventListener('input', renderQuickEntryPreview);
@@ -7240,7 +7266,7 @@
     }
 
     function filtrarDetallesEmbalaje(detalles) {
-      return filtrarItemsEmbalaje(detalles, obtenerProductoResolucion, normalizarNombreProducto);
+      return (detalles || []).filter(det => Number.isFinite(Number(det.cantidad)) && Number(det.cantidad) > 0);
     }
 
     function obtenerListasEmbalaje(detalles) {
@@ -7252,20 +7278,22 @@
         if (!resueltos.has(original)) resueltos.set(original, nombreDetalleProduccion(detalle, obtenerProductoResolucion));
         const nombre = resueltos.get(original);
         const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa || '');
-        const grupo = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes'].includes(categoriaManual)
+        const grupo = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes', 'Tortas', 'Kekes'].includes(categoriaManual)
           ? categoriaManual
           : grupoProductoProduccion(nombre, normalizarNombreProducto);
-        const clave = `${normalizarNombreProducto(nombre)}|${grupo}`;
+        const clave = `${claveNombreProduccion(nombre)}|${grupo}`;
         if (clave && !activos.has(clave)) activos.set(clave, { nombre, grupo });
       }
-      const listas = { bocaditos:[], sandwiches:[], triples:[], piqueos:[], panes:[] };
+      const listas = { bocaditos:[], sandwiches:[], triples:[], piqueos:[], panes:[], tortas:[], kekes:[] };
       const agregar = (claveNombre) => {
         const coincidencia = [...activos.keys()].find((clave) => clave.startsWith(`${claveNombre}|`));
         if (!coincidencia) return;
         const item = activos.get(coincidencia);
         if (!item) return;
         activos.delete(coincidencia);
-        const destino = item.grupo === 'Panes' ? listas.panes
+        const destino = item.grupo === 'Tortas' ? listas.tortas
+          : item.grupo === 'Kekes' ? listas.kekes
+          : item.grupo === 'Panes' ? listas.panes
           : item.grupo === 'Triples' ? listas.triples
           : item.grupo === 'Piqueos' ? listas.piqueos
           : item.grupo === 'Sándwiches' ? listas.sandwiches
@@ -7273,7 +7301,7 @@
         destino.push(item.nombre);
       };
       for (const nombre of [...resolverProductoNombres(), ...obtenerProductosExtraParaProduccion()]) {
-        agregar(normalizarNombreProducto(nombre));
+        agregar(claveNombreProduccion(nombre));
       }
       for (const clave of [...activos.keys()]) agregar(clave.slice(0, clave.lastIndexOf('|')));
       return listas;
@@ -7380,7 +7408,7 @@
   }
 
   function imprimirHojaEmbalaje() {
-    if (!document.getElementById('fecha_filtro')?.value) return alert('Selecciona una fecha primero.');
+    if (!document.getElementById('fecha_embalaje')?.value) return alert('Selecciona una fecha primero.');
     marcarPedidosVentanaEnPreparacion().finally(() => setTimeout(() => prepararImpresionCocina('embalaje'), 120));
   }
 
@@ -7424,7 +7452,9 @@
       if (!nombresResueltos.has(original)) {
         nombresResueltos.set(original, nombreDetalleProduccion(detalle, obtenerProductoResolucion));
       }
-      const clave = normalizarNombreProducto(nombresResueltos.get(original));
+      const nombre = nombresResueltos.get(original);
+      const grupo = normalizarCategoriaOperativa(detalle.categoria_operativa) || grupoProductoProduccion(nombre, normalizarNombreProducto);
+      const clave = JSON.stringify([claveNombreProduccion(nombre), grupo]);
       if (!indice.has(clave)) indice.set(clave, { clientes: new Set(), cantidades: new Map(), detalles: [] });
       const producto = indice.get(clave);
       const pedidoId = Number(detalle.pedido_id);
@@ -7433,9 +7463,9 @@
       producto.detalles.push(detalle);
     });
 
-    const productosActivos = secciones.flatMap(({ titulo, productosLista }) =>
-      (productosLista || []).filter((nombre) => indice.has(normalizarNombreProducto(nombre))).map((nombre) => {
-        const producto = indice.get(normalizarNombreProducto(nombre));
+    const productosActivos = secciones.flatMap(({ titulo, productosLista, grupo }) =>
+      (productosLista || []).filter((nombre) => indice.has(JSON.stringify([claveNombreProduccion(nombre), normalizarCategoriaOperativa(grupo || titulo)]))).map((nombre) => {
+        const producto = indice.get(JSON.stringify([claveNombreProduccion(nombre), normalizarCategoriaOperativa(grupo || titulo)]));
         return { nombre, titulo, producto, resumen: obtenerResumenPaquetesDesdeCantidades(producto.detalles) };
       })
     );
@@ -7481,7 +7511,7 @@
       }
     }
 
-    const fechaEmbalaje = document.getElementById('fecha_filtro')?.value || '';
+    const fechaEmbalaje = document.getElementById('fecha_embalaje')?.value || '';
     contenedor.innerHTML = paginas.map(({ grupoClientes, productosBloque, mostrarTotal }) => {
         let html = `<div class="kitchen-page"><div class="kitchen-page-date">EMBALAJE · ${escapeHtmlAdmin(formatearFecha(fechaEmbalaje).toUpperCase())}</div><table><thead><tr><th class="prod-col">PRODUCTO</th>`;
 
@@ -7489,7 +7519,7 @@
           const claseTurno = cliente.es_urgente ? 'kitchen-urgent' : 'kitchen-normal';
           const claseCasino = cliente.origen === 'casino' ? ' kitchen-casino' : '';
           const tag = cliente.origen === 'casino' ? '<span class="kitchen-casino-tag">CASINO</span>' : '';
-          html += `<th class="client-header ${claseTurno}${claseCasino}"><div class="vertical-text">${escapeHtmlAdmin((cliente.cliente_nombre || 'Cliente').toUpperCase())}${tag}</div></th>`;
+          html += `<th class="client-header ${claseTurno}${claseCasino}"><div class="vertical-text">${escapeHtmlAdmin((cliente.cliente_nombre || 'Cliente').toUpperCase())}${tag}<span style="display:block;font-size:9px;">ENTREGA ${escapeHtmlAdmin(cliente.fecha_recoge || '')}</span></div></th>`;
         });
 
         if (mostrarTotal) html += '<th class="total-header"><div class="vertical-text">TOTAL</div></th>';
@@ -7557,8 +7587,7 @@
 
     const configuraciones = [
       { titulo:'SÁNDWICHES / PIQUEOS', grupos:new Set(['Sándwiches', 'Piqueos']) },
-      { titulo:'TRIPLES', grupos:new Set(['Triples']) },
-      { titulo:'PANES', grupos:new Set(['Panes']) }
+      { titulo:'TRIPLES', grupos:new Set(['Triples']) }
     ];
     const fecha = dataEmbalaje?.fecha || document.getElementById('fecha_filtro')?.value || '';
 
@@ -7605,7 +7634,7 @@
         <section class="distribution-paper kitchen-page">
           <div class="distribution-paper-title">
             <h4>${escapeHtmlAdmin(titulo)}</h4>
-            <span>EMBALAJE · ${escapeHtmlAdmin(formatearFecha(fecha).toUpperCase())}</span>
+            <span>HPE · ${escapeHtmlAdmin(formatearFecha(fecha).toUpperCase())}</span>
           </div>
           ${bloques.length ? `
             <div class="distribution-columns">
@@ -7637,29 +7666,12 @@
       ordenReferencia
     );
 
-    // Producción del mismo día: sánguches, piqueos y triples.
-    // Usa exactamente los pedidos cuyo fecha_recoge es la fecha seleccionada.
-    const detallesMismoDia = Array.isArray(data?.embalaje?.detalles) ? data.embalaje.detalles : [];
-    const clasificacionMismoDia = clasificarHojaProduccion(
-      detallesMismoDia,
-      data?.embalaje?.clientes || [],
-      obtenerProductoResolucion,
-      normalizarNombreProducto,
-      ordenReferencia
-    );
-
     const paginas = [
       {
         titulo:'Bocaditos dulces y salados',
         bloque:clasificacionAnticipada.filas.filter((item) => item.grupo === 'Bocaditos'),
         especiales:clasificacionAnticipada.especiales,
         anchoCompleto:false
-      },
-      {
-        titulo:'Sándwiches · Piqueos · Triples',
-        bloque:clasificacionMismoDia.filas.filter((item) => ['Sándwiches', 'Piqueos', 'Triples'].includes(item.grupo)),
-        especiales:[],
-        anchoCompleto:true
       },
       {
         titulo:'Panes',
@@ -7673,7 +7685,7 @@
       <section class="production-paper${bloque.length > 32 ? ' production-compact' : ''}">
         <div class="production-paper-title">
           <h4>${formatearFecha(data.fecha).toUpperCase()}</h4>
-          <span>${escapeHtmlAdmin(titulo)} · ${pagina + 1}/3</span>
+          <span>${escapeHtmlAdmin(titulo)} · ${pagina + 1}/2</span>
         </div>
         <div class="production-layout${anchoCompleto ? ' production-layout-wide' : ''}">
           <table class="production-main-table">
@@ -7716,12 +7728,14 @@
     `).join('');
   }
 
-  async function cargarMatriz() {
-    if (cargaMatrizEnCurso) return;
-    const fecha = document.getElementById('fecha_filtro').value;
+  async function cargarMatriz(pagina = document.querySelector('.tab-btn.active')?.dataset.tab || 'produccion') {
+    window.__cargasHojas ||= {};
+    if (window.__cargasHojas[pagina]) return;
+    const esEmbalaje = pagina === 'embalaje';
+    const fecha = document.getElementById(esEmbalaje ? 'fecha_embalaje' : 'fecha_filtro').value;
     if (!fecha) return alert('Selecciona una fecha');
-    cargaMatrizEnCurso = true;
-    const boton = document.getElementById('actualizarCocinaBtn');
+    window.__cargasHojas[pagina] = true;
+    const boton = document.getElementById(esEmbalaje ? 'actualizarEmbalajeBtn' : 'actualizarCocinaBtn');
     if (boton) { boton.disabled = true; boton.textContent = 'Actualizando…'; }
 
     try {
@@ -7729,34 +7743,34 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo cargar la producción.');
 
-      window.__datosProduccionClientes = data.clientes || [];
-      window.__datosProduccionDetalles = data.detalles || [];
-      window.__datosEmbalajeClientes = data.embalaje?.clientes || [];
-      window.__datosEmbalajeDetalles = data.embalaje?.detalles || [];
+      if (esEmbalaje) {
+        window.__datosEmbalajeClientes = data.embalaje?.clientes || [];
+        window.__datosEmbalajeDetalles = data.embalaje?.detalles || [];
+      } else {
+        window.__datosProduccionClientes = data.clientes || [];
+        window.__datosProduccionDetalles = data.detalles || [];
+      }
       const nuevaFirmaProduccion = JSON.stringify({
-        clientes:data.clientes,
+        pagina, fecha, clientes:data.clientes,
         detalles:data.detalles,
-        embalaje:data.embalaje,
+        embalaje:data.embalaje, hpe:data.produccion_embalaje,
         ventana:data.ventana
       });
       if (firmaProduccion === nuevaFirmaProduccion) return;
 
-      const etiqueta = document.getElementById('kitchenWindowLabel');
-      if (etiqueta) etiqueta.textContent = `Producción ${fecha}: anticipados del día siguiente solo si el pedido existía con 2 días de anticipación; pedidos tardíos pasan al día del recojo y salen urgentes. Embalaje: recojos del ${data.embalaje?.fecha || fecha}.`;
-
-      renderizarHojaProduccionCocina(data);
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const detallesEmbalaje = filtrarDetallesEmbalaje(data.embalaje?.detalles || []);
-      const listasEmbalaje = obtenerListasEmbalaje(detallesEmbalaje);
-      renderizarMatrizProducto([
-        { titulo:'BOCADITOS', productosLista:listasEmbalaje.bocaditos },
-        { titulo:'SÁNGUCHES / PETIPANES', productosLista:listasEmbalaje.sandwiches },
-        { titulo:'TRIPLES', productosLista:listasEmbalaje.triples },
-        { titulo:'PIQUEOS', productosLista:listasEmbalaje.piqueos },
-        { titulo:'PANES', productosLista:listasEmbalaje.panes }
-      ], detallesEmbalaje);
-
-      renderizarHojasEmbalajePorHora(data.embalaje || {});
+      if (!esEmbalaje) {
+        renderizarHojaProduccionCocina(data);
+        renderizarHojasEmbalajePorHora(data.produccion_embalaje || {});
+      } else {
+        const detallesEmbalaje = filtrarDetallesEmbalaje(data.embalaje?.detalles || []);
+        const listasEmbalaje = obtenerListasEmbalaje(detallesEmbalaje);
+        renderizarMatrizProducto([
+          { titulo:'BOCADITOS', productosLista:listasEmbalaje.bocaditos },
+          { titulo:'TORTAS', productosLista:listasEmbalaje.tortas },
+          { titulo:'KEKES', productosLista:listasEmbalaje.kekes },
+          { titulo:'PANES', productosLista:listasEmbalaje.panes }
+        ], detallesEmbalaje);
+      }
 
       const paginasCocina = [...document.querySelectorAll('#embalajeWrapper .kitchen-page')];
       paginasCocina.forEach((pagina) => pagina.classList.remove('last-kitchen-page'));
@@ -7766,13 +7780,13 @@
     } catch (error) {
       alert(error.message || 'Error al obtener los datos de producción.');
     } finally {
-      cargaMatrizEnCurso = false;
+      window.__cargasHojas[pagina] = false;
       if (boton) { boton.disabled = false; boton.textContent = 'Actualizar hojas'; }
     }
   }
 
   function descargarExcel() {
-    const fecha = document.getElementById('fecha_filtro').value;
+    const fecha = document.getElementById('fecha_embalaje').value;
     if (!fecha) return alert('Selecciona una fecha');
     window.location.href = `/api/admin/exportar-excel?fecha=${fecha}`;
   }
@@ -7789,13 +7803,13 @@
         if (document.hidden || actualizacionEnCurso) return;
         if (document.getElementById('pedidoDetalleModal').classList.contains('active')) return;
         const tab = document.querySelector('.tab-btn.active')?.dataset.tab;
-        if (!['general', 'historial', 'cocina'].includes(tab)) return;
+        if (!['general', 'historial', 'produccion', 'embalaje'].includes(tab)) return;
         actualizacionEnCurso = true;
         try {
           ciclos += 1;
           if (tab === 'general') await cargarPedidosGenerales();
           if (tab === 'historial' && ciclos % 3 === 0 && pedidosHistorialCargados.length <= 50) await cargarHistorialPedidos();
-          if (tab === 'cocina' && ciclos % 3 === 0) await cargarMatriz();
+          if (['produccion', 'embalaje'].includes(tab) && ciclos % 3 === 0) await cargarMatriz();
         } finally {
           actualizacionEnCurso = false;
         }

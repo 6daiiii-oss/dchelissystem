@@ -1,3 +1,7 @@
+function claveNombreProduccion(nombre) {
+  return String(nombre || '').normalize('NFC').trim();
+}
+
 // Los pedidos de casinos conservan el texto de la celda, sin aliases del catálogo.
 function nombreDetalleProduccion(detalle, resolver = (nombre) => nombre) {
   if (String(detalle?.origen || '').toLowerCase() === 'casino' || detalle?.producto_nombre_fuente) {
@@ -74,10 +78,10 @@ function grupoProductoProduccion(nombre, normalizar) {
   // sánguche. Una fila "Francesito con asado" no puede fusionarse con
   // "Ciabattita con asado". Cualquier base de pan con relleno se trata como
   // Sándwich; la pieza de pan sola continúa en Panes.
-  const baseRellena = clave.match(/^(FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO)\b/);
+  const baseRellena = clave.match(/^(?:MINI |MINNI )?(FRANCES(?:ITO)?|CIABAT[A-Z]*|CROISSANT|CROSSAINT|CAMOTE|MAIZ|ARABE|ARABITO|BAGUETINO)\b/);
   if (baseRellena) {
     const resto = clave.slice(baseRellena[0].length).trim();
-    if (resto) return 'Sándwiches';
+    if (resto && !/^(?:MINI|CHICO|PEQUENO|SIN RELLENO)(?: X \d+ UND)?$/.test(resto)) return 'Sándwiches';
   }
 
   if (/^PIQUEOS?\b/.test(clave)
@@ -202,7 +206,7 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
     const tipo = tipoItemCocina(fuenteTipo, cantidad, normalizar);
     const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa);
     const nombre = esCasino ? nombreDetalleProduccion(detalle) : resolverPyePorCantidad(nombreBase, cantidad, normalizar);
-    const clave = normalizar(nombre);
+    const clave = esCasino ? claveNombreProduccion(nombre) : normalizar(nombre);
     const esKeke = categoriaManual === 'Kekes' || (!categoriaManual && tipo.esKeke);
     const esTorta = categoriaManual === 'Tortas' || (!categoriaManual && tipo.esTorta);
     const esPastel = esTorta || (!categoriaManual && tipo.esPastel);
@@ -212,7 +216,7 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
 
     if (esKeke || esTorta) {
       const cliente = nombres.get(Number(detalle.pedido_id)) || 'Cliente';
-      const etiqueta = esKeke ? nombre : (nombre.toUpperCase().startsWith('TORTA ') ? nombre : `Torta ${nombre}`);
+      const etiqueta = nombre;
       const llave = esKeke ? `keke:${clave}` : `torta:${clave}:${Number(detalle.pedido_id)}`;
       if (!especiales.has(llave)) {
         especiales.set(llave, {
@@ -228,7 +232,7 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
       continue;
     }
 
-    const etiqueta = esPastel ? `${nombre} (BOCADITOS)` : nombre;
+    const etiqueta = !esCasino && esPastel ? `${nombre} (BOCADITOS)` : nombre;
     const llave = `principal:${grupo}:${clave}`;
     if (!principales.has(llave)) {
       principales.set(llave, { nombre: etiqueta, grupo, urgente: 0, normal: 0, total: 0, orden: orden.get(clave) ?? 99999 });
@@ -260,7 +264,7 @@ function resolverNombreEspecialProduccion(nombre) {
 }
 
 if (typeof module !== 'undefined') module.exports = {
-  nombreDetalleProduccion, clasificarHojaProduccion, resolverPetipanNombre, resolverCiabattaNombre,
+  claveNombreProduccion, nombreDetalleProduccion, clasificarHojaProduccion, resolverPetipanNombre, resolverCiabattaNombre,
   grupoProductoProduccion, tipoItemCocina, filtrarItemsEmbalaje, resolverPyePorCantidad,
   resolverNombreEspecialProduccion, normalizarCategoriaOperativa
 };

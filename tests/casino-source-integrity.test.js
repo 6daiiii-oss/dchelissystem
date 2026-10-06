@@ -61,7 +61,8 @@ test('cada variante del Excel llega a producción, lista de embalaje, matriz y d
   assert.ok(!containers.hojaDistribucionCocina.innerHTML.includes('60 MINI FRANCÉS'));
   ui.renderizarHojaProduccionCocina({ fecha: '2026-10-06', clientes: clients, detalles: details,
     embalaje: { clientes: clients, detalles: details } });
-  for (const name of names) assert.ok(containers.hojaProduccionCocina.innerHTML.includes(name), name);
+  for (const name of names.slice(7)) assert.ok(containers.hojaProduccionCocina.innerHTML.includes(name), name);
+  for (const name of names.slice(0, 7)) assert.ok(!containers.hojaProduccionCocina.innerHTML.includes(name), 'HPE no debe aparecer en HP: ' + name);
 });
 
 test('cronograma: empanadas el día anterior, triples el mismo día, sin depender de la hora de importación', () => {
@@ -69,7 +70,7 @@ test('cronograma: empanadas el día anterior, triples el mismo día, sin depende
   const order = { origen: 'casino', cronograma_casino_id: 5, fecha_recoge: '2026-10-06', hora_recoge: '09:00', fecha_emision: '2026-10-05T18:00:00-05:00' };
   assert.equal(ctx.fechaProduccionAnticipada(order, 'Bocaditos'), '2026-10-05');
   assert.equal(ctx.fechaProduccionAnticipada(order, 'Triples'), '2026-10-06');
-  assert.equal(ctx.fechaProduccionAnticipada({ ...order, origen: 'pg', cronograma_casino_id: null }, 'Panes'), '2026-10-06');
+  assert.equal(ctx.fechaProduccionAnticipada({ ...order, origen: 'pg', cronograma_casino_id: null }, 'Panes'), '2026-10-05');
 });
 
 test('importación real: filas distintas, columnas por fecha, celdas vacías y totales SUM sin artículo', async () => {
@@ -124,7 +125,7 @@ test('reconciliación del Excel original, celda por celda para todas sus hojas y
         }); r++; continue;
       }
       if (!columns.length) continue;
-      const name = (nameColumn > 0 ? text(sheet.getCell(r, nameColumn)) : [panColumn, typeColumn].filter(c => c > 0).map(c => text(sheet.getCell(r, c))).join(' ')).replace(/\s+/g, ' ').trim();
+      const name = (nameColumn > 0 ? text(sheet.getCell(r, nameColumn)) : [panColumn, typeColumn].filter(c => c > 0).map(c => text(sheet.getCell(r, c))).join(' ')).replace(/\u00a0/g, ' ').trim();
       if (!name || /TOTAL|#REF/i.test(name)) continue;
       for (const [c, date] of columns) {
         const val = sheet.getCell(r, c).value;
@@ -163,6 +164,7 @@ test('API Cocina y Excel descargado conservan cantidades, fechas y filas; descar
       assert.ok(!params.includes(2), 'no consultar detalles de la versión anterior');
       return details;
     }
+    if (sql.includes('FROM casino_cronogramas')) return [{ id: 8, datos_json: JSON.stringify({ dias: [{ fecha: '2026-10-06', casinos: ['Morelli'] }] }) }];
     return clients;
   };
   const start = server.indexOf("app.get('/api/admin/produccion'");
@@ -172,19 +174,19 @@ test('API Cocina y Excel descargado conservan cantidades, fechas y filas; descar
   assert.equal(response.detalles.find(d => d.producto_nombre === 'EMPANADITAS DE CARNE').cantidad, 50);
   assert.equal(response.detalles.some(d => d.producto_nombre.startsWith('TRIPLE')), false);
   await ctx.routes['/api/admin/produccion']({ query: { fecha: '2026-10-06' } }, { json: value => { response = value; } });
-  assert.equal(response.embalaje.detalles.length, 4);
-  assert.equal(response.embalaje.detalles.find(d => d.producto_nombre === 'TRIPLE POLLO JAMON QUESO').cantidad, 20);
+  assert.equal(response.embalaje.detalles.length, 0);
+  assert.equal(response.produccion_embalaje.detalles.length, 2);
+  assert.equal(response.produccion_embalaje.detalles.find(d => d.producto_nombre === 'TRIPLE POLLO JAMON QUESO').cantidad, 20);
   const { Writable } = require('node:stream');
   const chunks = [];
   const res = new Writable({ write(chunk, encoding, cb) { chunks.push(chunk); cb(); } });
   res.setHeader = () => {};
   res.status = () => { throw Error('La exportación devolvió un error'); };
-  await ctx.routes['/api/admin/exportar-excel']({ query: { fecha: '2026-10-06' } }, res);
+  await ctx.routes['/api/admin/exportar-excel']({ query: { fecha: '2026-10-05' } }, res);
   const book = new ExcelJS.Workbook(); await book.xlsx.load(Buffer.concat(chunks));
   const source = book.getWorksheet('Detalle de pedidos');
-  assert.equal(source.rowCount, 5);
-  assert.deepEqual(source.getRow(2).values.slice(1, 7), ['Morelli', 'EMPANADITAS DE CARNE', 50, 'Bocaditos', '2026-10-05', '2026-10-06']);
-  assert.deepEqual(source.getRow(3).values.slice(1, 7), ['Morelli', 'TRIPLE POLLO JAMON QUESO', 20, 'Triples', '2026-10-06', '2026-10-06']);
-  assert.equal(source.getCell('B4').value, 'CROISSANT JAMON QUESO');
-  assert.equal(source.getCell('B5').value, 'KEKE DE ZANAHORIA');
+  assert.equal(source.rowCount, 3);
+  assert.deepEqual(source.getRow(2).values.slice(1, 8), ['Morelli', 'EMPANADITAS DE CARNE', 50, 'Bocaditos', '2026-10-05', '2026-10-05', '2026-10-06']);
+  assert.equal(source.getCell('B3').value, 'KEKE DE ZANAHORIA');
+  assert.ok(!source.getColumn(2).values.includes('TRIPLE POLLO JAMON QUESO'));
 });

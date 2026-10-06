@@ -115,54 +115,27 @@ test('la producción recupera fuente y categoría del detalle guardado antes de 
 });
 
 
-test('Cocina y embalaje leen los campos fuente persistidos del cronograma', () => {
-  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-  const inicioProduccion = server.indexOf("app.get('/api/admin/produccion'");
-  const inicioExcel = server.indexOf("app.get('/api/admin/exportar-excel'", inicioProduccion);
-  const finExcel = server.indexOf('\nconst PORT =', inicioExcel);
-  assert.ok(inicioProduccion >= 0 && inicioExcel > inicioProduccion && finExcel > inicioExcel);
-  const rutaProduccion = server.slice(inicioProduccion, inicioExcel);
-  const rutaExcel = server.slice(inicioExcel, finExcel);
-  const contar = (texto, patron) => (texto.match(patron) || []).length;
-  assert.equal(contar(rutaProduccion, /dp\.producto_nombre_fuente/g), 2);
-  assert.equal(contar(rutaProduccion, /dp\.casino_categoria_fuente/g), 2);
-  assert.equal(contar(rutaProduccion, /prepararDetalleCasino\(det, resolverProductoCasinoOperacion, categoriaOperativaCasino\)/g), 2);
-  assert.equal(contar(rutaExcel, /dp\.producto_nombre_fuente/g), 1);
-  assert.equal(contar(rutaExcel, /dp\.casino_categoria_fuente/g), 1);
-  assert.equal(contar(rutaExcel, /prepararDetalleCasino\(det, resolverProductoCasinoOperacion, categoriaOperativaCasino\)/g), 1);
-
-  const inicioEmbalaje = rutaProduccion.indexOf('const idsEmbalaje');
-  const rutaEmbalaje = rutaProduccion.slice(inicioEmbalaje);
-  assert.ok(inicioEmbalaje >= 0);
-  assert.match(rutaEmbalaje, /producto_nombre_original: esCasino \? detalleBase\.producto_nombre_original/);
-  assert.match(rutaEmbalaje, /categoria_operativa: esCasino \? detalleBase\.categoria_operativa/);
+test('las hojas consultan los detalles guardados una sola vez y recuperan el nombre de origen', async () => {
+  const { serverContext } = require('./helpers/server-context');
+  const ctx = serverContext(); let consultasDetalles = 0;
+  ctx.dbAllAsync = async sql => {
+    if (sql.includes('FROM detalles_pedido')) {
+      consultasDetalles++;
+      return [{ pedido_id: 1, origen: 'casino', producto_nombre: 'alias incorrecto', producto_nombre_fuente: 'EMPANADITAS DE CARNE', casino_categoria_fuente: 'Bocaditos salados', cantidad: 25 }];
+    }
+    if (sql.includes('FROM casino_cronogramas')) return [];
+    return [{ id: 1, origen: 'casino', fecha_recoge: '2026-10-06', cronograma_casino_id: 1 }];
+  };
+  const hojas = await ctx.cargarDatosHojas('2026-10-05');
+  assert.equal(consultasDetalles, 1);
+  assert.equal(hojas.detalles[0].producto_nombre, 'EMPANADITAS DE CARNE');
+  assert.strictEqual(hojas.detalles, hojas.embalaje.detalles);
 });
 
-
-test('los panes del pedido de mañana pasan al día de recojo desde el corte de las 8 a. m.', () => {
-  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-  const inicio = server.indexOf('function fechaProduccionAnticipada(');
-  const fin = server.indexOf('\nfunction firmaDetallesPedido', inicio);
-  assert.ok(inicio >= 0 && fin > inicio);
-  const funcion = server.slice(inicio, fin);
-  const sumarDiasIso = (fecha, dias) => {
-    const [anio, mes, dia] = fecha.split('-').map(Number);
-    return new Date(Date.UTC(anio, mes - 1, dia + dias)).toISOString().slice(0, 10);
-  };
-  const fechaIsoLimaDesdeValor = (valor) => {
-    const fecha = valor instanceof Date ? valor : new Date(valor);
-    const partes = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
-    }).formatToParts(fecha).map(({ type, value }) => [type, value]));
-    return `${partes.year}-${partes.month}-${partes.day}`;
-  };
-  const instanteLima = (fecha, hora) => new Date(`${fecha}T${hora}:00-05:00`);
-  const producir = new Function(
-    'sumarDiasIso', 'normalizarProducto', 'fechaIsoLimaDesdeValor', 'instanteLima',
-    `${funcion}; return fechaProduccionAnticipada;`
-  )(sumarDiasIso, (valor) => String(valor || '').toUpperCase(), fechaIsoLimaDesdeValor, instanteLima);
-  const base = { fecha_recoge: '2026-10-05', hora_recoge: '09:00' };
-  assert.equal(producir({ ...base, fecha_emision: '2026-10-04T07:59:00-05:00' }, 'Panes'), '2026-10-04');
-  assert.equal(producir({ ...base, fecha_emision: '2026-10-04T08:00:00-05:00' }, 'Panes'), '2026-10-05');
-  assert.equal(producir({ ...base, fecha_emision: '2026-10-04T10:00:00-05:00' }, 'Sándwiches'), '2026-10-05');
+test('los panes permanecen siempre en la HP y HE del día anterior, antes y después del corte', () => {
+  const { fechaTrabajo } = require('../production-sheets');
+  const pedido = { fecha_recoge: '2026-10-06', hora_recoge: '21:00' };
+  for (const hora of ['07:59', '08:00', '17:00']) {
+    assert.equal(fechaTrabajo({ ...pedido, fecha_emision: `2026-10-05T${hora}:00-05:00` }, 'Panes'), '2026-10-05');
+  }
 });

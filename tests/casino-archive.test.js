@@ -7,23 +7,23 @@ const { clasificarHojaProduccion } = require('../public/production-classificatio
 test('las semanas importadas se conservan y una fecha repetida usa el último Excel', () => {
   const vieja = { id: 1, nombre_archivo: 'Viejo.xlsx', fecha_inicio: '2026-09-14', fecha_fin: '2026-09-22', datos_json: JSON.stringify({
     dias: [
-      { fecha: '2026-09-14', casinos: ['Antiguo'], productos: [{ nombre: 'Keke', total: 1 }] },
-      { fecha: '2026-09-22', casinos: ['Antiguo'], productos: [{ nombre: 'Keke', total: 2 }] }
+      { fecha: '2026-09-14', casinos: ['Antiguo'], productos: [{ nombre: 'Keke', total: 1, por_casino: { Antiguo: 1 } }] },
+      { fecha: '2026-09-22', casinos: ['Antiguo'], productos: [{ nombre: 'Keke', total: 2, por_casino: { Antiguo: 2 } }] }
     ]
   }) };
   const nueva = { id: 2, nombre_archivo: 'Nuevo.xlsx', fecha_inicio: '2026-09-22', fecha_fin: '2026-09-28', datos_json: JSON.stringify({
     dias: [
-      { fecha: '2026-09-22', casinos: ['Actual'], productos: [{ nombre: 'Keke', total: 3 }] },
-      { fecha: '2026-09-28', casinos: ['Actual'], productos: [{ nombre: 'Pie', total: 20 }] }
+      { fecha: '2026-09-22', casinos: ['Antiguo'], productos: [{ nombre: 'Keke', total: 3, por_casino: { Antiguo: 3 } }] },
+      { fecha: '2026-09-28', casinos: ['Actual'], productos: [{ nombre: 'Pie', total: 20, por_casino: { Actual: 20 } }] }
     ]
   }) };
   const combinado = unirCronogramasCasino([nueva, vieja]);
   assert.deepEqual(combinado.dias.map((dia) => [dia.fecha, dia.casinos[0], dia.productos[0].total]), [
     ['2026-09-14', 'Antiguo', 1],
-    ['2026-09-22', 'Actual', 3],
+    ['2026-09-22', 'Antiguo', 3],
     ['2026-09-28', 'Actual', 20]
   ]);
-  assert.deepEqual(combinado.casinos, ['Actual', 'Antiguo']);
+  assert.deepEqual(combinado.casinos, ['Antiguo', 'Actual']);
 });
 
 test('pye y tortita con 15 o más son bocaditos; tortas pequeñas conservan el nombre del casino', () => {
@@ -36,10 +36,10 @@ test('pye y tortita con 15 o más son bocaditos; tortas pequeñas conservan el n
   const clientes = [{ id: 1, cliente_nombre: 'Barranco' }, { id: 2, cliente_nombre: 'NY' }];
   const resultado = clasificarHojaProduccion(detalles, clientes, (nombre) => nombre, (nombre) => nombre.toUpperCase());
   assert.deepEqual(resultado.filas.map((item) => [item.nombre, item.total]), [
-    ['Pye de limón (BOCADITOS)', 15], ['Pye de manzana (BOCADITOS)', 20], ['Tortita helada (BOCADITOS)', 25]
+    ['Pye de limón (BOCADITOS)', 15], ['Pye de Manzana (BOCADITOS)', 20], ['Tortita helada (BOCADITOS)', 25]
   ]);
   assert.deepEqual(resultado.especiales.map((item) => [item.nombre, item.total, item.cliente]), [
-    ['Keke de chocolate', 4, ''], ['Torta de moka (TORTA)', 1, 'Barranco'], ['Tortita helada (TORTA)', 1, 'NY']
+    ['Keke de chocolate', 4, ''], ['Torta de moka', 1, 'Barranco'], ['Tortita helada', 1, 'NY']
   ]);
 });
 

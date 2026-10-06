@@ -11,7 +11,7 @@ function normalizar(nombre) {
 }
 
 function nombreFuenteProducto(producto) {
-  return String(producto?.nombre_fuente || producto?.nombre || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(producto?.nombre_fuente || producto?.nombre || '').replace(/\u00a0/g, ' ').trim();
 }
 
 function esIdentidadProductoCasino(nombre) {
@@ -41,15 +41,16 @@ function categoriaProducto(producto, nombre) {
 function claveProducto(producto, nombre, categoria) {
   const fuente = nombreFuenteProducto(producto);
   const identidad = fuente && esIdentidadProductoCasino(fuente) ? fuente : nombre;
-  return [normalizar(identidad), normalizar(categoria)].filter(Boolean).join('::');
+  return JSON.stringify([producto?.clave_fuente || identidad, categoria]);
 }
 
 function unirCronogramasCasino(rows) {
   const dias = new Map();
   const casinos = new Set();
   let reciente = null;
+  const cubiertos = new Set();
 
-  for (const row of rows || []) {
+  for (const row of [...(rows || [])].sort((a, b) => Number(b.id) - Number(a.id))) {
     let datos;
     try { datos = JSON.parse(row.datos_json); } catch { continue; }
     if (!Array.isArray(datos?.dias)) continue;
@@ -67,7 +68,8 @@ function unirCronogramasCasino(rows) {
       }
 
       const destino = dias.get(dia.fecha);
-      for (const casino of dia.casinos || []) {
+      const disponibles = new Set((dia.casinos || []).filter(casino => !cubiertos.has(`${dia.fecha}::${casino}`)));
+      for (const casino of disponibles) {
         if (casino) {
           casinos.add(casino);
           destino.casinos.add(casino);
@@ -79,8 +81,11 @@ function unirCronogramasCasino(rows) {
         const categoria = categoriaProducto(producto, nombre);
         const clave = claveProducto(producto, nombre, categoria);
         if (!clave) continue;
+        const cantidades = Object.entries(producto.por_casino || {}).filter(([casino, cantidad]) => disponibles.has(casino) && Number(cantidad) > 0);
+        if (!cantidades.length) continue;
         if (!destino.productos.has(clave)) {
           destino.productos.set(clave, {
+            ...producto,
             nombre,
             nombre_fuente: nombreFuenteProducto(producto),
             categoria_fuente: producto.categoria_fuente || '',
@@ -93,7 +98,7 @@ function unirCronogramasCasino(rows) {
         const acumulado = destino.productos.get(clave);
         if (acumulado.grupo !== 'extra' && producto.grupo === 'extra') acumulado.grupo = 'extra';
 
-        for (const [casino, cantidadValor] of Object.entries(producto.por_casino || {})) {
+        for (const [casino, cantidadValor] of cantidades) {
           const cantidad = Number(cantidadValor || 0);
           if (!(cantidad > 0)) continue;
           casinos.add(casino);
@@ -102,6 +107,7 @@ function unirCronogramasCasino(rows) {
           acumulado.total += cantidad;
         }
       }
+      for (const casino of disponibles) cubiertos.add(`${dia.fecha}::${casino}`);
     }
   }
 
