@@ -38,7 +38,7 @@ test('HP reserva páginas para bocaditos y panes y conserva kekes y tortas; HPE 
   assert.doesNotMatch(hpe, /PAN FRANCES MINI|ALFAJOR|KEKE VAINILLA/);
 });
 
-test('HE pagina por altura y conserva todas las cantidades de 13 clientes', () => {
+test('HE conserva las cantidades de 13 clientes y 40 productos en una página', () => {
   let resoluciones = 0;
   const clientes = Array.from({ length: 13 }, (_, i) => ({ id: i + 1, cliente_nombre: `Cliente ${i + 1}` }));
   const productos = Array.from({ length: 40 }, (_, i) => `Bocadito ${i}`);

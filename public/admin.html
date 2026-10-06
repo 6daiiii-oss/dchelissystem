@@ -1135,7 +1135,7 @@
       body.printing-cocina.printing-embalaje th.client-header { width:21px !important; min-width:21px !important; height:120px !important; }
       body.printing-cocina.printing-embalaje .vertical-text { font-size:8px !important; max-height:110px !important; overflow:visible !important; }
       body.printing-cocina.printing-embalaje th,
-      body.printing-cocina.printing-embalaje td { height:auto !important; max-height:none !important; padding:2px 1px !important; font-size:9px !important; }
+      body.printing-cocina.printing-embalaje td { height:auto !important; max-height:none !important; padding:1px 1px !important; font-size:9px !important; line-height:1.05 !important; }
       body.printing-cocina.printing-embalaje .qty-cell { font-size:9px !important; }
       body.printing-cocina.printing-embalaje .pack-badge {
         font-size:8px; line-height:1.2; white-space:normal !important; overflow:visible !important;
@@ -1150,7 +1150,7 @@
       }
       body.printing-cocina.printing-embalaje .total-header,
       body.printing-cocina.printing-embalaje .pack-cell { width:80px !important; min-width:80px !important; max-width:80px !important; }
-      body.printing-cocina.printing-embalaje .embalaje-group-row th { height:auto !important; font-size:9px !important; }
+      body.printing-cocina.printing-embalaje .embalaje-group-row th { height:auto !important; padding:3px 4px !important; font-size:9px !important; }
     }
 
 
@@ -2188,6 +2188,8 @@
     .qty-cell.kitchen-urgent { color:#c40000 !important; }
     .client-header.kitchen-normal,
     .qty-cell.kitchen-normal { color:#111 !important; }
+    .client-header.kitchen-urgent .vertical-text { color:#c40000 !important; }
+    .client-header.kitchen-normal .vertical-text { color:#111 !important; }
     .client-header.kitchen-casino,
     .qty-cell.kitchen-casino { background:#f1faf3 !important; }
     .qty-cell.kitchen-urgent { text-align:left !important; padding-left:6px !important; font-weight:900 !important; }
@@ -2373,6 +2375,16 @@
       body.printing-cocina.printing-embalaje .client-header.kitchen-urgent,
       body.printing-cocina.printing-embalaje .qty-cell.kitchen-urgent {
         color:#c40000 !important;
+        -webkit-print-color-adjust:exact;
+        print-color-adjust:exact;
+      }
+      body.printing-cocina.printing-embalaje .client-header.kitchen-urgent .vertical-text {
+        color:#c40000 !important;
+        -webkit-print-color-adjust:exact;
+        print-color-adjust:exact;
+      }
+      body.printing-cocina.printing-embalaje .client-header.kitchen-normal .vertical-text {
+        color:#111 !important;
         -webkit-print-color-adjust:exact;
         print-color-adjust:exact;
       }
@@ -7470,7 +7482,7 @@
     estilo.id = 'kitchenPrintPageStyle';
     const esEmbalajeOriginal = tipo === 'embalaje';
     estilo.textContent = esEmbalajeOriginal
-      ? '@media print { @page { size: A4 portrait; margin: 6mm; } }'
+      ? '@media print { @page { size: A4 portrait; margin: 4mm; } }'
       : '@media print { @page { size: A4 portrait; margin: 0; } }';
     document.head.appendChild(estilo);
     const clase = tipo === 'produccion'

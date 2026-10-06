@@ -248,6 +248,10 @@ test('Excel completo → PostgreSQL → HP/HE/HPE sin faltantes, sobrantes ni fi
         tableFont: getComputedStyle(document.querySelector('#hojaProduccion table')).fontSize,
         productFont: getComputedStyle(document.querySelector('#hojaProduccion td.prod-col')).fontSize,
         verticalFont: getComputedStyle(document.querySelector('#hojaProduccion .vertical-text')).fontSize,
+        normalClientName: document.querySelector('#hojaProduccion .client-header.kitchen-normal .vertical-text')
+          ? getComputedStyle(document.querySelector('#hojaProduccion .client-header.kitchen-normal .vertical-text')).color : null,
+        urgentClientName: document.querySelector('#hojaProduccion .client-header.kitchen-urgent .vertical-text')
+          ? getComputedStyle(document.querySelector('#hojaProduccion .client-header.kitchen-urgent .vertical-text')).color : null,
         maxClients: Math.max(...[...document.querySelectorAll('#hojaProduccion .kitchen-page table')]
           .map(table => table.querySelectorAll('th.client-header').length))
       };
@@ -257,6 +261,8 @@ test('Excel completo → PostgreSQL → HP/HE/HPE sin faltantes, sobrantes ni fi
     assert.equal(printLayout.productFont, '9px');
     assert.equal(printLayout.verticalFont, '8px');
     assert.ok(printLayout.maxClients <= 24, `HE debe paginar en bloques de hasta 24 clientes (actual: ${printLayout.maxClients})`);
+    if (printLayout.normalClientName) assert.equal(printLayout.normalClientName, 'rgb(17, 17, 17)');
+    if (printLayout.urgentClientName) assert.equal(printLayout.urgentClientName, 'rgb(196, 0, 0)');
     assert.deepEqual(errors, []);
     console.log('Chromium: páginas independientes, fechas, carga de hojas e impresiones HE/HPE verificadas.');
   }
