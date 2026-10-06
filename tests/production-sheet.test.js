@@ -45,7 +45,7 @@ test('HE pagina por altura y conserva todas las cantidades de 13 clientes', () =
   const detalles = clientes.flatMap(p => productos.map(producto_nombre => ({ pedido_id: p.id, producto_nombre, cantidad: 25 })));
   const { context, containers } = matriz(clientes, detalles, s => { resoluciones++; return s; });
   context.renderizarMatrizProducto([{ titulo: 'BOCADITOS', productosLista: productos }]);
-  assert.equal((containers.hojaProduccion.innerHTML.match(/class="kitchen-page"/g) || []).length, 2);
+  assert.equal((containers.hojaProduccion.innerHTML.match(/class="kitchen-page"/g) || []).length, 1);
   assert.equal((containers.hojaProduccion.innerHTML.match(/13x25/g) || []).length, 40);
   assert.equal(resoluciones, 40);
 });
@@ -64,15 +64,47 @@ test('HE incluye tortas y kekes y no fusiona dos nombres distintos por puntuaci�
   assert.equal((html.match(/class="pack-badge"/g) || []).length, 4);
 });
 
-test('cuando los clientes superan el ancho de A4, no se omite ninguno ni se repite el total', () => {
+test('HE admite hasta 24 clientes por página y conserva los nombres y el total', () => {
   const clientes = Array.from({ length: 15 }, (_, i) => ({ id: i + 1, cliente_nombre: `Pedido ${i + 1}` }));
   const detalles = clientes.map(c => ({ pedido_id: c.id, producto_nombre: 'ALFAJOR', cantidad: 25 }));
   const { context, containers } = matriz(clientes, detalles);
   context.renderizarMatrizProducto([{ titulo: 'BOCADITOS', productosLista: ['ALFAJOR'] }]);
   const html = containers.hojaProduccion.innerHTML;
-  assert.equal((html.match(/class="kitchen-page"/g) || []).length, 2);
+  assert.equal((html.match(/class="kitchen-page"/g) || []).length, 1);
   for (const c of clientes) assert.equal((html.match(new RegExp(`PEDIDO ${c.id}(?!\\d)`, 'g')) || []).length, 1);
   assert.equal((html.match(/class="pack-badge"/g) || []).length, 1);
+  const clientes25 = Array.from({ length: 25 }, (_, i) => ({ id: i + 1, cliente_nombre: `Cliente ${i + 1}` }));
+  const detalles25 = clientes25.map(c => ({ pedido_id: c.id, producto_nombre: 'ALFAJOR', cantidad: 25 }));
+  const ui25 = matriz(clientes25, detalles25);
+  ui25.context.renderizarMatrizProducto([{ titulo: 'BOCADITOS', productosLista: ['ALFAJOR'] }]);
+  const html25 = ui25.containers.hojaProduccion.innerHTML;
+  assert.equal((html25.match(/class="kitchen-page"/g) || []).length, 2);
+  const paginas25 = [...html25.matchAll(/<div class="kitchen-page">([\s\S]*?)<\/table><\/div>/g)];
+  assert.deepEqual(paginas25.map(([, pagina]) => (pagina.match(/class="client-header/g) || []).length), [24, 1]);
+  for (const c of clientes25) assert.equal((html25.match(new RegExp(`CLIENTE ${c.id}(?!\\d)`, 'g')) || []).length, 1);
+});
+
+test('HE agrupa tortas y kekes en una sola familia, separada de bocaditos y panes', () => {
+  const clientes = [{ id: 1, cliente_nombre: 'Casino' }];
+  const detalles = [
+    { pedido_id: 1, producto_nombre: 'ALFAJOR', categoria_operativa: 'Bocaditos', cantidad: 20 },
+    { pedido_id: 1, producto_nombre: 'TORTA MOKA', categoria_operativa: 'Tortas', cantidad: 1 },
+    { pedido_id: 1, producto_nombre: 'KEKE VAINILLA', categoria_operativa: 'Kekes', cantidad: 2 },
+    { pedido_id: 1, producto_nombre: 'PAN FRANCÉS', categoria_operativa: 'Panes', cantidad: 30 }
+  ];
+  const { context, containers } = matriz(clientes, detalles);
+  context.renderizarMatrizProducto([
+    { titulo: 'BOCADITOS', productosLista: ['ALFAJOR'] },
+    { titulo: 'TORTAS', productosLista: ['TORTA MOKA'] },
+    { titulo: 'KEKES', productosLista: ['KEKE VAINILLA'] },
+    { titulo: 'PANES', productosLista: ['PAN FRANCÉS'] }
+  ]);
+  const pages = [...containers.hojaProduccion.innerHTML.matchAll(/<div class="kitchen-page">([\s\S]*?)<\/table><\/div>/g)].map(([, html]) => html);
+  assert.equal(pages.length, 3);
+  assert.match(pages[0], /ALFAJOR/);
+  assert.match(pages[1], /TORTA MOKA/); assert.match(pages[1], /KEKE VAINILLA/);
+  assert.match(pages[2], /PAN FRANCÉS/);
+  assert.match(pages[1], /TORTAS Y KEKES/);
 });
 
 test('HE imprime los panes en una página aparte', () => {

@@ -38,6 +38,16 @@ test('HP y HE comparten filas y cantidades; triples, sánguches y piqueos aparec
   assert.deepEqual(entrega.produccion_embalaje.detalles.map(d => [d.producto_nombre, d.cantidad]), [['Sándwiches original', 5], ['Triples original', 6], ['Piqueos original', 7]]);
 });
 
+test('Butifarra se clasifica como sánguche incluso si el registro previo dice bocaditos', () => {
+  const ctx = serverContext();
+  assert.equal(ctx.categoriaOperativaCasino('BUTIFARRAS', 'Bocaditos'), 'Sándwiches');
+  const pedido = { id: 1, origen: 'pg', fecha_recoge: '2026-10-06', fecha_emision: '2026-10-05T07:00:00-05:00' };
+  const hojas = construirHojasOperativas('2026-10-06', [pedido], [{ pedido_id: 1,
+    producto_nombre: 'BUTIFARRA', categoria_operativa: 'Bocaditos', cantidad: 12 }], opciones);
+  assert.equal(hojas.detalles.length, 0);
+  assert.deepEqual(hojas.produccion_embalaje.detalles.map(d => [d.categoria_operativa, d.cantidad]), [['Sándwiches', 12]]);
+});
+
 test('los rellenos completos y la puntuación de cada nombre de casino nunca se colapsan', () => {
   const nombres = ['TRIPLE POLLO TOCINO, QUESO CREMA Y ESPINACA', 'TRIPLE POLLO TOCINO Y JAMON',
     'TRIPLE POLLO TOCINO QUESO CREMA Y ESPINACA'];

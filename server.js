@@ -1544,6 +1544,7 @@ function compactarNombreCasinoVista(nombre) {
 function categoriaOperativaCasino(nombre, categoriaFuente = '', cantidad = 0) {
   const claveNombre = normalizarProducto(nombre || '');
   const unidades = Number(cantidad || 0);
+  if (/\bBUTIFARRAS?\b/.test(claveNombre)) return 'Sándwiches';
   if (/\bCIABAT[A-Z]*\b.*\b(CHORIZO|HOT\s*DOG)\b/.test(claveNombre)) return 'Sándwiches';
   if (/\bENROLLADO\b.*\bJAMON\b.*\bESPARRAGOS?\b/.test(claveNombre) || /\bPIONON(?:O|ITO|ITOS)\b.*\bESPINACA\b/.test(claveNombre)) return 'Triples';
   if (/\b(PIE|PYE)\b/.test(claveNombre)) {
@@ -3732,14 +3733,15 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
   }
 });
 
-function agregarMatrizHojasExcel(workbook, { titulo, fecha, clientes = [], detalles = [], orientacion = 'landscape', clientesPorPagina = 14, separarPanes = false }) {
+function agregarMatrizHojasExcel(workbook, { titulo, fecha, clientes = [], detalles = [], orientacion = 'landscape', clientesPorPagina = 14, separarPanes = false, separarHE = false }) {
   const nombreVisible = (detalle) => {
     const nombre = String(detalle.producto_nombre_fuente || detalle.producto_nombre || '').trim();
     const esCasino = String(detalle.origen || '').toLowerCase() === 'casino' || Boolean(detalle.producto_nombre_fuente);
     return esCasino ? nombreVisibleProductoCronograma(nombre) : nombre;
   };
-  const grupoDetalle = (detalle, nombre) => normalizarCategoriaOperativa(detalle.categoria_operativa)
-    || grupoProductoProduccion(nombre, normalizarProducto);
+  const grupoDetalle = (detalle, nombre) => /\bBUTIFARRAS?\b/.test(normalizarProducto(nombre))
+    ? 'Sándwiches'
+    : normalizarCategoriaOperativa(detalle.categoria_operativa) || grupoProductoProduccion(nombre, normalizarProducto);
   const ordenGrupos = new Map([['Bocaditos', 0], ['Sándwiches', 1], ['Triples', 2], ['Piqueos', 3], ['Panes', 4]]);
   const ordenCatalogo = new Map([...PRODUCTOS_COCINA, ...PRODUCTOS_COCINA_EXTRA]
     .map((nombre, indice) => [normalizarProducto(nombre), indice]));
@@ -3760,13 +3762,22 @@ function agregarMatrizHojasExcel(workbook, { titulo, fecha, clientes = [], detal
     (ordenGrupos.get(a.categoria) ?? 99) - (ordenGrupos.get(b.categoria) ?? 99)
     || (ordenCatalogo.get(normalizarProducto(a.nombre)) ?? 9999) - (ordenCatalogo.get(normalizarProducto(b.nombre)) ?? 9999)
     || a.nombre.localeCompare(b.nombre, 'es'));
-  const segmentos = separarPanes
+  const segmentos = separarHE
+    ? [
+      { nombre: 'Bocaditos', filas: productos.filter(fila => fila.categoria === 'Bocaditos') },
+      { nombre: 'Tortas y Kekes', filas: productos.filter(fila => ['Tortas', 'Kekes'].includes(fila.categoria)) },
+      { nombre: 'Panes', filas: productos.filter(fila => fila.categoria === 'Panes') },
+      ...(productos.some(fila => !['Bocaditos', 'Tortas', 'Kekes', 'Panes'].includes(fila.categoria))
+        ? [{ nombre: 'Otros', filas: productos.filter(fila => !['Bocaditos', 'Tortas', 'Kekes', 'Panes'].includes(fila.categoria)) }]
+        : [])
+    ]
+    : separarPanes
     ? [{ nombre: titulo.includes('HE') ? 'Embalaje' : 'Producción', filas: productos.filter(fila => fila.categoria !== 'Panes') },
       { nombre: 'Panes', filas: productos.filter(fila => fila.categoria === 'Panes') }]
     : [{ nombre: titulo.includes('HPE') ? 'Sánguches' : titulo, filas: productos }];
   let indiceHoja = 0;
   for (const segmento of segmentos) {
-    if (!segmento.filas.length && !(productos.length === 0 && indiceHoja === 0)) continue;
+    if (!segmento.filas.length && !(productos.length === 0 && indiceHoja === 0) && !separarHE) continue;
     const ids = new Set(segmento.filas.flatMap(fila => [...fila.porCliente.keys()]));
     const clientesActivos = clientes.filter(cliente => ids.has(Number(cliente.id)));
     const gruposClientes = [];
@@ -3818,9 +3829,9 @@ function agregarMatrizHojasExcel(workbook, { titulo, fecha, clientes = [], detal
         };
         worksheet.getCell(row, totalIdx).font = { bold: true, size: 11 };
       });
-      worksheet.getColumn(1).width = orientacion === 'portrait' ? 24 : 30;
+      worksheet.getColumn(1).width = orientacion === 'portrait' ? 17 : 30;
       for (let col = 2; col <= totalIdx; col += 1) {
-        worksheet.getColumn(col).width = col === totalIdx ? (orientacion === 'portrait' ? 12 : 15) : (orientacion === 'portrait' ? 6 : 11);
+        worksheet.getColumn(col).width = col === totalIdx ? (orientacion === 'portrait' ? 8 : 15) : (orientacion === 'portrait' ? 3.2 : 11);
       }
       worksheet.getRow(2).height = orientacion === 'portrait' ? 120 : 90;
       worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
@@ -3837,7 +3848,7 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
     const data = await cargarDatosHojas(fecha);
     const workbook = new ExcelJS.Workbook();
     agregarMatrizHojasExcel(workbook, { titulo: 'HP', fecha, clientes: data.clientes, detalles: data.detalles, orientacion: 'landscape', separarPanes: true });
-    agregarMatrizHojasExcel(workbook, { titulo: 'HE', fecha, clientes: data.embalaje.clientes, detalles: data.embalaje.detalles, orientacion: 'portrait', clientesPorPagina: 11, separarPanes: true });
+    agregarMatrizHojasExcel(workbook, { titulo: 'HE', fecha, clientes: data.embalaje.clientes, detalles: data.embalaje.detalles, orientacion: 'portrait', clientesPorPagina: 24, separarHE: true });
     agregarMatrizHojasExcel(workbook, { titulo: 'HPE', fecha, clientes: data.produccion_embalaje.clientes, detalles: data.produccion_embalaje.detalles, orientacion: 'landscape' });
 
     // Una fila por detalle exacto conserva el nombre del cronograma para auditoría.

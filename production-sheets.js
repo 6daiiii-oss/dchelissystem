@@ -70,8 +70,10 @@ function construirHojasOperativas(fecha, pedidos, rows, opciones) {
     const base = String(pedido.origen || '').toLowerCase() === 'casino'
       ? prepararCasino(row) : { ...row, producto_nombre: resolverProducto(row.producto_nombre), producto_nombre_original: row.producto_nombre };
     if (!String(base.producto_nombre || '').trim()) throw new Error('Producto sin nombre en el registro de embalaje.');
-    const grupo = normalizarCategoriaOperativa(base.categoria_operativa)
-      || grupoProductoProduccion(base.producto_nombre, normalizar);
+    const grupo = /\bBUTIFARRAS?\b/.test(normalizar(base.producto_nombre))
+      ? 'Sándwiches'
+      : normalizarCategoriaOperativa(base.categoria_operativa)
+        || grupoProductoProduccion(base.producto_nombre, normalizar);
     const trabajo = fechaTrabajo(pedido, grupo);
     const esHpe = GRUPOS_HPE.has(grupo);
     let paquetes = row.paquetes || {};

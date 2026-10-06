@@ -254,9 +254,9 @@ test('Excel completo → PostgreSQL → HP/HE/HPE sin faltantes, sobrantes ni fi
     });
     assert.match(printLayout.page, /A4 portrait/);
     assert.equal(printLayout.tableFont, '11px');
-    assert.equal(printLayout.productFont, '11px');
-    assert.equal(printLayout.verticalFont, '9px');
-    assert.ok(printLayout.maxClients <= 11, `HE debe paginar en bloques de hasta 11 clientes (actual: ${printLayout.maxClients})`);
+    assert.equal(printLayout.productFont, '9px');
+    assert.equal(printLayout.verticalFont, '8px');
+    assert.ok(printLayout.maxClients <= 24, `HE debe paginar en bloques de hasta 24 clientes (actual: ${printLayout.maxClients})`);
     assert.deepEqual(errors, []);
     console.log('Chromium: páginas independientes, fechas, carga de hojas e impresiones HE/HPE verificadas.');
   }
