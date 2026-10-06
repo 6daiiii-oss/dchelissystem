@@ -1130,19 +1130,27 @@
         width:190px !important; min-width:190px !important; max-width:190px !important;
         height:auto !important; max-height:none !important; overflow:visible !important;
       }
+      body.printing-cocina.printing-embalaje .kitchen-page-date { font-size:13px !important; padding:8px 9px !important; }
+      body.printing-cocina.printing-embalaje .kitchen-page table { width:100% !important; min-width:0 !important; font-size:11px !important; }
+      body.printing-cocina.printing-embalaje th.client-header { width:64px !important; min-width:64px !important; height:120px !important; }
+      body.printing-cocina.printing-embalaje .vertical-text { font-size:10px !important; max-height:110px !important; overflow:visible !important; }
+      body.printing-cocina.printing-embalaje th,
+      body.printing-cocina.printing-embalaje td { height:auto !important; max-height:none !important; padding:5px 6px !important; font-size:11px !important; }
+      body.printing-cocina.printing-embalaje .qty-cell { font-size:12px !important; }
       body.printing-cocina.printing-embalaje .pack-badge {
-        font-size:8px; line-height:1.3; white-space:normal !important; overflow:visible !important;
+        font-size:10px; line-height:1.3; white-space:normal !important; overflow:visible !important;
       }
       body.printing-cocina.printing-embalaje th.prod-col,
       body.printing-cocina.printing-embalaje td.prod-col {
-        width:145px; min-width:145px; max-width:145px; font-size:8.5px;
+        width:155px; min-width:155px; max-width:155px; font-size:11px;
       }
       body.printing-cocina.printing-embalaje td.prod-col {
         height:auto; max-height:none; overflow:visible;
         white-space:normal; text-overflow:clip; overflow-wrap:anywhere;
       }
-      body.printing-cocina.printing-embalaje .total-header { width:190px !important; min-width:190px !important; max-width:190px !important; }
-      body.printing-cocina.printing-embalaje .embalaje-group-row th { height:18px; font-size:8px; }
+      body.printing-cocina.printing-embalaje .total-header,
+      body.printing-cocina.printing-embalaje .pack-cell { width:140px !important; min-width:140px !important; max-width:140px !important; }
+      body.printing-cocina.printing-embalaje .embalaje-group-row th { height:auto !important; font-size:11px !important; }
     }
 
 
@@ -7346,17 +7354,9 @@
       return (detalles || []).filter(det => Number.isFinite(Number(det.cantidad)) && Number(det.cantidad) > 0);
     }
 
-    const ALIASES_EMPANADA_CARNE_EMBALAJE = new Set([
-      'EMPANADITA DE CARNE', 'EMPANADITAS DE CARNE', 'EMPANADAS DE CARNE', 'EMPANADA DE CARNE'
-    ]);
-
     function nombreMatrizEmbalaje(detalle, nombre) {
-      const categoria = normalizarCategoriaOperativa(detalle?.categoria_operativa || '')
-        || grupoProductoProduccion(nombre, normalizarNombreProducto);
-      if (categoria !== 'Bocaditos') return nombre;
-      const clave = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .toUpperCase().replace(/[.,;:()]/g, ' ').replace(/\s+/g, ' ').trim();
-      return ALIASES_EMPANADA_CARNE_EMBALAJE.has(clave) ? 'EMPANADA CARNE' : nombre;
+      if (String(detalle?.origen || '').toLowerCase() !== 'casino' && !detalle?.producto_nombre_fuente) return nombre;
+      return nombreVisibleProductoCronograma(nombre);
     }
 
     function obtenerListasEmbalaje(detalles) {
@@ -7470,7 +7470,7 @@
     estilo.id = 'kitchenPrintPageStyle';
     const esEmbalajeOriginal = tipo === 'embalaje';
     estilo.textContent = esEmbalajeOriginal
-      ? '@media print { @page { size: A4 landscape; margin: 0; } }'
+      ? '@media print { @page { size: A4 portrait; margin: 6mm; } }'
       : '@media print { @page { size: A4 portrait; margin: 0; } }';
     document.head.appendChild(estilo);
     const clase = tipo === 'produccion'
@@ -7564,8 +7564,8 @@
       return;
     }
 
-    // A4 horizontal: se aprovecha el ancho para 14 clientes y se corta por
-    // altura estimada de nombres y totales, no cada 24 productos sin contexto.
+    // A4 vertical: se separan los casinos en bloques para que los nombres y
+    // cantidades sigan legibles al imprimir.
     const bloques = [];
     let bloque = [];
     let altura = 0;
@@ -7580,7 +7580,7 @@
         Math.ceil(fila.nombre.length / 28) * 11 + 6,
         Math.ceil(fila.resumen.length / 38) * 11 + 8);
       const alto = altoFila + (tituloNuevo ? 18 : 0);
-      if (bloque.length && altura + alto > 665) {
+      if (bloque.length && altura + alto > 900) {
         bloques.push(bloque);
         bloque = [];
         altura = 0;
@@ -7596,8 +7596,8 @@
       const idsBloque = new Set();
       productosBloque.forEach(({ producto }) => producto.clientes.forEach((id) => idsBloque.add(id)));
       const clientesBloque = clientes.filter((cliente) => idsBloque.has(Number(cliente.id)));
-      for (let i = 0; i < clientesBloque.length; i += 14) {
-        paginas.push({ grupoClientes: clientesBloque.slice(i, i + 14), productosBloque, mostrarTotal: i === 0 });
+      for (let i = 0; i < clientesBloque.length; i += 7) {
+        paginas.push({ grupoClientes: clientesBloque.slice(i, i + 7), productosBloque, mostrarTotal: i === 0 });
       }
     }
 
@@ -7665,13 +7665,16 @@
       const pedidoId = Number(detalle.pedido_id);
       const cantidad = Number(detalle.cantidad || 0);
       if (!pedidoId || !(cantidad > 0)) continue;
-      const nombre = nombreDetalleProduccion(detalle, obtenerProductoResolucion);
+      const nombreOriginal = nombreDetalleProduccion(detalle, obtenerProductoResolucion);
+      const esCasino = String(detalle?.origen || '').toLowerCase() === 'casino' || Boolean(detalle?.producto_nombre_fuente);
+      const nombre = esCasino ? nombreVisibleProductoCronograma(nombreOriginal) : nombreOriginal;
       const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa || '');
       const grupo = ['Bocaditos', 'Sándwiches', 'Triples', 'Piqueos', 'Panes'].includes(categoriaManual)
         ? categoriaManual
         : grupoProductoProduccion(nombre, normalizarNombreProducto);
       if (!porPedido.has(pedidoId)) porPedido.set(pedidoId, []);
-      porPedido.get(pedidoId).push({ nombre, grupo, cantidad, claveFuente: detalle.casino_clave_fuente });
+      porPedido.get(pedidoId).push({ nombre, grupo, cantidad, claveFuente: detalle.casino_clave_fuente,
+        esAliasExacto: esCasino && normalizarNombreProducto(nombre) !== normalizarNombreProducto(nombreOriginal) });
     }
 
     const configuraciones = [
@@ -7686,7 +7689,8 @@
         const agregados = new Map();
         for (const item of porPedido.get(Number(cliente.id)) || []) {
           if (!grupos.has(item.grupo)) continue;
-          const clave = item.claveFuente || normalizarNombreProducto(item.nombre) || item.nombre;
+          const clave = item.esAliasExacto ? `alias:${normalizarNombreProducto(item.nombre)}`
+            : item.claveFuente || normalizarNombreProducto(item.nombre) || item.nombre;
           if (!agregados.has(clave)) agregados.set(clave, { nombre:item.nombre, cantidad:0 });
           agregados.get(clave).cantidad += Number(item.cantidad || 0);
         }

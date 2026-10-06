@@ -44,6 +44,35 @@ function frontend() {
 }
 const badResolver = () => { throw Error('No debe renombrar la fuente'); };
 
+test('revisión uno por uno de nombres del cronograma: solo alias exactos cambian en las hojas', { skip: !process.env.CASINO_SOURCE_XLSX }, async () => {
+  const ctx = serverContext();
+  const parsed = await ctx.procesarCronogramaCasinos(fs.readFileSync(process.env.CASINO_SOURCE_XLSX));
+  const names = new Set(parsed.dias.flatMap(dia => dia.productos.map(producto => producto.nombre_fuente || producto.nombre)));
+  const aliasesEsperados = [
+    ['ALFAJORCITO', 'ALFAJOR'], ['ALFAJORCITO DE MANJAR', 'ALFAJOR'],
+    ['CISNE', 'CISNES'], ['COCADITAS', 'COCADAS'], ['CONITOS DE MANJAR', 'CONITOS'], ['DONITAS', 'DONAS'],
+    ['EMPANADITA DE BODA', 'EMPANADA DE BODA'], ['EMPANADITAS DE CARNE', 'EMPANADA CARNE'],
+    ['EMPANADITAS DE POLLO', 'EMPANADA POLLO'], ['EMPANADITAS DE QUESO', 'EMPANADA QUESO'],
+    ['EMPANADITAS MIXTAS', 'EMPANADA MIXTA'], ['EMPANADA DE CARNE', 'EMPANADA CARNE'], ['EMPANADA DE POLLO', 'EMPANADA POLLO'],
+    ['ENROLLADO DE HOT DOG', 'ENROLLADO HOT DOG'], ['KEKITO DE ZANAHORIA', 'KEKITO ZANAHORIA'], ['NIDITOS DE AMOR', 'NIDITOS'],
+    ['MOUSSE DE MARACUYA', 'MOUSSE MARACUYA'], ['PAÑUELITOS DE MANJAR', 'PAÑUELITOS'],
+    ['PIE DE MANZANA', 'PYE DE MANZANA'], ['PIONONITOS', 'PIONONO'], ['PROFITEROLES', 'PROFITEROL'],
+    ['RELAMPAGO DE CHOCOLATE', 'RELAMPAGOS'], ['RELÁMPAGO DE CHOCOLATE', 'RELAMPAGOS'],
+    ['TARTALETA DE DURAZNO', 'TARTALETA DURAZNO'], ['TORTA CHANTILLY', 'TORTITA CHANTILLY'],
+    ['TORTITA DE CHANTILLY', 'TORTITA CHANTILLY'], ['TORTITA DE CHOCOLATE', 'TORTITA CHOCOLATE']
+  ].filter(([fuente]) => names.has(fuente));
+  const cambios = [...names].filter(name => classification.nombreVisibleProductoCronograma(name) !== name)
+    .map(name => [name, classification.nombreVisibleProductoCronograma(name)]).sort(([a], [b]) => a.localeCompare(b, 'es'));
+  assert.deepEqual(cambios, aliasesEsperados.sort(([a], [b]) => a.localeCompare(b, 'es')));
+  for (const name of names) {
+    if (/^TRIPLE\b/.test(name)) assert.equal(classification.nombreVisibleProductoCronograma(name), name, `no mezclar rellenos: ${name}`);
+    if (/^(?:FRANCESITO|FRANCES|CIABATITTA|CIABATTA|CROISSANT|CROSSAINT|ARABITO)\b/.test(name)) {
+      assert.equal(classification.nombreVisibleProductoCronograma(name), name, `conservar pan y relleno: ${name}`);
+    }
+  }
+  console.log(`Auditados ${names.size} nombres fuente; ${cambios.length} equivalencias exactas y el resto conserva identidad.`);
+});
+
 test('cada variante del Excel llega a producción, lista de embalaje, matriz y distribución sin resolver aliases', () => {
   const ctx = serverContext();
   const names = ['FRANCESITO CON HOT DOG', 'FRANCESITO POLLO A LA BRASA', 'FRANCESITO CON CHORIZO',
@@ -61,13 +90,22 @@ test('cada variante del Excel llega a producción, lista de embalaje, matriz y d
   ui.renderizarMatrizProducto(Object.entries(lists).map(([titulo, productosLista]) => ({ titulo, productosLista })), details);
   assert.doesNotMatch(containers.hojaProduccion.innerHTML, /ENTREGA\s+2026-/);
   assert.doesNotMatch(containers.hojaProduccion.innerHTML, /kitchen-casino-tag/);
-  for (const name of names) assert.ok(containers.hojaProduccion.innerHTML.includes(name), name);
+  for (const name of names) {
+    const visible = classification.nombreVisibleProductoCronograma(name);
+    assert.ok(containers.hojaProduccion.innerHTML.includes(visible), `${name} → ${visible}`);
+  }
   ui.renderizarHojasEmbalajePorHora({ fecha: '2026-10-06', clientes: clients, detalles: details });
-  for (const name of names.slice(0, 7)) assert.ok(containers.hojaDistribucionCocina.innerHTML.includes(name), name);
+  for (const name of names.slice(0, 7)) {
+    const visible = classification.nombreVisibleProductoCronograma(name);
+    assert.ok(containers.hojaDistribucionCocina.innerHTML.includes(visible), `${name} → ${visible}`);
+  }
   assert.ok(!containers.hojaDistribucionCocina.innerHTML.includes('60 MINI FRANCÉS'));
   ui.renderizarHojaProduccionCocina({ fecha: '2026-10-06', clientes: clients, detalles: details,
     embalaje: { clientes: clients, detalles: details } });
-  for (const name of names.slice(7)) assert.ok(containers.hojaProduccionCocina.innerHTML.includes(name), name);
+  for (const name of names.slice(7)) {
+    const visible = classification.nombreVisibleProductoCronograma(name);
+    assert.ok(containers.hojaProduccionCocina.innerHTML.includes(visible), `${name} → ${visible}`);
+  }
   for (const name of names.slice(0, 7)) assert.ok(!containers.hojaProduccionCocina.innerHTML.includes(name), 'HPE no debe aparecer en HP: ' + name);
 });
 
@@ -122,6 +160,26 @@ test('importación ignora filas de totales y conserva triples y panes con nombre
   ]);
 });
 
+test('PAN y TIPO no duplican el nombre del pan y conservan los rellenos distintos', async () => {
+  const book = new ExcelJS.Workbook();
+  const sheet = book.addWorksheet('Benavides');
+  sheet.addRow(['PAN', 'TIPO', 'PRECIO', 'Lunes', 'Martes', 'Miércoles']);
+  sheet.addRow(['', '', '', new Date('2026-10-05'), new Date('2026-10-06'), new Date('2026-10-07')]);
+  sheet.addRow(['ARABITO', 'ARABITO PIZZERO (TOMATE, QUESO)', null, null, 20]);
+  sheet.addRow(['BAGUETINO', 'BAGUETINO DE JAMON Y HUEVO', null, null, 25]);
+  sheet.addRow(['FRANCES', 'POLLO PIÑA', null, null, null, 30]);
+  sheet.addRow(['FRANCES', 'POLLO DURAZNO', null, null, null, 35]);
+  const parsed = await serverContext().procesarCronogramaCasinos(await book.xlsx.writeBuffer());
+  const martes = parsed.dias.find(day => day.fecha === '2026-10-06');
+  const miercoles = parsed.dias.find(day => day.fecha === '2026-10-07');
+  assert.deepEqual(Array.from(martes.productos, product => product.nombre), [
+    'ARABITO PIZZERO (TOMATE, QUESO)', 'BAGUETINO DE JAMON Y HUEVO'
+  ]);
+  assert.deepEqual(Array.from(miercoles.productos, product => product.nombre), [
+    'FRANCES POLLO PIÑA', 'FRANCES POLLO DURAZNO'
+  ]);
+});
+
 // Opt-in audit against the original workbook; no private workbook is committed.
 test('reconciliación del Excel original, celda por celda para todas sus hojas y fechas', { skip: !process.env.CASINO_SOURCE_XLSX }, async () => {
   const ctx = serverContext();
@@ -154,7 +212,16 @@ test('reconciliación del Excel original, celda por celda para todas sus hojas y
         }); r++; continue;
       }
       if (!columns.length) continue;
-      const name = (nameColumn > 0 ? text(sheet.getCell(r, nameColumn)) : [panColumn, typeColumn].filter(c => c > 0).map(c => text(sheet.getCell(r, c))).join(' ')).replace(/\u00a0/g, ' ').trim();
+      let name;
+      if (nameColumn > 0) name = text(sheet.getCell(r, nameColumn));
+      else {
+        const pan = panColumn > 0 ? text(sheet.getCell(r, panColumn)).replace(/\u00a0/g, ' ').trim() : '';
+        const type = typeColumn > 0 ? text(sheet.getCell(r, typeColumn)).replace(/\u00a0/g, ' ').trim() : '';
+        const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+        const panKey = normalize(pan), typeKey = normalize(type);
+        name = panKey && typeKey && (typeKey === panKey || typeKey.startsWith(`${panKey} `)) ? type : [pan, type].filter(Boolean).join(' ');
+      }
+      name = name.replace(/\u00a0/g, ' ').trim();
       if (!name || /TOTAL|#REF/i.test(name)) continue;
       for (const [c, date] of columns) {
         const val = sheet.getCell(r, c).value;

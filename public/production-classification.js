@@ -15,6 +15,79 @@ function normalizarBaseProduccion(nombre) {
     .replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// Normalizaciones exactas y revisadas contra el cronograma de Casinos.
+// No se eliminan sufijos de forma general: varios nombres diminutivos indican
+// panes o rellenos diferentes y deben permanecer como filas separadas.
+const ALIASES_EXACTOS_CRONOGRAMA = new Map(Object.entries({
+  'ALFAJORCITO': 'ALFAJOR',
+  'ALFAJORCITO DE MANJAR': 'ALFAJOR',
+  'BROWNIE': 'BROWNIES',
+  'CISNE': 'CISNES',
+  'COCADITA': 'COCADAS',
+  'COCADITAS': 'COCADAS',
+  'CONITO DE MANJAR': 'CONITOS',
+  'CONITOS DE MANJAR': 'CONITOS',
+  'DONITA': 'DONAS',
+  'DONITAS': 'DONAS',
+  'EMPANADA DE BODA': 'EMPANADA DE BODA',
+  'EMPANADITA DE BODA': 'EMPANADA DE BODA',
+  'EMPANADA DE CARNE': 'EMPANADA CARNE',
+  'EMPANADAS DE CARNE': 'EMPANADA CARNE',
+  'EMPANADITA DE CARNE': 'EMPANADA CARNE',
+  'EMPANADITAS DE CARNE': 'EMPANADA CARNE',
+  'EMPANADA DE POLLO': 'EMPANADA POLLO',
+  'EMPANADA DE ACEITUNA': 'EMPANADA ACEITUNA',
+  'EMPANADITA DE ACEITUNA': 'EMPANADA ACEITUNA',
+  'EMPANADITAS DE ACEITUNA': 'EMPANADA ACEITUNA',
+  'EMPANADITA DE POLLO': 'EMPANADA POLLO',
+  'EMPANADITAS DE POLLO': 'EMPANADA POLLO',
+  'EMPANADITA DE JAMON': 'EMPANADA DE JAMON',
+  'EMPANADITAS DE JAMON': 'EMPANADA DE JAMON',
+  'EMPANADITA DE AJI DE GALLINA': 'EMPANADA AJI GALLINA',
+  'EMPANADITAS DE AJI DE GALLINA': 'EMPANADA AJI GALLINA',
+  'EMPANADA DE AJI DE GALLINA': 'EMPANADA AJI GALLINA',
+  'EMPANADITA DE QUESO': 'EMPANADA QUESO',
+  'EMPANADITAS DE QUESO': 'EMPANADA QUESO',
+  'EMPANADA DE QUESO': 'EMPANADA QUESO',
+  'EMPANADITA MIXTA': 'EMPANADA MIXTA',
+  'EMPANADITAS MIXTAS': 'EMPANADA MIXTA',
+  'EMPANADA MIXTA': 'EMPANADA MIXTA',
+  'ENROLLADO DE ACELGA': 'ENROLLADO ACELGA',
+  'ENROLLADO DE HOT DOG': 'ENROLLADO HOT DOG',
+  'HOT DOG': 'ENROLLADO HOT DOG',
+  'KEKITO DE ZANAHORIA': 'KEKITO ZANAHORIA',
+  'MOUSSE DE MARACUYA': 'MOUSSE MARACUYA',
+  'MOUSE DE MARACUYA': 'MOUSSE MARACUYA',
+  'NIDITO DE AMOR': 'NIDITOS',
+  'NIDITOS DE AMOR': 'NIDITOS',
+  'OREJITA': 'OREJITAS',
+  'PAÑUELITO DE MANJAR': 'PAÑUELITOS',
+  'PAÑUELITOS DE MANJAR': 'PAÑUELITOS',
+  'PANUELITOS DE MANJAR': 'PAÑUELITOS',
+  'PIONONITO': 'PIONONO',
+  'PIONONITOS': 'PIONONO',
+  'PIE DE MANZANA': 'PYE DE MANZANA',
+  'PIE DE LIMON': 'PYE DE LIMON',
+  'PROFITEROLES': 'PROFITEROL',
+  'PROFITEROLS': 'PROFITEROL',
+  'RELAMPAGO DE CHOCOLATE': 'RELAMPAGOS',
+  'PIZZITA': 'PIZZAS',
+  'PIZZITAS': 'PIZZAS',
+  'SOUFLE DE ALCACHOFA': 'SOUFLE ALCACHOFA',
+  'SOUFLES DE ALCACHOFA': 'SOUFLE ALCACHOFA',
+  'TARTALETA DE DURAZNO': 'TARTALETA DURAZNO',
+  'TARTALETA DE FRESA': 'TARTALETA DE FRESA',
+  'TORTA CHANTILLY': 'TORTITA CHANTILLY',
+  'ROSQUITA': 'ROSQUITAS',
+  'TORTITA DE CHANTILLY': 'TORTITA CHANTILLY',
+  'TORTITA DE CHOCOLATE': 'TORTITA CHOCOLATE'
+}).map(([alias, nombre]) => [normalizarBaseProduccion(alias), nombre]));
+
+function nombreVisibleProductoCronograma(nombre) {
+  const original = String(nombre || '').trim();
+  return ALIASES_EXACTOS_CRONOGRAMA.get(normalizarBaseProduccion(original)) || original;
+}
+
 function resolverPetipanNombre(nombre) {
   const original = String(nombre || '').trim();
   const limpio = normalizarBaseProduccion(original)
@@ -205,7 +278,9 @@ function clasificarHojaProduccion(detalles, clientes, resolver, normalizar, orde
 
     const tipo = tipoItemCocina(fuenteTipo, cantidad, normalizar);
     const categoriaManual = normalizarCategoriaOperativa(detalle.categoria_operativa);
-    const nombre = esCasino ? nombreDetalleProduccion(detalle) : resolverPyePorCantidad(nombreBase, cantidad, normalizar);
+    const nombre = esCasino
+      ? nombreVisibleProductoCronograma(nombreDetalleProduccion(detalle))
+      : resolverPyePorCantidad(nombreBase, cantidad, normalizar);
     const clave = esCasino ? claveNombreProduccion(nombre) : normalizar(nombre);
     const esKeke = categoriaManual === 'Kekes' || (!categoriaManual && tipo.esKeke);
     const esTorta = categoriaManual === 'Tortas' || (!categoriaManual && tipo.esTorta);
@@ -266,5 +341,5 @@ function resolverNombreEspecialProduccion(nombre) {
 if (typeof module !== 'undefined') module.exports = {
   claveNombreProduccion, nombreDetalleProduccion, clasificarHojaProduccion, resolverPetipanNombre, resolverCiabattaNombre,
   grupoProductoProduccion, tipoItemCocina, filtrarItemsEmbalaje, resolverPyePorCantidad,
-  resolverNombreEspecialProduccion, normalizarCategoriaOperativa
+  resolverNombreEspecialProduccion, normalizarCategoriaOperativa, nombreVisibleProductoCronograma
 };

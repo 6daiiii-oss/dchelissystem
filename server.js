@@ -1784,9 +1784,13 @@ async function procesarCronogramaCasinos(buffer) {
         const tipo = columnaTipo
           ? String(valorCeldaCasino(hoja.getCell(fila, columnaTipo)) ?? '').replace(/\u00a0/g, ' ').trim()
           : '';
+        const panNormalizado = normalizarProducto(pan);
+        const tipoNormalizado = normalizarProducto(tipo);
+        const tipoYaIncluyePan = Boolean(panNormalizado && tipoNormalizado
+          && (tipoNormalizado === panNormalizado || tipoNormalizado.startsWith(`${panNormalizado} `)));
         const nombreOriginal = columnaArticulo
           ? String(valorCeldaCasino(hoja.getCell(fila, columnaArticulo)) ?? '').replace(/\u00a0/g, ' ').trim()
-          : [pan, tipo].filter(Boolean).join(' ').trim();
+          : (tipoYaIncluyePan ? tipo : [pan, tipo].filter(Boolean).join(' ')).trim();
 
         if (columnaArticulo) {
           const celdaNombre = hoja.getCell(fila, columnaArticulo);

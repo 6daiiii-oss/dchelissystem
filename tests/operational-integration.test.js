@@ -8,9 +8,11 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const ExcelJS = require('exceljs');
 const { Pool } = require('pg');
+const { nombreVisibleProductoCronograma } = require('../public/production-classification');
 const enabled = process.env.CASINO_SOURCE_XLSX && process.env.DCHELIS_TEST_DATABASE_URL;
 const pause = ms => new Promise(r => setTimeout(r, ms));
 const text = cell => { const v = cell.value; return v == null ? '' : String(v.richText ? v.richText.map(t => t.text).join('') : v.result ?? v); };
+const normalizeName = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 const dateOf = v => v instanceof Date ? v.toISOString().slice(0, 10) : typeof v === 'number'
   ? new Date(Date.UTC(1899, 11, 30) + v * 86400000).toISOString().slice(0, 10)
   : /^\d{1,2}-sep$/i.test(String(v)) ? `2026-09-${String(v).split('-')[0].padStart(2, '0')}` : null;
@@ -30,7 +32,15 @@ function sourceCells(book) {
         r++; continue;
       }
       if (!columns.length) continue;
-      const name = (nameColumn > 0 ? text(sheet.getCell(r, nameColumn)) : [panColumn, typeColumn].filter(c => c > 0).map(c => text(sheet.getCell(r, c))).join(' ')).replace(/\u00a0/g, ' ').trim();
+      let name;
+      if (nameColumn > 0) name = text(sheet.getCell(r, nameColumn));
+      else {
+        const pan = panColumn > 0 ? text(sheet.getCell(r, panColumn)).replace(/\u00a0/g, ' ').trim() : '';
+        const type = typeColumn > 0 ? text(sheet.getCell(r, typeColumn)).replace(/\u00a0/g, ' ').trim() : '';
+        const panKey = normalizeName(pan), typeKey = normalizeName(type);
+        name = panKey && typeKey && (typeKey === panKey || typeKey.startsWith(`${panKey} `)) ? type : [pan, type].filter(Boolean).join(' ');
+      }
+      name = name.replace(/\u00a0/g, ' ').trim();
       if (!name || /TOTAL|#REF/i.test(name)) continue;
       for (const [c, date] of columns) {
         const raw = sheet.getCell(r, c).value;
@@ -201,8 +211,9 @@ test('Excel completo → PostgreSQL → HP/HE/HPE sin faltantes, sobrantes ni fi
     });
     const expectedTotals = new Map();
     for (const row of expectedHe) {
-      const nombre = ['EMPANADITA DE CARNE', 'EMPANADITAS DE CARNE', 'EMPANADAS DE CARNE', 'EMPANADA DE CARNE'].includes(row.producto_nombre.toUpperCase())
-        && row.categoria_operativa.toUpperCase() === 'BOCADITOS' ? 'EMPANADA CARNE' : row.producto_nombre;
+      const nombre = row.categoria_operativa.toUpperCase() === 'BOCADITOS'
+        ? nombreVisibleProductoCronograma(row.producto_nombre)
+        : row.producto_nombre;
       const key = JSON.stringify([nombre, row.categoria_operativa.toUpperCase()]);
       expectedTotals.set(key, (expectedTotals.get(key) || 0) + row.cantidad);
     }
@@ -228,6 +239,23 @@ test('Excel completo → PostgreSQL → HP/HE/HPE sin faltantes, sobrantes ni fi
     await page.evaluate(() => { document.body.classList.remove('printing-distribucion'); document.body.classList.add('printing-produccion'); });
     assert.equal(await page.locator('#productionPaperWrapper').isVisible(), true);
     assert.equal(await page.locator('#embalajeWrapper').isVisible(), false);
+    const printLayout = await page.evaluate(() => {
+      window.print = () => {};
+      prepararImpresionCocina('embalaje');
+      return {
+        page: document.getElementById('kitchenPrintPageStyle')?.textContent || '',
+        tableFont: getComputedStyle(document.querySelector('#hojaProduccion table')).fontSize,
+        productFont: getComputedStyle(document.querySelector('#hojaProduccion td.prod-col')).fontSize,
+        verticalFont: getComputedStyle(document.querySelector('#hojaProduccion .vertical-text')).fontSize,
+        maxClients: Math.max(...[...document.querySelectorAll('#hojaProduccion .kitchen-page table')]
+          .map(table => table.querySelectorAll('th.client-header').length))
+      };
+    });
+    assert.match(printLayout.page, /A4 portrait/);
+    assert.equal(printLayout.tableFont, '11px');
+    assert.equal(printLayout.productFont, '11px');
+    assert.equal(printLayout.verticalFont, '10px');
+    assert.ok(printLayout.maxClients <= 7, `HE debe paginar en bloques de hasta 7 clientes (actual: ${printLayout.maxClients})`);
     assert.deepEqual(errors, []);
     console.log('Chromium: páginas independientes, fechas, carga de hojas e impresiones HE/HPE verificadas.');
   }

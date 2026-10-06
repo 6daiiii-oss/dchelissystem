@@ -109,7 +109,7 @@ test('la producción recupera fuente y categoría del detalle guardado antes de 
   ]);
   const normalizar = (nombre) => String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
   const { filas } = clasificarHojaProduccion(detalles, [], resolverNombre, normalizar);
-  assert.ok(filas.some((f) => f.nombre === 'EMPANADITAS DE POLLO' && f.total === 30 && f.grupo === 'Bocaditos'));
+  assert.ok(filas.some((f) => f.nombre === 'EMPANADA POLLO' && f.total === 30 && f.grupo === 'Bocaditos'));
   assert.ok(filas.some((f) => f.nombre === 'PETIPAN CON POLLO' && f.total === 20 && f.grupo === 'Sándwiches'));
   assert.equal(filas.filter((f) => f.nombre === 'Mini Francés').length, 0);
 });

@@ -70,7 +70,7 @@ test('cuando los clientes superan el ancho de A4, no se omite ninguno ni se repi
   const { context, containers } = matriz(clientes, detalles);
   context.renderizarMatrizProducto([{ titulo: 'BOCADITOS', productosLista: ['ALFAJOR'] }]);
   const html = containers.hojaProduccion.innerHTML;
-  assert.equal((html.match(/class="kitchen-page"/g) || []).length, 2);
+  assert.equal((html.match(/class="kitchen-page"/g) || []).length, 3);
   for (const c of clientes) assert.equal((html.match(new RegExp(`PEDIDO ${c.id}(?!\\d)`, 'g')) || []).length, 1);
   assert.equal((html.match(/class="pack-badge"/g) || []).length, 1);
 });
@@ -129,4 +129,37 @@ test('HE muestra la cantidad de Barranco junto a EMPANADA CARNE aunque el cronog
   assert.match(carne[0][2], /1x20 \/ 1x25/, 'el total incluye los dos pedidos sin perder su distribución');
   assert.ok(!rows.some(([, nombre]) => nombre === 'EMPANADITAS DE CARNE'));
   assert.equal(detalles[1].producto_nombre_fuente, 'EMPANADITAS DE CARNE', 'el detalle conserva el nombre original del cronograma');
+});
+
+test('HP, HE y HPE asimilan diminutivos exactos y dejan intactos rellenos diferentes', () => {
+  const clientes = [{ id: 1, cliente_nombre: 'Casino', origen: 'casino' }];
+  const dulces = [
+    ['ALFAJORCITO DE MANJAR', 'ALFAJOR'], ['COCADITAS', 'COCADAS'],
+    ['CONITOS DE MANJAR', 'CONITOS'], ['DONITAS', 'DONAS'],
+    ['EMPANADITA DE BODA', 'EMPANADA DE BODA'], ['KEKITO DE ZANAHORIA', 'KEKITO ZANAHORIA'],
+    ['NIDITOS DE AMOR', 'NIDITOS'], ['PAÑUELITOS DE MANJAR', 'PAÑUELITOS'],
+    ['PIONONITOS', 'PIONONO'], ['PROFITEROLES', 'PROFITEROL']
+  ];
+  for (const [fuente, canonico] of dulces) assert.equal(require('../public/production-classification').nombreVisibleProductoCronograma(fuente), canonico);
+  const triples = ['TRIPLE TOCINO ESPINACA QUESO CREMA', 'TRIPLE POLLO JAMON QUESO'];
+  for (const name of triples) assert.equal(require('../public/production-classification').nombreVisibleProductoCronograma(name), name);
+
+  const detalles = dulces.slice(0, 2).map(([producto_nombre_fuente, producto_nombre], i) => ({
+    pedido_id: 1, origen: 'casino', producto_nombre_fuente, producto_nombre,
+    categoria_operativa: 'Bocaditos', cantidad: (i + 1) * 25
+  }));
+  const { context, containers } = matriz(clientes, detalles);
+  const listas = context.obtenerListasEmbalaje(context.filtrarDetallesEmbalaje(detalles));
+  context.renderizarMatrizProducto(Object.entries(listas).map(([titulo, productosLista]) => ({ titulo: titulo.toUpperCase(), productosLista })), detalles);
+  assert.match(containers.hojaProduccion.innerHTML, /<td class="prod-col">ALFAJOR<\/td>/);
+  assert.match(containers.hojaProduccion.innerHTML, /<td class="prod-col">COCADAS<\/td>/);
+  assert.doesNotMatch(containers.hojaProduccion.innerHTML, /ALFAJORCITO DE MANJAR|COCADITAS/);
+  context.renderizarHojaProduccionCocina({ fecha: '2026-10-05', clientes, detalles });
+  assert.match(containers.hojaProduccionCocina.innerHTML, /ALFAJOR/);
+  assert.match(containers.hojaProduccionCocina.innerHTML, /COCADAS/);
+  context.renderizarHojasEmbalajePorHora({ fecha: '2026-10-06', clientes, detalles: triples.map((producto_nombre_fuente, i) => ({
+    pedido_id: 1, origen: 'casino', producto_nombre_fuente, producto_nombre: producto_nombre_fuente,
+    categoria_operativa: 'Triples', cantidad: (i + 1) * 25
+  })) });
+  for (const name of triples) assert.ok(containers.hojaDistribucionCocina.innerHTML.includes(name));
 });
