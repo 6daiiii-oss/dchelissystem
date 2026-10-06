@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const ExcelJS = require('exceljs');
-const { fechaTrabajo, construirHojasOperativas, verificarImportacion } = require('../production-sheets');
+const { fechaTrabajo, construirHojasOperativas, verificarImportacion, validarVersionesCronogramaOperativo } = require('../production-sheets');
 const { prepararDetalleCasino } = require('../casino-production');
 const { clasificarHojaProduccion } = require('../public/production-classification');
 const { serverContext } = require('./helpers/server-context');
@@ -79,4 +79,43 @@ test('la importación conserva filas independientes y días vacíos; rechaza can
   assert.notEqual(datos.dias[1].productos[0].clave_fuente, datos.dias[1].productos[1].clave_fuente);
   sheet.mergeCells('C3:C4');
   await assert.rejects(ctx.procesarCronogramaCasinos(await book.xlsx.writeBuffer()), /cantidad ambigua/);
+});
+
+test('no publica hojas con cronogramas antiguos ni filas de totales importadas como productos', () => {
+  const pedido = { id: 1, origen: 'casino', cronograma_casino_id: 9, fecha_recoge: '2026-10-08' };
+  assert.throws(() => validarVersionesCronogramaOperativo([pedido], [
+    { id: 9, datos_json: JSON.stringify({ version_importacion: 2 }) }
+  ]), error => error.code === 'CRONOGRAMA_REQUIERE_REIMPORTACION' && error.status === 409);
+  assert.doesNotThrow(() => validarVersionesCronogramaOperativo([pedido], [
+    { id: 9, datos_json: JSON.stringify({ version_importacion: 3 }) }
+  ]));
+  assert.throws(() => construirHojasOperativas('2026-10-07', [pedido], [{
+    pedido_id: 1, producto_nombre: 'Cantidades totales', producto_nombre_fuente: 'Cantidades totales', cantidad: 2199
+  }], opciones), error => error.code === 'CRONOGRAMA_REQUIERE_REIMPORTACION' && error.status === 409);
+});
+
+test('la huella nueva deja reimportar el mismo Excel que quedó guardado con la huella anterior', () => {
+  const ctx = serverContext();
+  const old = require('node:crypto').createHash('sha256').update(JSON.stringify({ version: 2, dias: [] })).digest('hex');
+  assert.notEqual(ctx.huellaCronogramaCasino({ dias: [] }), old);
+  assert.equal(ctx.huellaCronogramaCasino({ dias: [] }), require('node:crypto').createHash('sha256')
+    .update(JSON.stringify({ version: 3, dias: [] })).digest('hex'));
+});
+
+test('la API de hojas bloquea una importación vieja con un error que pide reimportar', async () => {
+  const ctx = serverContext();
+  let consultoDetalles = false;
+  ctx.dbAllAsync = async sql => {
+    if (sql.includes('FROM casino_cronogramas')) return [{ id: 9, datos_json: JSON.stringify({ version_importacion: 2 }) }];
+    if (sql.includes('FROM detalles_pedido')) { consultoDetalles = true; return []; }
+    return [{ id: 1, origen: 'casino', cronograma_casino_id: 9, fecha_recoge: '2026-10-08' }];
+  };
+  let status = 200, body;
+  await ctx.routes['/api/admin/produccion']({ query: { fecha: '2026-10-07' } }, {
+    status(code) { status = code; return this; },
+    json(value) { body = value; return this; }
+  });
+  assert.equal(status, 409);
+  assert.match(body.error, /Vuelve a importar el Excel original/);
+  assert.equal(consultoDetalles, false, 'no lee ni muestra detalles de la importación vieja');
 });

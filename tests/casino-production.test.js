@@ -121,9 +121,9 @@ test('las hojas consultan los detalles guardados una sola vez y recuperan el nom
   ctx.dbAllAsync = async sql => {
     if (sql.includes('FROM detalles_pedido')) {
       consultasDetalles++;
-      return [{ pedido_id: 1, origen: 'casino', producto_nombre: 'alias incorrecto', producto_nombre_fuente: 'EMPANADITAS DE CARNE', casino_categoria_fuente: 'Bocaditos salados', cantidad: 25 }];
+      return [{ pedido_id: 1, origen: 'casino', producto_nombre: 'alias incorrecto', producto_nombre_fuente: 'EMPANADITAS DE CARNE', casino_clave_fuente: 'morelli::row::3', casino_orden_fuente: 3, casino_categoria_fuente: 'Bocaditos salados', cantidad: 25 }];
     }
-    if (sql.includes('FROM casino_cronogramas')) return [];
+    if (sql.includes('FROM casino_cronogramas')) return [{ id: 1, datos_json: JSON.stringify({ version_importacion: 3 }) }];
     return [{ id: 1, origen: 'casino', fecha_recoge: '2026-10-06', cronograma_casino_id: 1 }];
   };
   const hojas = await ctx.cargarDatosHojas('2026-10-05');

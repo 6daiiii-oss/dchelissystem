@@ -189,7 +189,7 @@ test('API Cocina y Excel descargado conservan cantidades, fechas y filas; descar
       assert.ok(!params.includes(2), 'no consultar detalles de la versión anterior');
       return details;
     }
-    if (sql.includes('FROM casino_cronogramas')) return [{ id: 8, datos_json: JSON.stringify({ dias: [{ fecha: '2026-10-06', casinos: ['Morelli'] }] }) }];
+    if (sql.includes('FROM casino_cronogramas')) return [{ id: 8, datos_json: JSON.stringify({ version_importacion: 3, dias: [{ fecha: '2026-10-06', casinos: ['Morelli'] }] }) }];
     return clients;
   };
   const start = server.indexOf("app.get('/api/admin/produccion'");

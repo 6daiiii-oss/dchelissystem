@@ -26,6 +26,16 @@ test('las semanas importadas se conservan y una fecha repetida usa el último Ex
   assert.deepEqual(combinado.casinos, ['Antiguo', 'Actual']);
 });
 
+test('el archivo semanal descarta líneas CANTIDADES TOTALES aunque provengan de una importación vieja', () => {
+  const merged = unirCronogramasCasino([{ id: 1, datos_json: JSON.stringify({ casinos: ['A'], dias: [{
+    fecha: '2026-10-08', casinos: ['A'], productos: [
+      { nombre: 'EMPANADITAS DE CARNE', clave_fuente: 'a::1', por_casino: { A: 20 } },
+      { nombre: 'CANTIDADES TOTALES', por_casino: { A: 181 } }
+    ]
+  }] }) }]);
+  assert.deepEqual(merged.dias[0].productos.map(p => [p.nombre, p.total]), [['EMPANADITAS DE CARNE', 20]]);
+});
+
 test('pye y tortita con 15 o más son bocaditos; tortas pequeñas conservan el nombre del casino', () => {
   const datos = [
     ['Pye de limón', 15, 1], ['Pye de manzana', 20, 1],

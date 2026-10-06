@@ -4,7 +4,8 @@ const path = require('path');
 const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const db = require('./db');
-const { fechaTrabajo, construirHojasOperativas, verificarImportacion } = require('./production-sheets');
+const { fechaTrabajo, construirHojasOperativas, verificarImportacion,
+  esFilaTotalCasino, validarVersionesCronogramaOperativo, MENSAJE_REIMPORTAR_CRONOGRAMA } = require('./production-sheets');
 const { extraerPedidosCasino, prepararDetalleCasino } = require('./casino-production');
 const { unirCronogramasCasino } = require('./casino-archive');
 const { resolverPetipanNombre, resolverCiabattaNombre, filtrarItemsEmbalaje, grupoProductoProduccion, resolverPyePorCantidad, resolverNombreEspecialProduccion, normalizarCategoriaOperativa, tipoItemCocina } = require('./public/production-classification');
@@ -334,6 +335,7 @@ async function construirCronogramaCasinoDesdePedidos({ desde = '', hasta = '', c
   const dias = new Map();
   const casinos = new Set();
   for (const row of rows) {
+    if (esFilaTotalCasino(row.producto_nombre_fuente || row.producto_nombre)) continue;
     const fecha = String(row.fecha_recoge || '');
     if (!fecha) continue;
     const casino = String(row.casino_nombre || row.cliente_nombre || 'Casino').trim();
@@ -1617,7 +1619,7 @@ function huellaCronogramaCasino(datos) {
     .filter((dia) => dia.fecha)
     .sort((a, b) => a.fecha.localeCompare(b.fecha));
 
-  return crypto.createHash('sha256').update(JSON.stringify({ version: 2, dias })).digest('hex');
+  return crypto.createHash('sha256').update(JSON.stringify({ version: 3, dias })).digest('hex');
 }
 
 async function procesarCronogramaCasinos(buffer) {
@@ -1932,7 +1934,7 @@ async function procesarCronogramaCasinos(buffer) {
     }));
 
   return {
-    version_importacion: 2,
+    version_importacion: 3,
     casinos: casinosOrden,
     dias,
     advertencias,
@@ -1958,6 +1960,7 @@ async function cargarDatosHojas(fecha) {
     ORDER BY id DESC
   `, [fechaSiguiente, fecha]);
   pedidos = filtrarVersionesVigentesCronogramasCasino(pedidos, cronogramas);
+  validarVersionesCronogramaOperativo(pedidos, cronogramas);
   const ids = pedidos.map(p => Number(p.id));
   const rows = ids.length ? await dbAllAsync(`
     SELECT dp.id AS detalle_id, dp.pedido_id, p.origen, dp.producto_nombre,
@@ -2228,6 +2231,9 @@ app.get('/api/admin/casinos/cronograma/:id', requireAdminAuth, async (req, res) 
     } catch {
       return res.status(500).json({ error: 'El cronograma guardado está dañado.' });
     }
+    if (Number(cronogramaBase.version_importacion) < 3) {
+      return res.status(409).json({ error: MENSAJE_REIMPORTAR_CRONOGRAMA });
+    }
 
     // Solo se consultan las ediciones de ESTA importación. La base JSON conserva
     // semanas aún no migradas; los pedidos internos sustituyen las fechas editadas.
@@ -2272,6 +2278,7 @@ app.get('/api/admin/casinos/cronograma/:id/excel', requireAdminAuth, async (req,
     let cronogramaBase;
     try { cronogramaBase = JSON.parse(meta.datos_json); }
     catch { return res.status(500).send('El cronograma guardado está dañado.'); }
+    if (Number(cronogramaBase.version_importacion) < 3) return res.status(409).send(MENSAJE_REIMPORTAR_CRONOGRAMA);
 
     const cronogramaEditado = await construirCronogramaCasinoDesdePedidos({ cronogramaId: id });
     const cronograma = combinarCronogramaCasinoConPedidos(cronogramaBase, cronogramaEditado);
@@ -3038,6 +3045,7 @@ app.get('/api/admin/casinos/pedidos', requireAdminAuth, async (req, res) => {
       for (const row of cronogramasLegacy) {
         let datos;
         try { datos = JSON.parse(row.datos_json); } catch { continue; }
+        if (Number(datos.version_importacion) < 3) return res.status(409).json({ error: MENSAJE_REIMPORTAR_CRONOGRAMA });
         const diasFiltrados = (Array.isArray(datos?.dias) ? datos.dias : [])
           .filter((dia) => dia?.fecha >= desde && dia?.fecha <= hasta)
           .map((dia) => ({
@@ -3693,7 +3701,7 @@ app.get('/api/admin/produccion', requireAdminAuth, async (req, res) => {
       ventana: { produccion: fecha, regla: 'hp_he_dia_anterior_hpe_entrega_corte_lima_0800' } });
   } catch (error) {
     console.error('Error cargando hojas:', error);
-    return res.status(500).json({ error: 'No se pudieron cargar las hojas del día.' });
+    return res.status(error.status || 500).json({ error: error.message || 'No se pudieron cargar las hojas del día.' });
   }
 });
 
@@ -3819,7 +3827,7 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
     res.end();
   } catch (error) {
     console.error('Error exportando embalaje:', error);
-    if (!res.headersSent) res.status(500).send('No se pudo generar la hoja de embalaje.');
+    if (!res.headersSent) res.status(error.status || 500).send(error.message || 'No se pudo generar la hoja de embalaje.');
   }
 });
 

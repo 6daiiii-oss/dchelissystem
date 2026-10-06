@@ -1,6 +1,34 @@
 const { normalizarCategoriaOperativa, grupoProductoProduccion } = require('./public/production-classification');
 
 const GRUPOS_HPE = new Set(['Sándwiches', 'Triples', 'Piqueos']);
+const VERSION_IMPORTACION_CASINO = 3;
+const MENSAJE_REIMPORTAR_CRONOGRAMA = 'El cronograma de casinos de esta fecha fue importado con una versión antigua y no conserva la identidad de cada fila. Vuelve a importar el Excel original antes de generar HP, HE o HPE.';
+
+function errorReimportacion() {
+  const error = new Error(MENSAJE_REIMPORTAR_CRONOGRAMA);
+  error.code = 'CRONOGRAMA_REQUIERE_REIMPORTACION';
+  error.status = 409;
+  return error;
+}
+
+function esFilaTotalCasino(nombre) {
+  const clave = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase().replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return clave.includes('CANTIDADES TOTALES') || clave === 'TOTAL'
+    || /^TOTAL (?:CANTIDAD|CANTIDADES|UNIDADES|SEMANAL|GASTO)\b/.test(clave);
+}
+
+function validarVersionesCronogramaOperativo(pedidos, cronogramas) {
+  const idsActivos = new Set(pedidos.filter(p => String(p.origen || '').toLowerCase() === 'casino'
+    && Number(p.cronograma_casino_id) > 0).map(p => Number(p.cronograma_casino_id)));
+  if (!idsActivos.size) return;
+  const versiones = new Map();
+  for (const cronograma of cronogramas || []) {
+    try { versiones.set(Number(cronograma.id), Number(JSON.parse(cronograma.datos_json || '{}').version_importacion)); }
+    catch { versiones.set(Number(cronograma.id), 0); }
+  }
+  if ([...idsActivos].some(id => (versiones.get(id) || 0) < VERSION_IMPORTACION_CASINO)) throw errorReimportacion();
+}
 
 function fechaAnterior(fecha) {
   const date = new Date(`${fecha}T12:00:00Z`);
@@ -33,6 +61,12 @@ function construirHojasOperativas(fecha, pedidos, rows, opciones) {
   const registro = rows.map(row => {
     const pedido = pedidosPorId.get(Number(row.pedido_id));
     if (!pedido) throw new Error('Detalle sin pedido en el registro de embalaje.');
+    if (esFilaTotalCasino(row.producto_nombre_fuente || row.producto_nombre)) throw errorReimportacion();
+    if (String(pedido.origen || '').toLowerCase() === 'casino' && Number(pedido.cronograma_casino_id) > 0
+        && (row.casino_orden_fuente != null || row.casino_clave_fuente)
+        && (!String(row.producto_nombre_fuente || '').trim() || !String(row.casino_clave_fuente || '').trim())) {
+      throw errorReimportacion();
+    }
     const base = String(pedido.origen || '').toLowerCase() === 'casino'
       ? prepararCasino(row) : { ...row, producto_nombre: resolverProducto(row.producto_nombre), producto_nombre_original: row.producto_nombre };
     if (!String(base.producto_nombre || '').trim()) throw new Error('Producto sin nombre en el registro de embalaje.');
@@ -91,4 +125,7 @@ function verificarImportacion(cronograma, rows) {
   return esperadas.length;
 }
 
-module.exports = { GRUPOS_HPE, fechaTrabajo, construirHojasOperativas, verificarImportacion };
+module.exports = {
+  GRUPOS_HPE, fechaTrabajo, construirHojasOperativas, verificarImportacion,
+  esFilaTotalCasino, validarVersionesCronogramaOperativo, MENSAJE_REIMPORTAR_CRONOGRAMA
+};

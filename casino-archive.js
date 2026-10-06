@@ -22,6 +22,12 @@ function nombreCanonico(producto) {
   return nombreFuenteProducto(producto);
 }
 
+function esFilaTotal(nombre) {
+  const clave = normalizar(nombre);
+  return clave.includes('CANTIDADES TOTALES') || clave === 'TOTAL'
+    || /^TOTAL (?:CANTIDAD|CANTIDADES|UNIDADES|SEMANAL|GASTO)\b/.test(clave);
+}
+
 function categoriaProducto(producto, nombre) {
   const clave = normalizar(nombre);
   // El francés mini sin relleno siempre es pan; el prefijo "Mini" evita
@@ -78,6 +84,7 @@ function unirCronogramasCasino(rows) {
 
       for (const producto of dia.productos || []) {
         const nombre = nombreCanonico(producto);
+        if (esFilaTotal(nombre)) continue;
         const categoria = categoriaProducto(producto, nombre);
         const clave = claveProducto(producto, nombre, categoria);
         if (!clave) continue;
