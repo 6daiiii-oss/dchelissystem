@@ -3818,8 +3818,10 @@ function agregarMatrizHojasExcel(workbook, { titulo, fecha, clientes = [], detal
         };
         worksheet.getCell(row, totalIdx).font = { bold: true, size: 11 };
       });
-      worksheet.getColumn(1).width = 30;
-      for (let col = 2; col <= totalIdx; col += 1) worksheet.getColumn(col).width = col === totalIdx ? 15 : (orientacion === 'portrait' ? 10 : 11);
+      worksheet.getColumn(1).width = orientacion === 'portrait' ? 24 : 30;
+      for (let col = 2; col <= totalIdx; col += 1) {
+        worksheet.getColumn(col).width = col === totalIdx ? (orientacion === 'portrait' ? 12 : 15) : (orientacion === 'portrait' ? 6 : 11);
+      }
       worksheet.getRow(2).height = orientacion === 'portrait' ? 120 : 90;
       worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
       worksheet.autoFilter = { from: { row: 2, column: 1 }, to: { row: Math.max(2, segmento.filas.length + 2), column: totalIdx } };
@@ -3835,7 +3837,7 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
     const data = await cargarDatosHojas(fecha);
     const workbook = new ExcelJS.Workbook();
     agregarMatrizHojasExcel(workbook, { titulo: 'HP', fecha, clientes: data.clientes, detalles: data.detalles, orientacion: 'landscape', separarPanes: true });
-    agregarMatrizHojasExcel(workbook, { titulo: 'HE', fecha, clientes: data.embalaje.clientes, detalles: data.embalaje.detalles, orientacion: 'portrait', clientesPorPagina: 7, separarPanes: true });
+    agregarMatrizHojasExcel(workbook, { titulo: 'HE', fecha, clientes: data.embalaje.clientes, detalles: data.embalaje.detalles, orientacion: 'portrait', clientesPorPagina: 11, separarPanes: true });
     agregarMatrizHojasExcel(workbook, { titulo: 'HPE', fecha, clientes: data.produccion_embalaje.clientes, detalles: data.produccion_embalaje.detalles, orientacion: 'landscape' });
 
     // Una fila por detalle exacto conserva el nombre del cronograma para auditoría.

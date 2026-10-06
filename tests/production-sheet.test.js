@@ -70,7 +70,7 @@ test('cuando los clientes superan el ancho de A4, no se omite ninguno ni se repi
   const { context, containers } = matriz(clientes, detalles);
   context.renderizarMatrizProducto([{ titulo: 'BOCADITOS', productosLista: ['ALFAJOR'] }]);
   const html = containers.hojaProduccion.innerHTML;
-  assert.equal((html.match(/class="kitchen-page"/g) || []).length, 3);
+  assert.equal((html.match(/class="kitchen-page"/g) || []).length, 2);
   for (const c of clientes) assert.equal((html.match(new RegExp(`PEDIDO ${c.id}(?!\\d)`, 'g')) || []).length, 1);
   assert.equal((html.match(/class="pack-badge"/g) || []).length, 1);
 });

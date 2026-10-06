@@ -1132,8 +1132,8 @@
       }
       body.printing-cocina.printing-embalaje .kitchen-page-date { font-size:13px !important; padding:8px 9px !important; }
       body.printing-cocina.printing-embalaje .kitchen-page table { width:100% !important; min-width:0 !important; font-size:11px !important; }
-      body.printing-cocina.printing-embalaje th.client-header { width:64px !important; min-width:64px !important; height:120px !important; }
-      body.printing-cocina.printing-embalaje .vertical-text { font-size:10px !important; max-height:110px !important; overflow:visible !important; }
+      body.printing-cocina.printing-embalaje th.client-header { width:42px !important; min-width:42px !important; height:120px !important; }
+      body.printing-cocina.printing-embalaje .vertical-text { font-size:9px !important; max-height:110px !important; overflow:visible !important; }
       body.printing-cocina.printing-embalaje th,
       body.printing-cocina.printing-embalaje td { height:auto !important; max-height:none !important; padding:5px 6px !important; font-size:11px !important; }
       body.printing-cocina.printing-embalaje .qty-cell { font-size:12px !important; }
@@ -1142,14 +1142,14 @@
       }
       body.printing-cocina.printing-embalaje th.prod-col,
       body.printing-cocina.printing-embalaje td.prod-col {
-        width:155px; min-width:155px; max-width:155px; font-size:11px;
+        width:130px; min-width:130px; max-width:130px; font-size:11px;
       }
       body.printing-cocina.printing-embalaje td.prod-col {
         height:auto; max-height:none; overflow:visible;
         white-space:normal; text-overflow:clip; overflow-wrap:anywhere;
       }
       body.printing-cocina.printing-embalaje .total-header,
-      body.printing-cocina.printing-embalaje .pack-cell { width:140px !important; min-width:140px !important; max-width:140px !important; }
+      body.printing-cocina.printing-embalaje .pack-cell { width:105px !important; min-width:105px !important; max-width:105px !important; }
       body.printing-cocina.printing-embalaje .embalaje-group-row th { height:auto !important; font-size:11px !important; }
     }
 
@@ -7596,8 +7596,8 @@
       const idsBloque = new Set();
       productosBloque.forEach(({ producto }) => producto.clientes.forEach((id) => idsBloque.add(id)));
       const clientesBloque = clientes.filter((cliente) => idsBloque.has(Number(cliente.id)));
-      for (let i = 0; i < clientesBloque.length; i += 7) {
-        paginas.push({ grupoClientes: clientesBloque.slice(i, i + 7), productosBloque, mostrarTotal: i === 0 });
+      for (let i = 0; i < clientesBloque.length; i += 11) {
+        paginas.push({ grupoClientes: clientesBloque.slice(i, i + 11), productosBloque, mostrarTotal: i === 0 });
       }
     }
 
