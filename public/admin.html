@@ -7518,8 +7518,7 @@
         grupoClientes.forEach((cliente) => {
           const claseTurno = cliente.es_urgente ? 'kitchen-urgent' : 'kitchen-normal';
           const claseCasino = cliente.origen === 'casino' ? ' kitchen-casino' : '';
-          const tag = cliente.origen === 'casino' ? '<span class="kitchen-casino-tag">CASINO</span>' : '';
-          html += `<th class="client-header ${claseTurno}${claseCasino}"><div class="vertical-text">${escapeHtmlAdmin((cliente.cliente_nombre || 'Cliente').toUpperCase())}${tag}<span style="display:block;font-size:9px;">ENTREGA ${escapeHtmlAdmin(cliente.fecha_recoge || '')}</span></div></th>`;
+          html += `<th class="client-header ${claseTurno}${claseCasino}"><div class="vertical-text">${escapeHtmlAdmin((cliente.cliente_nombre || 'Cliente').toUpperCase())}</div></th>`;
         });
 
         if (mostrarTotal) html += '<th class="total-header"><div class="vertical-text">TOTAL</div></th>';

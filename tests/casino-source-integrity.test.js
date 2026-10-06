@@ -55,6 +55,8 @@ test('cada variante del Excel llega a producción, lista de embalaje, matriz y d
   assert.equal(Object.values(lists).flat().length, names.length, 'también deben aparecer artículos fuera del catálogo');
   ui.window.__datosEmbalajeClientes = clients;
   ui.renderizarMatrizProducto(Object.entries(lists).map(([titulo, productosLista]) => ({ titulo, productosLista })), details);
+  assert.doesNotMatch(containers.hojaProduccion.innerHTML, /ENTREGA\s+2026-/);
+  assert.doesNotMatch(containers.hojaProduccion.innerHTML, /kitchen-casino-tag/);
   for (const name of names) assert.ok(containers.hojaProduccion.innerHTML.includes(name), name);
   ui.renderizarHojasEmbalajePorHora({ fecha: '2026-10-06', clientes: clients, detalles: details });
   for (const name of names.slice(0, 7)) assert.ok(containers.hojaDistribucionCocina.innerHTML.includes(name), name);
@@ -91,6 +93,29 @@ test('importación real: filas distintas, columnas por fecha, celdas vacías y t
   ]);
   assert.equal(parsed.dias.find(d => d.fecha === '2026-10-05').productos.length, 0);
   assert.equal(new Set(day.productos.map(p => p.clave_fuente)).size, 3);
+});
+
+test('importación ignora filas de totales y conserva triples y panes con nombres distintos', async () => {
+  const book = new ExcelJS.Workbook();
+  const sheet = book.addWorksheet('Crazy');
+  sheet.addRow(['', 'Categoría', 'Artículo', 'Lunes', 'Martes', 'Miércoles']);
+  sheet.addRow(['', '', '', new Date('2026-10-05'), new Date('2026-10-06'), new Date('2026-10-07')]);
+  sheet.addRow(['', 'Triples', 'TRIPLE TOCINO ESPINACA QUESO CREMA', null, 30, null]);
+  sheet.addRow(['', 'Triples', 'TRIPLE POLLO Y TOCINO', null, 50, null]);
+  sheet.addRow(['', 'Triples', 'TRIPLE ACEITUNA HUEVO JAMON', null, 30, null]);
+  sheet.addRow(['', 'Panes', 'PAN HAMBURGUESITA', null, null, 100]);
+  sheet.addRow(['', 'Panes', 'PAN HAMBURGUESA ROLLYS', null, null, 12]);
+  sheet.addRow(['', '', 'CANTIDADES TOTALES', null, 110, 112]);
+  const ctx = serverContext();
+  const parsed = await ctx.procesarCronogramaCasinos(await book.xlsx.writeBuffer());
+  const martes = parsed.dias.find(d => d.fecha === '2026-10-06');
+  const miercoles = parsed.dias.find(d => d.fecha === '2026-10-07');
+  assert.deepEqual(Array.from(martes.productos, p => [p.nombre, p.total]), [
+    ['TRIPLE TOCINO ESPINACA QUESO CREMA', 30], ['TRIPLE POLLO Y TOCINO', 50], ['TRIPLE ACEITUNA HUEVO JAMON', 30]
+  ]);
+  assert.deepEqual(Array.from(miercoles.productos, p => [p.nombre, p.total]), [
+    ['PAN HAMBURGUESITA', 100], ['PAN HAMBURGUESA ROLLYS', 12]
+  ]);
 });
 
 // Opt-in audit against the original workbook; no private workbook is committed.

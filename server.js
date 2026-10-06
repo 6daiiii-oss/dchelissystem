@@ -3755,7 +3755,7 @@ app.get('/api/admin/exportar-excel', requireAdminAuth, async (req, res) => {
 
       clientesGrupo.forEach((cli, idx) => {
         const cell = worksheet.getCell(2, idx + 2);
-        cell.value = `${String(cli.cliente_nombre || '').toUpperCase()}${cli.origen === 'casino' ? ' · CASINO' : ''} · ENTREGA ${cli.fecha_recoge}`;
+        cell.value = String(cli.cliente_nombre || '').toUpperCase();
         cell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
         cell.font = { bold: true, color: { argb: cli.es_urgente ? 'FFCC0000' : 'FF111111' } };
       });

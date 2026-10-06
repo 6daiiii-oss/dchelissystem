@@ -30,6 +30,8 @@ test('el Excel HE conserva cada fila fuente, incluye kekes/tortas y separa panes
   assert.equal(panes.getCell('A3').value, 'PAN FRANCES MINI'); assert.equal(panes.getCell('B3').value, 60);
   assert.equal(panes.getCell('C3').result, 60, 'el total lleva resultado cacheado verificable sin recalcular el Excel');
   const embalaje = workbook.getWorksheet('Embalaje');
+  assert.equal(embalaje.getCell('B2').value, 'CASINO');
+  assert.equal(embalaje.getCell('B2').value.includes('ENTREGA'), false, 'el encabezado muestra solo el nombre');
   const nombres = embalaje.getColumn(1).values.filter(v => typeof v === 'string');
   for (const n of ['EMPANADA, CARNE', 'EMPANADA CARNE', 'KEKE CHOCOLATE', 'TORTA MOKA']) assert.ok(nombres.includes(n));
 });
