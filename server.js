@@ -2210,6 +2210,29 @@ app.get('/api/admin/casinos/cronograma', requireAdminAuth, async (req, res) => {
   }
 });
 
+app.delete('/api/admin/casinos/cronograma/:id', requireAdminAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Cronograma no válido.' });
+
+  let transaccion = false;
+  try {
+    const cronograma = await dbGetAsync('SELECT id FROM casino_cronogramas WHERE id = ?', [id]);
+    if (!cronograma) return res.status(404).json({ error: 'No se encontró este Excel de casinos.' });
+
+    await dbRunAsync('BEGIN TRANSACTION');
+    transaccion = true;
+    const pedidos = await dbRunAsync('DELETE FROM pedidos WHERE origen = ? AND cronograma_casino_id = ?', ['casino', id]);
+    await dbRunAsync('DELETE FROM casino_cronogramas WHERE id = ?', [id]);
+    await dbRunAsync('COMMIT');
+    transaccion = false;
+    return res.json({ ok: true, pedidos_eliminados: pedidos.changes });
+  } catch (error) {
+    if (transaccion) await dbRunAsync('ROLLBACK').catch(() => {});
+    console.error('Error eliminando cronograma Casino:', error);
+    return res.status(500).json({ error: 'No se pudo eliminar este Excel de casinos.' });
+  }
+});
+
 app.get('/api/admin/casinos/cronograma/:id', requireAdminAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);

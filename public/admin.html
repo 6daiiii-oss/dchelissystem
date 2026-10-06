@@ -1284,6 +1284,8 @@
     }
     .casino-cronograma-actions { display:flex; gap:7px; flex:0 0 auto; }
     .casino-cronograma-actions .btn { min-height:38px; padding:8px 11px; }
+    .btn-casino-delete { background:#b42318; color:#fff; }
+    .btn-casino-delete:hover { background:#912018; }
     .casino-cronograma-active {
       display:flex;
       justify-content:space-between;
@@ -5606,6 +5608,7 @@
             <div class="casino-cronograma-actions">
               <button type="button" class="btn btn-ghost" onclick="abrirCronogramaCasino(${id})">Abrir</button>
               <button type="button" class="btn btn-warning" onclick="imprimirCronogramaCasino(${id})">Imprimir todos los casinos</button>
+              <button type="button" class="btn btn-casino-delete" onclick="eliminarExcelCasino(${id}, event)">Eliminar Excel</button>
             </div>
           </article>
         `;
@@ -5674,6 +5677,46 @@
       if (!cargado) return;
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       imprimirHojaCasinos();
+    }
+
+    async function eliminarExcelCasino(id, event) {
+      event?.stopPropagation();
+      const importacion = (window.__casinoImportaciones || []).find((item) => Number(item.id) === Number(id));
+      if (!importacion) return;
+      const nombre = importacion.nombre_archivo || 'este Excel';
+      if (!confirm(`¿Eliminar ${nombre} y todos los pedidos de casino que se generaron desde este archivo? Esta acción no se puede deshacer.`)) return;
+
+      const estado = document.getElementById('casinoEstado');
+      mostrarCargaCasino(true, 'Eliminando cronograma y pedidos asociados…');
+      try {
+        const respuesta = await fetch(`/api/admin/casinos/cronograma/${Number(id)}`, {
+          method:'DELETE', credentials:'same-origin', headers:{ 'Content-Type':'application/json' }
+        });
+        const data = await respuesta.json().catch(() => ({}));
+        if (!respuesta.ok) throw new Error(data.error || 'No se pudo eliminar el Excel de casinos.');
+
+        if (Number(window.__casinoCronogramaId) === Number(id)) {
+          window.__casinoCronogramaId = null;
+          window.__casinoProduccionData = null;
+          window.__casinoSemanaIndex = -1;
+          actualizarCabeceraCronogramaCasino(null);
+          document.getElementById('casinoDiasResumen').innerHTML = '';
+          document.getElementById('casinoArchivoSemanas').innerHTML = '';
+          document.getElementById('casinosProduccion').innerHTML = '';
+        }
+        if (estado) {
+          estado.className = 'casino-status success';
+          estado.textContent = `Excel eliminado. Se quitaron ${Number(data.pedidos_eliminados || 0)} pedido(s) asociado(s).`;
+        }
+        await cargarCronogramaCasinoPersistido();
+      } catch (error) {
+        if (estado) {
+          estado.className = 'casino-status error';
+          estado.textContent = error.message || 'No se pudo eliminar el Excel de casinos.';
+        }
+      } finally {
+        mostrarCargaCasino(false);
+      }
     }
 
 

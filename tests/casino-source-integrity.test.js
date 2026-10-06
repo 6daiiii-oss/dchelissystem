@@ -11,11 +11,15 @@ const html = fs.readFileSync(path.join(__dirname, '../public/admin.html'), 'utf8
 function serverContext() {
   const routes = {};
   const context = { routes, console, Buffer, URL, Date, process: { env: { ADMIN_SESSION_SECRET: 'test' } } };
-  context.require = (name) => name === 'express' ? (() => ({ set() {}, get(url, ...handlers) { routes[url] = handlers.at(-1); } }))
+  context.require = (name) => name === 'express' ? (() => ({ set() {}, get(url, ...handlers) { routes[url] = handlers.at(-1); }, delete(url, ...handlers) { routes[`DELETE ${url}`] = handlers.at(-1); } }))
     : name === 'cors' ? (() => {}) : name === 'bcryptjs' ? { hashSync: () => '' }
     : name === './db' ? {} : name.startsWith('./') ? require(path.join(__dirname, '..', name)) : require(name);
   vm.createContext(context);
   vm.runInContext(server.split('// Middlewares')[0], context);
+  context.requireAdminAuth = (req, res, next) => next?.();
+  const deleteStart = server.indexOf("app.delete('/api/admin/casinos/cronograma/:id'");
+  const deleteEnd = server.indexOf("\napp.get('/api/admin/casinos/cronograma/:id'", deleteStart);
+  vm.runInContext(server.slice(deleteStart, deleteEnd), context);
   return context;
 }
 function frontend() {
@@ -214,4 +218,34 @@ test('API Cocina y Excel descargado conservan cantidades, fechas y filas; descar
   assert.deepEqual(source.getRow(2).values.slice(1, 8), ['Morelli', 'EMPANADITAS DE CARNE', 50, 'Bocaditos', '2026-10-05', '2026-10-05', '2026-10-06']);
   assert.equal(source.getCell('B3').value, 'KEKE DE ZANAHORIA');
   assert.ok(!source.getColumn(2).values.includes('TRIPLE POLLO JAMON QUESO'));
+});
+
+test('eliminar un Excel de casinos borra en una transacción solo su importación y pedidos asociados', async () => {
+  const ctx = serverContext();
+  const consultas = [];
+  ctx.dbGetAsync = async (sql, params) => {
+    consultas.push([sql, params]);
+    return { id: 14 };
+  };
+  ctx.dbRunAsync = async (sql, params = []) => {
+    consultas.push([sql, params]);
+    return { changes: sql.startsWith('DELETE FROM pedidos') ? 3 : 1 };
+  };
+  let status = 200, body;
+  await ctx.routes['DELETE /api/admin/casinos/cronograma/:id']({ params: { id: '14' } }, {
+    status(code) { status = code; return this; },
+    json(value) { body = value; return this; }
+  });
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.pedidos_eliminados, 3);
+  assert.deepEqual(consultas.map(([sql]) => sql), [
+    'SELECT id FROM casino_cronogramas WHERE id = ?',
+    'BEGIN TRANSACTION',
+    'DELETE FROM pedidos WHERE origen = ? AND cronograma_casino_id = ?',
+    'DELETE FROM casino_cronogramas WHERE id = ?',
+    'COMMIT'
+  ]);
+  assert.equal(consultas[2][1][0], 'casino');
+  assert.equal(consultas[2][1][1], 14);
 });
